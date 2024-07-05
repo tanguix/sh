@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_file, abort
+from flask import Blueprint, request, jsonify, send_file
 import os
 import json
 from app.logger import logger
@@ -12,7 +12,8 @@ upload_bp = Blueprint('upload', __name__)
 # Assuming this is in routes.py
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
-IMAGE_FOLDER = os.path.join(SERVER_DIR, 'image')  # Changed from './file' to 'files'
+# TODO: need to make this path variable into some yml of config files, and it should only include the names of folder you want to store
+IMAGE_FOLDER = os.path.join(SERVER_DIR, 'images')  # Changed from './file' to 'files'
 FILE_FOLDER = os.path.join(SERVER_DIR, 'files')  # Changed from './file' to 'files'
 
 # Ensure the directory exists
@@ -47,13 +48,21 @@ def upload_data():
     image_file_path = None
     # check if image file received
     if image_file:
-        image_file_path = os.path.join(IMAGE_FOLDER, image_file.filename)
-        image_file.save(image_file_path)
+        # TODO: Construct the relative path for the image file, need to be done in the models.py as method
+        relative_image_path = os.path.join('images', image_file.filename)
+        # Construct the absolute path using the server directory and relative path
+        absolute_image_path = os.path.join(SERVER_DIR, relative_image_path)
+        # Save the image file to the absolute path
+        image_file.save(absolute_image_path)
+        # Store only the relative path in the database
+        image_file_path = relative_image_path
+
 
     # create Item object
     # =========== add check method in the model.py to check if refernece number is unique, otherwise prevent inserting ==========
     # to-do
 
+    print("Check the images path push to mongoDB: ", image_file_path)
     sample = Item(reference_no, categories, tags, additional_fields, image_file_path)
     # save_item() method that insert data into database
     result = sample.save_item()
