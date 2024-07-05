@@ -1,7 +1,7 @@
 
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import type { Node, Edge, Workflow } from '../types.ts';
+    import type { Node, Edge, Workflow } from '$lib//types';
 
     export let activeWorkflow: Workflow | null = null;
     export let nodes: Node[] = [];

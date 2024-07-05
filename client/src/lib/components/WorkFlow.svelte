@@ -1,141 +1,90 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { writable, derived, get } from 'svelte/store';
-    import { API_ENDPOINTS, constructUrl } from '../utils/api.ts';
-    import Pipeline from './Pipeline.svelte';
-    import type { Edge } from './types';
-    import { unsavedChanges } from '$lib/stores/unsavedChanges.ts';
 
-    interface Node {
-      node_id: string;
-      label: string;
-      status: 'Not Started' | 'In Progress' | 'Completed';
-      sections: Section[];
-    }
+  import { onMount } from 'svelte';
+  import { writable, derived, get } from 'svelte/store';
+  import { API_ENDPOINTS, constructUrl } from '../utils/api';
+  import Pipeline from './Pipeline.svelte';
+  import type { Workflow, Node, Edge, Section, File } from '$lib/types';
+  import { unsavedChanges } from '$lib/stores/unsavedChanges';
 
 
-    interface File {
-      file_id: string;
-      name: string;
-      type: string;
-    }
+  // ----------------------------------------------------- "Type" specific to WorkFlow object -----------------------------------------------------
+  // "Change" type: used for keep track of instructions given by frontend
+  interface Change {
+    type: 
+      'create_workflow' | 
+      'confirm_workflow' | 
+      'add_node' | 
+      'remove_node' | 
+      'add_section' | 
+      'upload_file' | 
+      'update_lock_status';
+    data: any;
+  }
 
 
-    interface Section {
-      id: string;
-      section_id: string;  // Add this line
-      label: string;
-      files: File[];
-    }
+  // ----------------------------------------------------- Variable Declaration -----------------------------------------------------
 
+  let workflows: Workflow[] = [];           // an array of workflow object
+  let workflowName = '';                    // the name of certain workflow object
+  let workflow_id = '';                     // workflow id, unique identifier generated
+  const changes = writable<Change[]>([]);   // svelte reactive array of an array of "Change" type, 
+                                            // because needed to be constantly updated 
 
-
-    interface Change {
-        // available type for instructions
-      type: 
-        'create_workflow' | 
-        'confirm_workflow' | 
-        'add_node' | 
-        'remove_node' | 
-        'add_section' | 
-        'upload_file' | 
-        'update_lock_status';
-      data: any;
-    }
-
-    interface Workflow {
-      id: string;
-      name: string;
-      is_locked: boolean;
-      nodes: Node[];
-      edges: Edge[];
-      status: 'created' | 'saved';
-    }
-
-    let workflows: Workflow[] = [];
-    let workflowName = '';
-    let workflow_id = '';
-    const changes = writable<Change[]>([]);
+  let isWorkflowLocked = false;   // Lock status of workflow, TODO: later use for modification permission (now is reactive component)
+  let newNodeLabel = '';                    // newly added node label
+  let newNodePrevId = '';                   // node's previous node's id in workflow data strcuture
 
 
 
 
-    let initialLockStatus = false;
-    let newNodeLabel = '';
-    let newNodePrevId = '';
-
-    const nodes = writable<Node[]>([]);
-    const edges = writable<Edge[]>([]);
-    const workflowStatus = writable('');
-    const isWorkflowLocked = writable(false);
-    const workflowState = writable<'draft' | 'confirmed'>('draft');
-
-    function handleNodeClick(event: CustomEvent<string>) {
-      const nodeId = event.detail;
-      const sectionElement = document.getElementById(nodeId);
-      if (sectionElement) {
-        sectionElement.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-
-    function getNodeStatus(node: Node): 'Completed' | 'In Progress' | 'Not Started' {
-      return node.status;
-    }
-
-    function toggleNodeStatus(workflowId: string, nodeId: string) {
-      const workflowIndex = workflows.findIndex(w => w.id === workflowId);
-      if (workflowIndex === -1) return;
-
-      workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map((node) => {
-        if (node.node_id === nodeId) {
-          let newStatus: 'Not Started' | 'In Progress' | 'Completed';
-          switch (node.status) {
-            case 'Not Started':
-              newStatus = 'In Progress';
-              break;
-            case 'In Progress':
-              newStatus = 'Completed';
-              break;
-            case 'Completed':
-              newStatus = 'Not Started';
-              break;
-          }
-
-          changes.update(c => {
-            const newChange = { 
-              type: 'update_node_status', 
-              data: { 
-                workflowId: workflowId,
-                node_id: node.node_id,
-                status: newStatus
-              } 
-            };
-            logChange(newChange);
-            return [...c, newChange];
-          });
-    
-          unsavedChanges.set(true);
-          return {...node, status: newStatus};
-        }
-        return node;
-      });
-      workflows = [...workflows];
-    }
+    // const nodes = writable<Node[]>([]);
+    // const edges = writable<Edge[]>([]);
+    // const workflowStatus = writable('');
+    // const workflowState = writable<'draft' | 'confirmed'>('draft');
 
 
 
-    function createDefaultSections(): Section[] {
-      const sectionId = `section-expense-${Date.now()}`;
-      console.log(`Creating default section with ID: ${sectionId}`);
-      return [
-        {
-          id: sectionId,
-          section_id: sectionId,  // Add this line
-          label: 'Expense',
-          files: []
-        },
-      ];
-    }
+
+
+
+  // TODO: remember to get the user from locals: 
+  // 1) pass user as key for workflow 
+  // 2) use users to set permission of lock button 
+  // 3) append the username to the end of (unique_id + timestemp) => workflow, node, section, file?
+
+
+
+
+
+
+
+
+
+
+  // ----------------------------------------------------- Frontend Interaction Function -----------------------------------------------------
+
+  // "CustomEvent" type is for event that parent send(dispatch 派遣) to child component for communication
+  // <Pipeline /> is created inside <WorkFlow />, so former is the parent, latter is the child
+  function handleNodeClick(event: CustomEvent<string>) {
+    const nodeId = event.detail;                                      // extract the data(detail) in the event
+    const sectionElement = document.getElementById(nodeId);           // get the HTML element in the document with an ID matching nodeID
+    if (sectionElement) {
+      sectionElement.scrollIntoView({ behavior: 'smooth' });          // js built-in method, scroll to tag contains id=nodeID
+    }                                                                 // scroll smoothly, random than instantly
+  }
+
+  // strings after semi-colon ensure function will return one of the string (type safety)
+  // like the python def xxx() -> str:
+  function getNodeStatus(node: Node): 'Completed' | 'In Progress' | 'Not Started' {
+    return node.status;
+  }
+
+
+
+
+
+
 
 
 
@@ -155,103 +104,187 @@
       recentChange = newChange;
     }
 
-    function generateUniqueId(type: 'workflow' | 'node' | 'file', label: string, existingItems: { id: string }[]): string {
-      const prefix = type === 'workflow' ? 'wf-' : type === 'node' ? 'node-' : 'file-';
-      const baseId = `${prefix}${label.toLowerCase().replace(/\s+/g, '-')}`;
-      let uniqueId = baseId;
-      let counter = 1;
-      
-      while (existingItems.some(item => item.id === uniqueId)) {
-        uniqueId = `${baseId}-${counter}`;
-        counter++;
-      }
-      
-      return `${uniqueId}-${Date.now()}`;
+
+
+
+
+  // ----------------------------------------------------- Workflow Helper Function -----------------------------------------------------
+
+
+  // 1) 
+  // parameters => obj_type: (again, for type safety)  |  label: name of node  |  existingItems: existing workflow objects with workflow_id
+  function generateUniqueId(obj_type: 'workflow' | 'node' | 'file', label: string, existingItems: { id: string }[]): string {
+    // .py equivalent: if obj_type == 'workflow': 'wf-', elif obj_type == 'node': 'node-'; else: 'file-'
+    const prefix = obj_type === 'workflow' ? 'wf-' : obj_type === 'node' ? 'node-' : 'file-';
+    const baseId = `${prefix}${label.toLowerCase().replace(/\s+/g, '_')}`;        // concatenating: "prefix" + "label.lower()" + "_" replace " "
+    let uniqueId = baseId; 
+    let counter = 1;
+    // id uniqueness checking: node1, node2, node3, ..., etc (if same string name exist in the workflow_id list)
+    while (existingItems.some(item => item.id === uniqueId)) {
+      uniqueId = `${baseId}-${counter}`;
+      counter++;
     }
+    // lastly, append the current timestamp to the end (1720162171941 = "7/5/2024, 3:09:31 PM")
+    return `${uniqueId}-${Date.now()}`;
+  }
+
+
+  // 2)
+  // create default array of section type json: Section[]
+  function createDefaultSections(): Section[] {
+    const sectionId = `section-expense-${Date.now()}`;              // assuming expense exist for every section
+    console.log(`Creating default section with ID: ${sectionId}`);
+    return [
+      {
+        id: sectionId,
+        section_id: sectionId,  // Add this line
+        label: 'Expense',
+        files: []
+      },
+    ];
+  }
 
 
 
 
+  // ----------------------------------------------------- Main WorkFlow Function -----------------------------------------------------
+
+  // create a default workflow array
+  function createWorkflow() {
+
+    if (!workflowName) {
+      alert('Please enter a workflow name');
+      return;
+    }
+    
+    // HACK: properly not needed to check if ID is unique from database because (prefix + timestamp + username)
+    // generate unique workflow id: 
+    const workflowId = generateUniqueId('workflow', workflowName, workflows);
+    const newNodes = [
+      {
+        node_id: generateUniqueId('node', 'Sampling', []),      // initially, empty array of ids
+        label: 'Sampling', 
+        status: 'Not Started', 
+        sections: createDefaultSections()
+      },
+      { 
+          node_id: generateUniqueId('node', 'Production', []), 
+          label: 'Production', 
+          status: 'Not Started', 
+          sections: createDefaultSections()
+      },
+      { 
+          node_id: generateUniqueId('node', 'Delivery', []), 
+          label: 'Delivery', 
+          status: 'Not Started', 
+          sections: createDefaultSections()
+      },
+      { 
+          node_id: generateUniqueId('node', 'Payment', []), 
+          label: 'Payment', 
+          status: 'Not Started', 
+          sections: createDefaultSections()
+      },
+    ];
+
+    // create new edge array using node_id from array of new nodes just created
+    const newEdges = [
+        { from: newNodes[0].node_id, to: newNodes[1].node_id },
+        { from: newNodes[1].node_id, to: newNodes[2].node_id },
+        { from: newNodes[2].node_id, to: newNodes[3].node_id },
+    ];
+
+    // create workflow object
+    const newWorkflow: Workflow = { 
+        id: workflowId, 
+        name: workflowName, 
+        is_locked: isWorkflowLocked,
+        nodes: newNodes,
+        edges: newEdges,
+        status: 'created',
+    };
+
+    // "..." operator mean spread the element in the array after it (workflows)
+    // after spreading adding the item or array(newWorkflow) after comma to it and create a new array
+    // this method does not modify the original array directly, 
+    // and js will free up memory when original one is not referred anymore
+    workflows = [...workflows, newWorkflow];
+
+    console.log('Newly created workflow:', newWorkflow); // Log created workflow
+
+    /* 
+    Few things to note: 
+    1) what's a callback function? 
+       - function A that was passed to another function B as an argument, A is intended to execute later
+       - executing later can mean: B will decide when to invoke A
+    2) svelte store 
+       - think of it as a class in python, you can create reactive object in store 
+       - here changes.update() is function B, const currentChanges => {} is function A
+       - currentChange is temp variable hold the current value in changes array (reactive array)
+       - is like the "i" in for loop
+    */
+    changes.update(c => {
+        const newChange = { 
+            type: 'create_workflow', 
+            data: { 
+                name: workflowName, 
+                id: workflowId, 
+                is_locked: isWorkflowLocked,
+                nodes: newWorkflow.nodes, 
+                edges: newWorkflow.edges,
+                status: newWorkflow.status,
+            } 
+        };
+        logChange(newChange)
+        return [...c, newChange];
+    });
+    // set the unsavedChange status to true prevent user leaving unexpectedly
+    unsavedChanges.set(true);
+  }
 
 
 
 
+  function toggleNodeStatus(workflowId: string, nodeId: string) {
+    const workflowIndex = workflows.findIndex(w => w.id === workflowId);
+    if (workflowIndex === -1) return;
 
-    function createWorkflow() {
-        if (!workflowName) {
-            alert('Please enter a workflow name');
-            return;
+    workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map((node) => {
+      if (node.node_id === nodeId) {
+        let newStatus: 'Not Started' | 'In Progress' | 'Completed';
+        switch (node.status) {
+          case 'Not Started':
+            newStatus = 'In Progress';
+            break;
+          case 'In Progress':
+            newStatus = 'Completed';
+            break;
+          case 'Completed':
+            newStatus = 'Not Started';
+            break;
         }
 
-        const workflowId = generateUniqueId('workflow', workflowName, workflows);
-        const newNodes = [
-            { 
-                node_id: generateUniqueId('node', 'Sampling', []), 
-                label: 'Sampling', 
-                status: 'Not Started', 
-                sections: createDefaultSections()
-            },
-            { 
-                node_id: generateUniqueId('node', 'Production', []), 
-                label: 'Production', 
-                status: 'Not Started', 
-                sections: createDefaultSections()
-            },
-            { 
-                node_id: generateUniqueId('node', 'Delivery', []), 
-                label: 'Delivery', 
-                status: 'Not Started', 
-                sections: createDefaultSections()
-            },
-            { 
-                node_id: generateUniqueId('node', 'Payment', []), 
-                label: 'Payment', 
-                status: 'Not Started', 
-                sections: createDefaultSections()
-            },
-        ];
-        
-        const newEdges = [
-            { from: newNodes[0].node_id, to: newNodes[1].node_id },
-            { from: newNodes[1].node_id, to: newNodes[2].node_id },
-            { from: newNodes[2].node_id, to: newNodes[3].node_id },
-        ];
-
-        const newWorkflow: Workflow = { 
-            id: workflowId, 
-            name: workflowName, 
-            is_locked: initialLockStatus,
-            nodes: newNodes,
-            edges: newEdges,
-            status: 'created',
-        };
-
-        workflows = [...workflows, newWorkflow];
-
-        console.log('Newly created workflow:', newWorkflow); // Log created workflow
-
         changes.update(c => {
-            const newChange = { 
-                type: 'create_workflow', 
-                data: { 
-                    name: workflowName, 
-                    id: workflowId, 
-                    is_locked: initialLockStatus,
-                    nodes: newWorkflow.nodes, 
-                    edges: newWorkflow.edges,
-                    status: newWorkflow.status,
-                } 
-            };
-            logChange(newChange)
-            return [...c, newChange];
+          const newChange = { 
+            type: 'update_node_status', 
+            data: { 
+              workflowId: workflowId,
+              node_id: node.node_id,
+              status: newStatus
+            } 
+          };
+          logChange(newChange);
+          return [...c, newChange];
         });
+
         unsavedChanges.set(true);
-    }
+        return {...node, status: newStatus};
+      }
 
-
-
-
-
+      return node;
+    });
+    workflows = [...workflows];
+  }
 
 
 
@@ -697,7 +730,7 @@
 
 
 
-    function downloadFile(workflowId, nodeId, sectionId, fileId, fileName) {
+    function downloadFile(workflowId: any, nodeId: any, sectionId: any, fileId: any, fileName: any) {
       const downloadUrl = `${API_ENDPOINTS.DOWNLOAD_FILE}/${workflowId}/${nodeId}/${sectionId}/${fileId}`;
       
       fetch(downloadUrl)

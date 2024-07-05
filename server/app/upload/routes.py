@@ -126,36 +126,6 @@ def commit_changes():
 
 
 
-# def commit_changes():
-#     try:
-#         changes = request.json.get('changes')
-#         if not changes:
-#             return jsonify({"error": "No changes provided"}), 400
-#         print("Received changes:")
-#         for i, change in enumerate(changes):
-#             print(f"{i}: {change}")
-#         results = []
-#         for change in changes:
-#             try:
-#                 print(f"Processing change: {change['type']}")
-#                 result = HandleWorkflow.process_change(change['type'], change['data'])
-#                 print(f"Result of {change['type']}: {result}")
-#                 results.append(result)
-#             except KeyError as e:
-#                 print(f"KeyError in {change['type']}: {str(e)}")
-#                 return jsonify({"error": f"Missing key in change data for {change['type']}: {str(e)}"}), 400
-#             except ValueError as e:
-#                 print(f"ValueError in {change['type']}: {str(e)}")
-#                 return jsonify({"error": str(e)}), 400
-#         return jsonify({
-#             "message": "Changes committed successfully",
-#             "results": results
-#         }), 200
-#     except Exception as e:
-#         print(f"Unexpected error: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
-
-
 
 @upload_bp.route('/api/fetch_all_workflow', methods=['GET'])
 def get_workflow():
