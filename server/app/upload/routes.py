@@ -110,7 +110,9 @@ def commit_changes():
     if not changes:
         return jsonify({"error": "No changes provided"}), 400
 
+    print('change:\n', changes)
     results = HandleWorkflow.process_changes(changes)
+    print('result:\n', results)
 
     if any("error" in result for result in results):
         return jsonify({

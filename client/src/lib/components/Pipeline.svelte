@@ -20,7 +20,9 @@
           return '#4CAF50'; // Green for completed
         case 'In Progress':
           return '#FFC107'; // Amber for in-progress
-        case 'Not Started':
+        case 'Error':
+          return '#FF0000'; // Amber for in-progress
+        // case 'Not Started':
         default:
           return '#9E9E9E'; // Grey for not started
       }

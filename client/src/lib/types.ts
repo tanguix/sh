@@ -20,24 +20,24 @@ export interface Edge {
 
 
 export interface Section {
-  id: string;
+  // id: string;
   section_id: string;  // Add this line
   label: string;
   files: File[];
 }
 
 
+// TODO: create a new status, warnings for something wrong(marked with color red)
 export interface Node {
   node_id: string;
   label: string;
-  status: 'Not Started' | 'In Progress' | 'Completed';
+  status: 'Not Started' | 'In Progress' | 'Completed' | 'Error';
   sections: Section[];
 }
 
 
-// TODO: create a new status, warnings for something wrong(marked with color red)
 export interface Workflow {
-  id: string;
+  workflow_id: string;
   name: string;
   is_locked: boolean;
   nodes: Node[];

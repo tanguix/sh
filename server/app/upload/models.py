@@ -68,9 +68,9 @@ from bson import ObjectId
 from typing import Dict, Any
 
 class Workflow:
-    def __init__(self, name, frontend_id, is_locked, status):
+    def __init__(self, name, workflow_id, is_locked, status):
         self._id = ObjectId()
-        self.workflow_id = frontend_id
+        self.workflow_id = workflow_id
         self.name = name
         self.node_ids = []
         self.edges = []
@@ -459,13 +459,13 @@ class HandleWorkflow:
                 results.append(result)
             except KeyError as e:
                 logger.error(f"KeyError in change: {str(e)}")
-                results.append({"error": f"Invalid change format: {str(e)}"})
+                results.append({"error": f"Invalid change format: {str(e)}", "type": change.get('type', 'unknown')})
             except ValueError as e:
                 logger.error(f"ValueError in change: {str(e)}")
-                results.append({"error": str(e)})
+                results.append({"error": str(e), "type": change.get('type', 'unknown')})
             except Exception as e:
                 logger.error(f"Unexpected error processing change: {str(e)}")
-                results.append({"error": "An unexpected error occurred"})
+                results.append({"error": "An unexpected error occurred", "type": change.get('type', 'unknown')})
         return results
 
 
@@ -473,22 +473,29 @@ class HandleWorkflow:
 
     @staticmethod
     def process_change(change_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        if change_type == 'create_workflow':
-            return HandleWorkflow._create_workflow(data)
-        elif change_type == 'confirm_workflow':
-            return HandleWorkflow._confirm_workflow(data)
-        elif change_type == 'remove_node':
-            return HandleWorkflow._remove_node(data)
-        elif change_type == 'add_node':
-            return HandleWorkflow._add_node(data)
-        elif change_type == 'add_section':
-            return HandleWorkflow._add_section(data)
-        elif change_type == 'update_node_status':
-            return HandleWorkflow._update_node_status(data)
-        elif change_type == 'update_lock_status':
-            return HandleWorkflow._update_lock_status(data)
-        else:
-            raise ValueError(f"Unknown change type: {change_type}")
+        try:
+            if change_type == 'create_workflow':
+                return HandleWorkflow._create_workflow(data)
+            elif change_type == 'confirm_workflow':
+                return HandleWorkflow._confirm_workflow(data)
+            elif change_type == 'remove_node':
+                return HandleWorkflow._remove_node(data)
+            elif change_type == 'add_node':
+                return HandleWorkflow._add_node(data)
+            elif change_type == 'add_section':
+                return HandleWorkflow._add_section(data)
+            elif change_type == 'update_node_status':
+                return HandleWorkflow._update_node_status(data)
+            elif change_type == 'update_lock_status':
+                return HandleWorkflow._update_lock_status(data)
+            else:
+                raise ValueError(f"Unknown change type: {change_type}")
+        except KeyError as e:
+            logger.error(f"Missing key in change data for type '{change_type}': {str(e)}")
+            return {"error": f"Missing data for {change_type}: {str(e)}", "type": change_type}
+        except Exception as e:
+            logger.error(f"Error processing change of type '{change_type}': {str(e)}")
+            return {"error": f"Error processing {change_type}: {str(e)}", "type": change_type}
 
 
 
@@ -514,7 +521,7 @@ class HandleWorkflow:
     def _create_workflow(data: Dict[str, Any]) -> Dict[str, Any]:
         workflow = Workflow(
             name=data['name'], 
-            frontend_id=data['id'], 
+            workflow_id=data['workflow_id'], 
             is_locked=data.get('is_locked', False), 
             status=data.get('status', 'created')
         )
@@ -530,19 +537,22 @@ class HandleWorkflow:
             node.save()
             workflow.node_ids.append(node.node_id)
             
+            print(f"\nProcessing node: {node.label}")
             for section_data in node_data.get('sections', []):
-                section_id = section_data.get('id') or f"section-{section_data['label'].lower()}-{int(time.time() * 1000)}"
+                print(f"\nSection data: {section_data}")
                 section = Section(
-                    section_id=section_id,
+                    section_id=section_data.get('section_id'),
                     node_id=node.node_id,
                     workflow_id=workflow.workflow_id,
                     label=section_data['label'],
                 )
                 section_result = section.save()
-                section_id = section_result.inserted_id
-                Node.push_section(node.node_id, str(section_id))
+                section_id = str(section_result.inserted_id)
+                Node.push_section(node.node_id, section_id)
+                print(f"Saved section: {section.label} with id: {section_id}")
 
         workflow.save()
+        print(f"\nWorkflow saved: {workflow.name} with id: {workflow.workflow_id}")
         return {
             "type": "create_workflow",
             "id": workflow.workflow_id,
@@ -552,7 +562,6 @@ class HandleWorkflow:
             "status": workflow.status,
             "is_locked": workflow.is_locked
         }
-
 
 
 
@@ -596,9 +605,8 @@ class HandleWorkflow:
         Workflow.update_edges(workflow_id, new_edges)
 
         for section_data in node_data.get('sections', []):
-            section_id = section_data.get('id') or f"section-{section_data['label'].lower()}-{int(time.time() * 1000)}"
             section = Section(
-                section_id=section_id,
+                section_id=section_data.section_id,
                 node_id=node.node_id,
                 workflow_id=node.workflow_id,
                 label=section_data['label']
@@ -620,11 +628,14 @@ class HandleWorkflow:
 
     @staticmethod
     def _update_node_status(data: Dict[str, Any]) -> Dict[str, Any]:
-        workflow_id = data['workflowId']
-        node_id = data['node_id']
-        new_status = data['status']
+        workflow_id = data.get('workflow_id')
+        node_id = data.get('node_id')
+        new_status = data.get('status')
         
-        # Find the node, ensuring it belongs to the correct workflow
+        if not all([workflow_id, node_id, new_status]):
+            missing = [k for k in ['workflow_id', 'node_id', 'status'] if k not in data]
+            raise KeyError(f"Missing required data for updating node status: {', '.join(missing)}")
+        
         node = db.nodes.find_one({"workflow_id": workflow_id, "node_id": node_id})
         if not node:
             raise ValueError(f"Node with id {node_id} not found in workflow {workflow_id}")
@@ -658,9 +669,14 @@ class HandleWorkflow:
 
 
 
+
+
+
+
+
     @staticmethod
     def _remove_node(data: Dict[str, Any]) -> Dict[str, Any]:
-        workflow_id = data['workflowId']
+        workflow_id = data['workflow_id']
         workflow = db.workflows.find_one({"workflow_id": workflow_id})
         
         if workflow['is_locked']:
@@ -708,37 +724,40 @@ class HandleWorkflow:
 
     @staticmethod
     def _add_section(data: Dict[str, Any]) -> Dict[str, Any]:
-        workflow_id = data['workflowId']
-        node_id = data['nodeId']  # Changed from 'node_id' to 'nodeId'
-        workflow = db.workflows.find_one({"workflow_id": workflow_id})
-        
-        if workflow['is_locked']:
-            raise ValueError(f"Cannot add section. Workflow {workflow_id} is locked.")
-        
-        existing_section = db.sections.find_one({
-            "node_id": node_id,
-            "section_id": data['section']['id']
-        })
+        workflow_id = data.get('workflow_id')
+        node_id = data.get('node_id')
+        section_data = data.get('section')
 
-        if existing_section:
-            section_id = existing_section['_id']
-            print(f"Using existing section: {section_id}")
-        else:
-            section = Section(
-                section_id=data['section']['id'],
-                node_id=node_id,
-                workflow_id=workflow_id,
-                label=data['section']['label']
-            )
-            section_result = section.save()
-            section_id = section_result.inserted_id
-            Node.push_section(node_id, str(section_id))
-            print(f"Created new section: {section_id}")
+        if not all([workflow_id, node_id, section_data]):
+            raise ValueError(f"Missing required data for adding section: {data}")
+
+        workflow = db.workflows.find_one({"workflow_id": workflow_id})
+        if not workflow:
+            raise ValueError(f"Workflow with id {workflow_id} not found")
+
+        if workflow.get('is_locked'):
+            raise ValueError(f"Cannot add section. Workflow {workflow_id} is locked.")
+
+        node = db.nodes.find_one({"node_id": node_id, "workflow_id": workflow_id})
+        if not node:
+            raise ValueError(f"Node with id {node_id} not found in workflow {workflow_id}")
+
+        section = Section(
+            section_id=section_data['section_id'],
+            node_id=node_id,
+            workflow_id=workflow_id,
+            label=section_data['label']
+        )
+        section_result = section.save()
+        section_id = str(section_result.inserted_id)
+        Node.push_section(node_id, section_id)
+
+        print(f"\nAdded new section: {section.label} with id: {section_id} to node: {node_id}")
 
         return {
             "type": "add_section",
-            "id": str(section_id),
-            "section_id": data['section']['id'],
+            "id": section_id,
+            "section_id": section_data['section_id'],
             "node_id": node_id,
-            "label": data['section']['label'],
+            "label": section_data['label'],
         }
