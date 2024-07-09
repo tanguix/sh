@@ -1,6 +1,5 @@
 import uuid
 from app.database import db
-import time
 from bson import ObjectId
 from werkzeug.utils import secure_filename
 import os

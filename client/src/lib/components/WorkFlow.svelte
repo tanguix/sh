@@ -33,7 +33,7 @@
 
   let isWorkflowLocked = false;             // Lock status of workflow, TODO: later use for modification permission (now is reactive component)
   let newNodeLabel = '';                    // newly added node label
-  let newNodePrevId = '';                   // node's previous node's id in workflow data strcuture
+  let newNodePrevLabel = '';                   // node's previous node's id in workflow data strcuture
   let recentChange: Change | null = null;   // for tracking changes
  
 
@@ -114,25 +114,27 @@
 
 
   // 1)
-  // parameters => obj_type: (again, for type safety)  |  label: name of node  |  existingItems: existing workflow objects with workflow_id
+  // checking existing ID, pass in obj_type and label to create unique ID
   function generateUniqueId(
-    obj_type: 'workflow' | 'node' | 'section' | 'file',
-    label: string,
-    existingItems: { id?: string; workflow_id?: string; node_id?: string; section_id?: string }[] 
-  ): string 
-  {
-    const prefix = {
-      'workflow': 'wf-',
-      'node': 'node-',
-      'section': 'section-',
-      'file': 'file-'
-    }[obj_type];
+    obj_type: 'workflow' | 'node' | 'section' | 'file',     // parameters => obj_type: (again, for type safety)
+    label: string,                                          // label: name of node 
+    existingItems: { 
+      id?: string; 
+      workflow_id?: string; 
+      node_id?: string; 
+      section_id?: string }[] ): string                     // passing array of different type for uniqueness checking
 
+    {
+    // const prefix is like a json, obj_tyoe are keys, each key stand for a prefix string
+    // basically you access the prefix using obj_type(key) passed in as parameter:  prefix = {json}[key]
+    const prefix = { 'workflow': 'wf-', 'node': 'node-', 'section': 'section-', 'file': 'file-' }[obj_type];
+
+    // concatenation: prefix + label TODO: do I have to make it case sensitive?
     const baseId = `${prefix}${label.toLowerCase().replace(/\s+/g, '_')}`;
     let uniqueId = baseId;
     let counter = 1;
 
-    // Check for uniqueness based on the object type
+    // Check for uniqueness based on the object type, passed in an array
     while (existingItems.some(item => 
       item.id === uniqueId || 
       item.workflow_id === uniqueId || 
@@ -140,19 +142,19 @@
       item.section_id === uniqueId
     )) {
       uniqueId = `${baseId}-${counter}`;
-      counter++;
+      counter++;                            // plus one
     }
-
     // Append the current timestamp
     return `${uniqueId}-${Date.now()}`;
+
+    // TODO: find username, and append to the end
   }
 
 
 
 
-
   // 2)
-  // create default array of section type json: Section[]
+  // create default array of section type json: Section[], but leave it empty for now
   function createDefaultSections(): Section[] {
     const sectionId = generateUniqueId('section', 'expense', []);
     console.log(`Creating default section with ID: ${sectionId}`);
@@ -171,9 +173,10 @@
 
 
 
-  // ----------------------------------------------------- Main WorkFlow (modify data sent to backend) -----------------------------------------------------
+  // ------------------------------------------ Main WorkFlow Instruction (modify data sent to backend) ------------------------------------------
 
-  // @create a default workflow array
+  // 1)
+  // create a default workflow array
   function createWorkflow() {
 
     if (!workflowName) {
@@ -186,8 +189,9 @@
     const workflowId = generateUniqueId('workflow', workflowName, workflows);
 
     // Create nodes with unique IDs and sections
-    // const newNodes = ['Sampling', 'Production', 'Delivery', 'Payment'].map(label => {
-    const newNodes = ['TEST_1', 'TEST_2'].map(label => {
+    // here newNodes is the label we initialize for default nodes, map() function iterate over each label in newNodes
+    // passing them to generated unique ID
+    const newNodes = ['Sampling', 'Production', 'Delivery', 'Payment'].map(label => {
       const nodeId = generateUniqueId('node', label, []);
       return {
         node_id: nodeId,
@@ -198,7 +202,7 @@
     });
 
 
-    // Create edges using the node IDs
+    // iterate nodes and their corresponding indexes, create a new edge array
     const newEdges = newNodes.slice(0, -1).map((node, index) => ({
       from: node.node_id,
       to: newNodes[index + 1].node_id
@@ -257,13 +261,15 @@
 
 
 
-  // @toggle the status of a node
+  // 2)
+  // toggle the status of a node
   function toggleNodeStatus(workflowId: string, nodeId: string) {
     // findIndex is an array method built-in: (for w in workflow) {return w (w.workflow_id = workflowId)}
     const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
     if (workflowIndex === -1) return;   // return nothing if index = -1
 
-    /* .map is a built-in array method
+    /* 
+    .map is a built-in array method
         - create new array by calling a provided function (callback function) on every element
         - map() iterate over each node in the original array
         - "() => {}": this is an arrow function, ( parameters ) => { operation } 
@@ -293,19 +299,19 @@
         changes.update(act => {
           // create new variable for storing new changes
           const newChange = { 
-            type: 'update_node_status',     // give it a type
+            type: 'update_node_status',       // give it a type
             data: { 
-              workflow_id: workflowId,      // workflow_id for identification
-              node_id: node.node_id,        // same for node_id
-              status: newStatus             // but set the new status
+              workflow_id: workflowId,        // workflow_id for identification
+              node_id: node.node_id,          // same for node_id
+              status: newStatus               // but set the new status
             } 
           };
           logChange(newChange);
-          return [...act, newChange];
+          return [...act, newChange];         // spread out current actions, and append newChange
         });
 
         unsavedChanges.set(true);
-        return {...node, status: newStatus};
+        return {...node, status: newStatus};  // BUG: here, don't know why, fix later
       }
 
       return node;
@@ -317,109 +323,162 @@
 
 
 
-
-
-    function confirmWorkflowCreation(workflowId: string) {
-      const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-      if (workflowIndex === -1) {
-        alert('Workflow not found');
-        return;
-      }
-
-      workflows[workflowIndex].is_locked = true;
-      workflows = [...workflows];
-
-      changes.update(c => [...c, { 
-        type: 'update_lock_status', 
-        data: { workflow_id: workflowId, is_locked: true } 
-      }]);
-      unsavedChanges.set(true);
+  // 3)
+  // lock the workflow, prevent users that don't have authorization to modify
+  function lockWorkflow(workflowId: string) {
+    
+    // find workflow object based on index matching the workflowID
+    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    if (workflowIndex === -1) {
+      alert('Workflow not found');
+      return;
     }
 
-    function releaseWorkflow(workflowId: string) {
-      const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-      if (workflowIndex === -1) return;
+    // set the is_locked attribute(key) to true (lock the workflow)
+    workflows[workflowIndex].is_locked = true;
+    // the above line can simply change the is_locked's value 
+    // this line is spread the original array and create new array 
+    // simply modifying the array can't trigger svelte reactive re-rendering, creating new array can
+    // we want to see the lock effect immediately
+    workflows = [...workflows];
 
-      workflows[workflowIndex].is_locked = false;
-      workflows = [...workflows];
+    // collect the instruction as changes, for later pass to backend
+    changes.update(c => [...c, { 
+      type: 'update_lock_status', 
+      data: { workflow_id: workflowId, is_locked: true } 
+    }]);
+    // you have change something
+    unsavedChanges.set(true);
+  }
 
-      changes.update(c => [...c, { 
-        type: 'update_lock_status', 
-        data: { workflow_id: workflowId, is_locked: false } 
-      }]);
-      unsavedChanges.set(true);
-    }
 
-    function toggleLockStatus(workflowId: string) {
-      const workflow = workflows.find(w => w.workflow_id === workflowId);
-      if (workflow) {
-        if (workflow.is_locked) {
-          releaseWorkflow(workflowId);
-        } else {
-          confirmWorkflowCreation(workflowId);
-        }
+  // 4)
+  // release the workflow for modifying 
+  function releaseWorkflow(workflowId: string) {
+    // same, find workflow based on index matching with id
+    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    if (workflowIndex === -1) return;
+
+    // set is_locked to false
+    workflows[workflowIndex].is_locked = false;
+    // reflect the changes
+    workflows = [...workflows];
+
+    // append the instructions
+    changes.update(c => [...c, { 
+      type: 'update_lock_status', 
+      data: { workflow_id: workflowId, is_locked: false } 
+    }]);
+    // update change variable
+    unsavedChanges.set(true);
+  }
+
+
+
+  // 5)
+  // toggle lock and release function
+  function toggleLockStatus(workflowId: string) {
+    // every workflow has its own button for controling lock and release status
+    // because there is a loop rendering all the existing workflow in the array, you can get the id for then
+    const workflow = workflows.find(w => w.workflow_id === workflowId);
+    if (workflow) {
+      if (workflow.is_locked) {
+        releaseWorkflow(workflowId);
+      } else {
+        lockWorkflow(workflowId);
       }
     }
+  }
 
 
 
-    function addNode(workflowId: string) {
-      const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-      if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
-        alert('Cannot add node. Workflow is locked or not found.');
-        return;
-      }
 
-      const newNodeId = generateUniqueId('node', newNodeLabel, workflows[workflowIndex].nodes);
-      const newNode: Node = {
-        node_id: newNodeId,
-        label: newNodeLabel,
-        status: 'Not Started',
-        sections: createDefaultSections()
-      };
+  // 6)
+  // adding node to existing workflow array
+  function addNode(workflowId: string) {
+
+    // you are dealing with array of workflow, so you always need to find the 
+    // basically only if the workflow exist, then you can add node to it; also check if it's locked or not
+    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
+      alert('Cannot add node. Workflow is locked or not found.');
+      return;
+    }
+
+    // generate a unique ID for new node you entered (label is the name, and index use to find workflows)
+    const newNodeId = generateUniqueId('node', newNodeLabel, workflows[workflowIndex].nodes);
+    const newNode: Node = {
+      node_id: newNodeId,
+      label: newNodeLabel,
+      status: 'Not Started',
+      sections: createDefaultSections()
+    };
       
-      const prevNode = workflows[workflowIndex].nodes.find(node => node.label.toLowerCase() === newNodePrevId.toLowerCase());
-      let updatedEdges = [...workflows[workflowIndex].edges];
-      
-      if (prevNode) {
-        updatedEdges.push({ from: prevNode.node_id, to: newNode.node_id });
+    // HACK: usually, there would be nodes with the same name in a workflow, so this method don't check with dupliate label name 
+    // assuming label are unique in every workflow.
+    // it find the previous node solely on the label name entered by user (matching the elements in the array)
+    const prevNode = workflows[workflowIndex].nodes.find(node => node.label.toLowerCase() === newNodePrevLabel.toLowerCase());
+    // create a copy of current edges data structure, temp array for newly edges updating
+    let updatedEdges = [...workflows[workflowIndex].edges];
+
+    // if prevNode exist
+    if (prevNode) {
+      // append the new from-to relation to edge object (an json element in the array)
+      updatedEdges.push({ from: prevNode.node_id, to: newNode.node_id });
         
-        const nextNodeIndex = workflows[workflowIndex].nodes.findIndex(n => n.node_id === prevNode.node_id) + 1;
-        if (nextNodeIndex < workflows[workflowIndex].nodes.length) {
-          const nextNode = workflows[workflowIndex].nodes[nextNodeIndex];
-          const existingEdgeIndex = updatedEdges.findIndex(edge => edge.from === prevNode.node_id && edge.to === nextNode.node_id);
+      // locate the index of current workflow, and then you plus one, meaning locating the next index 
+      // because right now you just add the new edge to the array, you don't change the original edge combination yet
+      const nextNodeIndex = workflows[workflowIndex].nodes.findIndex(n => n.node_id === prevNode.node_id) + 1;
+      // you assume there's a next node first by adding 1 to the index, now you actually checking if it indeed exist
+      if (nextNodeIndex < workflows[workflowIndex].nodes.length) {
+        // if there is indeed next node, grap this node with index into const nextNode: workflows[index].nodes[index]
+        const nextNode = workflows[workflowIndex].nodes[nextNodeIndex];
+        // now do the same: find the edge connect the current node and next node originally (before modification)
+        const existingEdgeIndex = updatedEdges.findIndex(edge => edge.from === prevNode.node_id && edge.to === nextNode.node_id);
           
-          if (existingEdgeIndex !== -1) {
-            updatedEdges[existingEdgeIndex] = { ...updatedEdges[existingEdgeIndex], from: newNode.node_id };
-          } else {
-            updatedEdges.push({ from: newNode.node_id, to: nextNode.node_id });
-          }
+        // !== -1, meaning such edge exist (still checking now)
+        if (existingEdgeIndex !== -1) {
+          // spreading all property within this edge object (from, to), add / update the from properties
+          // as if you break the pointer in this way 
+          // Originally: A -> B 
+          // Imtermediately: A -> B, A -> NewNode (done right after if statement), NewNode -> B
+          // finally: A -> NewNode, NewNode -> B (below line replace the A -> B, break the links directly), maybe it's now how do in C++
+          updatedEdges[existingEdgeIndex] = { ...updatedEdges[existingEdgeIndex], from: newNode.node_id };
+        } else {
+          // if not, push this NewNode -> NextNode directly
+          updatedEdges.push({ from: newNode.node_id, to: nextNode.node_id });
         }
-      } else if (workflows[workflowIndex].nodes.length > 0) {
-        updatedEdges.push({ from: workflows[workflowIndex].nodes[workflows[workflowIndex].nodes.length - 1].node_id, to: newNode.node_id });
       }
-
-      workflows[workflowIndex].nodes = [...workflows[workflowIndex].nodes, newNode];
-      workflows[workflowIndex].edges = updatedEdges;
-      workflows = [...workflows];
-
-      changes.update(c => {
-        const newChange = { 
-          type: 'add_node', 
-          data: { 
-            workflow_id: workflowId,
-            node: newNode,
-            edges: updatedEdges
-          } 
-        };
-        logChange(newChange);
-        return [...c, newChange];
-      });
-
-      unsavedChanges.set(true);
-      newNodeLabel = '';
-      newNodePrevId = '';
+    } else {
+      // if no previous node is specifiied, create a new branch 
+      // we do nothing here, no edges are added
+      console.log('creating a new branch or starting node;')
     }
+
+
+    // update nodes, edge, and use ...workflow to trigger reative rendering
+    workflows[workflowIndex].nodes = [...workflows[workflowIndex].nodes, newNode];
+    workflows[workflowIndex].edges = updatedEdges;
+    workflows = [...workflows];
+
+    // append instruction to the changes variable
+    changes.update(c => {
+      const newChange = { 
+        type: 'add_node', 
+        data: { 
+          workflow_id: workflowId,
+          node: newNode,
+          edges: updatedEdges
+        } 
+      };
+      logChange(newChange);
+      return [...c, newChange];
+    });
+
+    unsavedChanges.set(true);
+    newNodeLabel = '';
+    newNodePrevLabel = '';
+  }
 
 
 
@@ -935,7 +994,8 @@
             <div>
               <label>
                 Connect after node (enter node label):
-                <input type="text" bind:value={newNodePrevId} />
+                <input type="text" bind:value={newNodePrevLabel} />
+                <!-- <p>{newNodePrevId}</p> -->
               </label>
             </div>
             <button type="submit">Add Node</button>
