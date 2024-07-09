@@ -37,6 +37,21 @@
   let recentChange: Change | null = null;   // for tracking changes
  
 
+  // new section label name (entered in the frontend)
+  let newSectionLabel = '';
+  let addingSectionToNodeId: string | null = null;
+
+  // assign values for rendering and backend record if add
+  function startAddingSection(nodeId: string) {
+    addingSectionToNodeId = nodeId;
+    newSectionLabel = '';
+  }
+
+  // reset value for rendering and backend (set to null)
+  function cancelAddingSection() {
+    addingSectionToNodeId = null;
+    newSectionLabel = '';
+  }
 
     // const nodes = writable<Node[]>([]);
     // const edges = writable<Edge[]>([]);
@@ -290,7 +305,7 @@
           case 'Error':
             newStatus = 'Completed';
             break;
-          case 'Error':
+          case 'Completed':
             newStatus = 'Not Started';
             break;
         }
@@ -421,40 +436,29 @@
     // create a copy of current edges data structure, temp array for newly edges updating
     let updatedEdges = [...workflows[workflowIndex].edges];
 
-    // if prevNode exist
     if (prevNode) {
-      // append the new from-to relation to edge object (an json element in the array)
+      // Connect the new node to the previous node
       updatedEdges.push({ from: prevNode.node_id, to: newNode.node_id });
-        
-      // locate the index of current workflow, and then you plus one, meaning locating the next index 
-      // because right now you just add the new edge to the array, you don't change the original edge combination yet
-      const nextNodeIndex = workflows[workflowIndex].nodes.findIndex(n => n.node_id === prevNode.node_id) + 1;
-      // you assume there's a next node first by adding 1 to the index, now you actually checking if it indeed exist
-      if (nextNodeIndex < workflows[workflowIndex].nodes.length) {
-        // if there is indeed next node, grap this node with index into const nextNode: workflows[index].nodes[index]
-        const nextNode = workflows[workflowIndex].nodes[nextNodeIndex];
-        // now do the same: find the edge connect the current node and next node originally (before modification)
-        const existingEdgeIndex = updatedEdges.findIndex(edge => edge.from === prevNode.node_id && edge.to === nextNode.node_id);
-          
-        // !== -1, meaning such edge exist (still checking now)
-        if (existingEdgeIndex !== -1) {
-          // spreading all property within this edge object (from, to), add / update the from properties
-          // as if you break the pointer in this way 
-          // Originally: A -> B 
-          // Imtermediately: A -> B, A -> NewNode (done right after if statement), NewNode -> B
-          // finally: A -> NewNode, NewNode -> B (below line replace the A -> B, break the links directly), maybe it's now how do in C++
-          updatedEdges[existingEdgeIndex] = { ...updatedEdges[existingEdgeIndex], from: newNode.node_id };
-        } else {
-          // if not, push this NewNode -> NextNode directly
-          updatedEdges.push({ from: newNode.node_id, to: nextNode.node_id });
-        }
+      
+      // Check if the previous node has any outgoing edges
+      // two conditions: 
+      // 1) exist "from" property, which has previous node 
+      // 2) don't have "to" property == newNode
+      // these condition make sure you found a valid place to add node to existing workflow
+      const nextEdge = updatedEdges.find(edge => edge.from === prevNode.node_id && edge.to !== newNode.node_id);
+      
+      // if has nextEdge (identify it using previous node, meaning an edge after a previous node)
+      // FULL LOGIC:
+      // 1) Originally: A -> B 
+      // 2) Imtermediately: A -> B, A -> NewNode (done right after if statement), NewNode -> B
+      // 3) finally: A -> NewNode, NewNode -> B (below line replace the A -> B, break the links directly), maybe it's now how do in C++
+      if (nextEdge) {
+        nextEdge.from = newNode.node_id;    // this line break the links by updating the from property of the targetted edge
       }
     } else {
-      // if no previous node is specifiied, create a new branch 
-      // we do nothing here, no edges are added
-      console.log('creating a new branch or starting node;')
+      console.log("Creating a new branch or starting node");
+      // No need to add any edges when creating a new branch, also handle the situation when no edge found
     }
-
 
     // update nodes, edge, and use ...workflow to trigger reative rendering
     workflows[workflowIndex].nodes = [...workflows[workflowIndex].nodes, newNode];
@@ -481,409 +485,428 @@
   }
 
 
+  // 7) 
+  // remove node
+  function removeNode(workflowId: string, nodeId: string) {
 
-    function removeNode(workflowId: string, nodeId: string) {
-      const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-      if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
-        alert('Cannot remove node. Workflow is locked or not found.');
-        return;
-      }
+    // First: again locate the workflow and check it status
+    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
+      alert('Cannot remove node. Workflow is locked or not found.');
+      return;
+    }
 
-      const nodeToRemove = workflows[workflowIndex].nodes.find(node => node.node_id === nodeId);
-      if (!nodeToRemove) {
-        console.error(`Node with id ${nodeId} not found`);
-        return;
-      }
+    // Second: located the nodes in the given workflow
+    const nodeToRemove = workflows[workflowIndex].nodes.find(node => node.node_id === nodeId);
+    if (!nodeToRemove) {
+      console.error(`Node with id ${nodeId} not found`);
+      return;
+    }
 
-      workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.filter(node => node.node_id !== nodeId);
+    // keep all other nodes that id's doesn't equal to selected one for removal
+    workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.filter(node => node.node_id !== nodeId);
       
-      let updatedEdges = workflows[workflowIndex].edges.filter(edge => edge.from !== nodeId && edge.to !== nodeId);
-      const incomingEdge = workflows[workflowIndex].edges.find(edge => edge.to === nodeId);
-      const outgoingEdge = workflows[workflowIndex].edges.find(edge => edge.from === nodeId);
-      if (incomingEdge && outgoingEdge) {
-        updatedEdges.push({ from: incomingEdge.from, to: outgoingEdge.to });
-      }
+    // same logic, keep all the edge without "from" and "to" properties doesn't equal to nodeId (the one intended to remove)
+    // A -> B -> C -> D: say if you want to remove C, you exclude edges B -to- C and C -to- D
+    let updatedEdges = workflows[workflowIndex].edges.filter(edge => edge.from !== nodeId && edge.to !== nodeId);
 
-      workflows[workflowIndex].edges = updatedEdges;
-      workflows = [...workflows];
+    // find edge's to == C, and edge's from == C, kind of the reverse finding compared to above "updatedEdge" finding
+    const incomingEdge = workflows[workflowIndex].edges.find(edge => edge.to === nodeId);
+    const outgoingEdge = workflows[workflowIndex].edges.find(edge => edge.from === nodeId);
+    // if exist, then append the new edge to updatedEdge variable
+    if (incomingEdge && outgoingEdge) {
+      updatedEdges.push({ from: incomingEdge.from, to: outgoingEdge.to });
+    }
 
-      changes.update(c => {
-        const newChange = { 
-          type: 'remove_node', 
-          data: { 
-            workflow_id: workflowId,
-            node_id: nodeToRemove.node_id,
-            edges: updatedEdges
-          } 
+    // replace the original set of edge with updatedEdges
+    workflows[workflowIndex].edges = updatedEdges;
+    // trigger reactive
+    workflows = [...workflows];
+
+    changes.update(c => {
+      const newChange = { 
+        type: 'remove_node', 
+        data: { 
+          workflow_id: workflowId,
+          node_id: nodeToRemove.node_id,
+          edges: updatedEdges
+        } 
+      };
+      logChange(newChange);
+      return [...c, newChange];
+    });
+    unsavedChanges.set(true);
+  }
+
+
+
+
+  // 8)
+  // given workflowId and nodeId, locate the place for section adding
+  function addSection(workflowId: string, nodeId: string) {
+
+    // always, first find the workflow using unique ID
+    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
+      alert('Cannot add section. Workflow is locked or not found.');
+      return;
+    }
+
+    // Prevent button clicking if not section label entered
+    if (!newSectionLabel) {
+      alert('Please enter a section label.');
+      return;
+    }
+
+    // retrieve the section label name, and generated unique ID
+    const newSectionId = generateUniqueId('section', newSectionLabel.toLowerCase(), []);
+
+    // find the corresponding node
+    workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map(node => {
+      if (node.node_id === nodeId) {
+        const newSection = {
+          section_id: newSectionId,  // new unique sectionId just generated
+          label: newSectionLabel,
+          files: []
         };
-        logChange(newChange);
-        return [...c, newChange];
-      });
-      unsavedChanges.set(true);
-    }
 
-    let newSectionLabel = '';
-    let addingSectionToNodeId: string | null = null;
-
-    function startAddingSection(nodeId: string) {
-      addingSectionToNodeId = nodeId;
-      newSectionLabel = '';
-    }
-
-    function cancelAddingSection() {
-      addingSectionToNodeId = null;
-      newSectionLabel = '';
-    }
-
-
-
-
-
-    function addSection(workflowId: string, nodeId: string) {
-      const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-      if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
-        alert('Cannot add section. Workflow is locked or not found.');
-        return;
-      }
-
-      if (!newSectionLabel) {
-        alert('Please enter a section label.');
-        return;
-      }
-
-      // const newSectionId = `section-${newSectionLabel.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
-      const newSectionId = generateUniqueId('section', newSectionLabel.toLowerCase(), []);
-
-      workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map(node => {
-        if (node.node_id === nodeId) {
-          const newSection = {
-            // id: newSectionId,
-            section_id: newSectionId,  // Add this line
-            label: newSectionLabel,
-            files: []
+        // update the instruction to changes
+        changes.update(c => {
+          const newChange = { 
+            type: 'add_section', 
+            data: { 
+              workflow_id: workflowId,
+              node_id: node.node_id,
+              section: newSection 
+            } 
           };
+          console.log('Section added:', newChange);
+          return [...c, newChange];
+        });
 
-          changes.update(c => {
-            const newChange = { 
-              type: 'add_section', 
-              data: { 
-                workflow_id: workflowId,
-                node_id: node.node_id,
-                section: newSection 
-              } 
-            };
-            console.log('Section added:', newChange);
-            return [...c, newChange];
-          });
+        // reset the changes
+        unsavedChanges.set(true);
+        // two spreads here: 
+        // first execute the object level: find the node and goes into the nested one
+        // then execute the array level: node.sections spread, add new section 
+        // now located the next spreading node repeat the operation
+        return {...node, sections: [...node.sections, newSection]};
+      }
+      // if no node found, return node object as it is
+      return node;
+    });
 
-          unsavedChanges.set(true);
-          return {...node, sections: [...node.sections, newSection]};
-        }
-        return node;
+    // trigger reactive rendering
+    workflows = [...workflows];
+    // reset section and node for next entered
+    addingSectionToNodeId = null;
+    newSectionLabel = '';
+  }
+
+
+
+
+
+  // 9) quiet complicated file upload function
+  async function uploadFiles(workflowId: string, nodeId: string, sectionId: string, event: Event) {
+    console.log(`uploadFiles called with workflowId: ${workflowId}, nodeId: ${nodeId}, sectionId: ${sectionId}`);
+        
+    // just for double checking the sections, normally don't need this checking
+    if (!sectionId || sectionId === 'undefined') {
+        console.error('Invalid section ID');
+        alert('Error: Invalid section ID. Please try again or contact support.');
+        return;
+    }
+
+    // if use open the file explorer by clicking file upload button 
+    // catch the upload behavior, but then cancel the upload behavior, this is for not raising an error 
+    const target = event.target as HTMLInputElement;
+    if (!target.files || target.files.length === 0) {
+        console.error('No files selected');
+        return;
+    }
+
+    // convert file into array, because we allow multiple files upload at the same time 
+    // TODO: later you might need to add check here, for restricting the total file size trying to upload 
+    // use helper function, this function is already long and complex
+    const files = Array.from(target.files);
+    // create form data and workflow_id, node_id, section_id for securing the spot that files are gonna uploaded
+    const formData = new FormData();
+    formData.append('workflow_id', workflowId);
+    formData.append('node_id', nodeId);
+    formData.append('section_id', sectionId);
+
+    // checking lines, could be remove later
+    console.log(`FormData:`, {
+        workflow_id: formData.get('workflow_id'),
+        node_id: formData.get('node_id'),
+        section_id: formData.get('section_id')
+    });
+
+    // create the unique id and key properties for the each file inside the array 
+    const fileDataArray = files.map(file => ({
+        file_id: generateUniqueId('file', file.name, []),
+        name: file.name,
+        type: file.type,
+        size: file.size
+    }));
+
+    // when you can upload multiple files to some components, you catch them together 
+    // but in the end, you have to send them in form data, which means one by one added to formdata
+    // below is doing the one by one adding by loop with key = "files" indicating this is file to send
+    files.forEach((file, index) => {
+        formData.append('files', file);
+    });
+    // this is the array of all meta data of the files
+    formData.append('file_data', JSON.stringify(fileDataArray));
+
+    // open API routes
+    try {
+      console.log('Attempting to upload files to:', API_ENDPOINTS.UPLOAD_FILE);
+      const response = await fetch(API_ENDPOINTS.UPLOAD_FILE, {
+          method: 'POST',
+          body: formData
       });
 
-      workflows = [...workflows];
-      addingSectionToNodeId = null;
-      newSectionLabel = '';
-    }
+      if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
 
 
+      const result = await response.json();
+      console.log('Upload response:', result);
 
-
-
-
-    async function uploadFiles(workflowId: string, nodeId: string, sectionId: string, event: Event) {
-        console.log(`uploadFiles called with workflowId: ${workflowId}, nodeId: ${nodeId}, sectionId: ${sectionId}`);
-        
-        if (!sectionId || sectionId === 'undefined') {
-            console.error('Invalid section ID');
-            alert('Error: Invalid section ID. Please try again or contact support.');
-            return;
-        }
-
-        const target = event.target as HTMLInputElement;
-        if (!target.files || target.files.length === 0) {
-            console.error('No files selected');
-            return;
-        }
-
-        const files = Array.from(target.files);
-        const formData = new FormData();
-        formData.append('workflow_id', workflowId);
-        formData.append('node_id', nodeId);
-        formData.append('section_id', sectionId);
-
-        console.log(`FormData:`, {
-            workflow_id: formData.get('workflow_id'),
-            node_id: formData.get('node_id'),
-            section_id: formData.get('section_id')
-        });
-
-        const fileDataArray = files.map(file => ({
-            file_id: generateUniqueId('file', file.name, []),
-            name: file.name,
-            type: file.type,
-            size: file.size
-        }));
-
-        files.forEach((file, index) => {
-            formData.append('files', file);
-        });
-        formData.append('file_data', JSON.stringify(fileDataArray));
-
-        try {
-            console.log('Attempting to upload files to:', API_ENDPOINTS.UPLOAD_FILE);
-            const response = await fetch(API_ENDPOINTS.UPLOAD_FILE, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-            }
-
-            const result = await response.json();
-            console.log('Upload response:', result);
-
-            // Update local state to reflect the new files
-            workflows = workflows.map(workflow => {
-                if (workflow.workflow_id === workflowId) {
-                    workflow.nodes = workflow.nodes.map(node => {
-                        if (node.node_id === nodeId) {
-                            node.sections = node.sections.map(section => {
-                                if (section.section_id === sectionId) {  // Changed from section.id to section.section_id
-                                    const successfulUploads = result.results.filter(r => r.message === "File uploaded successfully");
-                                    const newFiles = successfulUploads.map(upload => {
-                                        const fileData = fileDataArray.find(f => f.file_id === upload.file_id);
-                                        return fileData ? fileData : null;
-                                    }).filter(Boolean);
-                                    
-                                    section.files = [...(section.files || []), ...newFiles];
-                                }
-                                return section;
-                            });
-                        }
-                        return node;
-                    });
+      // Update local state to reflect the new files? HACK: didn't add comments yet
+      workflows = workflows.map(workflow => {
+        // match the correct workflow with id
+        if (workflow.workflow_id === workflowId) {
+          // find nodes under correct workflow_id
+          workflow.nodes = workflow.nodes.map(node => {
+            // match the correct node with id
+            if (node.node_id === nodeId) {
+              // repeat for section
+              node.sections = node.sections.map(section => {
+                if (section.section_id === sectionId) {
+                  // TODO: "r" implicitly has any type, to fix this warnings, solution is to create type interface, save it for later
+                  // same for upload 
+                  const successfulUploads = result.results.filter(r => r.message === "File uploaded successfully");
+                  const newFiles = successfulUploads.map(upload => {
+                    const fileData = fileDataArray.find(f => f.file_id === upload.file_id);
+                    return fileData ? fileData : null;
+                  }).filter(Boolean);
+                      
+                  section.files = [...(section.files || []), ...newFiles];
                 }
-                return workflow;
-            });
-
-        } catch (error) {
-            console.error('Error uploading files:', error);
-            if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                console.error('Network error: Unable to connect to the server. Please check your internet connection and server status.');
-            }
-            alert('Failed to upload files. Please try again later.');
-        }
-    }
-
-
-
-
-
-
-    async function commitChanges() {
-      const allChanges = get(changes);
-    
-      try {
-        const response = await fetch(API_ENDPOINTS.WORKFLOW_COMMIT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-
-          body: JSON.stringify({ changes: allChanges }),
-        });
-
-        console.log("see the response:", response);
-        if (!response.ok) {
-          throw new Error('Failed to commit changes');
-        }
-
-        const result = await response.json();
-        console.log('Changes committed successfully:', result);
-
-        changes.set([]);
-        unsavedChanges.set(false);
-
-      } catch (error) {
-        console.error('Error committing changes:', error);
-        alert('Failed to commit changes. Please try again.');
-      }
-    }
-
-
-
-
-
-    async function fetchWorkflow() {
-        if (!workflow_id) {
-            alert('Please enter a workflow ID');
-            return;
-        }
-
-        try {
-            const url = constructUrl(API_ENDPOINTS.FETCH_ALL_WORKFLOW, {
-                workflow_id: workflow_id,
-            });
-
-            console.log(`Fetching workflow with URL: ${url}`);
-
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch workflow: ${response.status} ${response.statusText}`);
-            }
-
-            const workflow = await response.json();
-            console.log('Fetched workflow:', workflow);
-
-
-            // Ensure that each node has a sections array and each section has a files array
-            const processedNodes = workflow.nodes.map(node => ({
-                ...node,
-                sections: (node.sections || []).map(section => ({
-                    ...section,
-                    files: section.files || []
-                }))
-            }));
-
-            if (!workflows.some(w => w.id === workflow.workflow_id)) {
-                workflows = [...workflows, {
-                    workflow_id: workflow.workflow_id,
-                    name: workflow.name,
-                    is_locked: workflow.is_locked,
-                    nodes: sortNodesByEdges(processedNodes, workflow.edges),
-                    edges: workflow.edges,
-                    status: workflow.status || 'saved',  // defaulting to 'saved' if not provided
-                }];
-            } else {
-                alert('This workflow is already displayed.');
-            }
-
-
-            workflow_id = '';
-
-        } catch (error) {
-            console.error('Error fetching workflow:', error);
-            alert(`Failed to fetch workflow: ${error.message}`);
-        }
-    }
-
-
-
-
-
-
-    function sortNodesByEdges(nodes: Node[], edges: Edge[]): Node[] {
-      const nodeMap = new Map(nodes.map(node => [node.node_id, node]));
-      const sortedNodes: Node[] = [];
-      const visited = new Set<string>();
-
-      function dfs(nodeId: string) {
-        if (visited.has(nodeId)) return;
-        visited.add(nodeId);
-        
-        const node = nodeMap.get(nodeId);
-        if (node) {
-          sortedNodes.push(node);
-        }
-
-        const outgoingEdges = edges.filter(edge => edge.from === nodeId);
-        for (const edge of outgoingEdges) {
-          dfs(edge.to);
-        }
-      }
-
-      const startNodes = nodes.filter(node => 
-        !edges.some(edge => edge.to === node.node_id)
-      );
-
-      for (const startNode of startNodes) {
-        dfs(startNode.node_id);
-      }
-
-      for (const node of nodes) {
-        if (!visited.has(node.node_id)) {
-          sortedNodes.push(node);
-        }
-      }
-
-      return sortedNodes;
-    }
-
-
-
-
-
-    function downloadFile(workflowId: any, nodeId: any, sectionId: any, fileId: any, fileName: any) {
-      const downloadUrl = `${API_ENDPOINTS.DOWNLOAD_FILE}/${workflowId}/${nodeId}/${sectionId}/${fileId}`;
-      
-      fetch(downloadUrl)
-        .then(response => {
-          if (!response.ok) {
-            if (response.status === 404) {
-              throw new Error('File not found in the specified section');
-            }
-            throw new Error('Network response was not ok');
-          }
-          const contentDisposition = response.headers.get('Content-Disposition');
-          let serverFileName = fileName;
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-            if (filenameMatch) {
-              serverFileName = filenameMatch[1];
-            }
-          }
-          return response.blob().then(blob => ({ blob, fileName: serverFileName }));
-        })
-        .then(({ blob, fileName }) => {
-          if ('showSaveFilePicker' in window) {
-            return window.showSaveFilePicker({
-              suggestedName: fileName,
-              types: [{
-                description: 'File',
-                accept: { [blob.type]: [`.${fileName.split('.').pop()}`] }
-              }]
-            }).then(handle => handle.createWritable())
-              .then(writable => {
-                writable.write(blob);
-                return writable.close();
+                return section;
               });
-          } else {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-          }
-        })
-        .catch(error => {
-          // Check if the error is due to user canceling the download
-          if (error.name === 'AbortError') {
-            // User canceled the download, do nothing
-            console.log('Download canceled by user');
-          } else {
-            // For other errors, log to console but don't show an alert
-            console.error('Download failed:', error);
-          }
-        });
+            }
+            return node;
+          });
+        }
+        return workflow;
+      });
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error('Network error: Unable to connect to the server. Please check your internet connection and server status.');
+      }
+      alert('Failed to upload files. Please try again later.');
+    }
+  }
+
+
+
+  // this one is simple, send all frontend modification as instructions 
+  // for backend to process, exclude the file uploading part, because that was done directly
+  async function commitChanges() {
+    const allChanges = get(changes);
+    try {
+      const response = await fetch(API_ENDPOINTS.WORKFLOW_COMMIT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+      body: JSON.stringify({ changes: allChanges }),
+      });
+
+      console.log("see the response:", response);
+      if (!response.ok) {
+        throw new Error('Failed to commit changes');
+      }
+
+      const result = await response.json();
+      console.log('Changes committed successfully:', result);
+
+      changes.set([]);
+      unsavedChanges.set(false);
+
+    } catch (error) {
+      console.error('Error committing changes:', error);
+      alert('Failed to commit changes. Please try again.');
+    }
+  }
+
+
+
+
+  // ------------------------------------------ Retrieve Workflow (from backend) ------------------------------------------
+
+  async function fetchWorkflow() {
+    if (!workflow_id) {
+      alert('Please enter a workflow ID');
+      return;
     }
 
+    try {
+      const url = constructUrl(API_ENDPOINTS.FETCH_ALL_WORKFLOW, {
+        workflow_id: workflow_id,
+      });
+      console.log(`Fetching workflow with URL: ${url}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch workflow: ${response.status} ${response.statusText}`);
+      }
+
+      const workflow = await response.json();
+      console.log('Fetched workflow:', workflow);
+
+      // Ensure that each node has a sections array and each section has a files array
+      const processedNodes = workflow.nodes.map(node => ({
+        ...node,
+        sections: (node.sections || []).map(section => ({
+          ...section,
+          files: section.files || []
+        }))
+      }));
+
+      if (!workflows.some(w => w.workflow_id === workflow.workflow_id)) {
+        workflows = [...workflows, {
+          workflow_id: workflow.workflow_id,
+          name: workflow.name,
+          is_locked: workflow.is_locked,
+          nodes: sortNodesByEdges(processedNodes, workflow.edges),
+          edges: workflow.edges,
+          status: workflow.status || 'saved',  // defaulting to 'saved' if not provided
+        }];
+      } else {
+        alert('This workflow is already displayed.');
+      }
+
+      workflow_id = '';
+    } catch (error) {
+      console.error('Error fetching workflow:', error);
+      alert(`Failed to fetch workflow: ${error.message}`);
+    }
+  }
 
 
 
+  // sorting the nodes based on edge before displaying them when fetch back from the backend
+  function sortNodesByEdges(nodes: Node[], edges: Edge[]): Node[] {
+    const nodeMap = new Map(nodes.map(node => [node.node_id, node]));
+    const sortedNodes: Node[] = [];
+    const visited = new Set<string>();
+
+    function dfs(nodeId: string) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+        
+      const node = nodeMap.get(nodeId);
+      if (node) {
+        sortedNodes.push(node);
+      }
+
+      const outgoingEdges = edges.filter(edge => edge.from === nodeId);
+      for (const edge of outgoingEdges) {
+        dfs(edge.to);
+      }
+    }
+
+    const startNodes = nodes.filter(node => 
+      !edges.some(edge => edge.to === node.node_id)
+    );
+
+    for (const startNode of startNodes) {
+      dfs(startNode.node_id);
+    }
+
+    for (const node of nodes) {
+      if (!visited.has(node.node_id)) {
+        sortedNodes.push(node);
+      }
+    }
+
+    return sortedNodes;
+  }
 
 
 
+  // download the files
+  async function downloadFile(workflowId: string, nodeId: string, sectionId: string, fileId: string, fileName: string) {
+    const downloadUrl = `${API_ENDPOINTS.DOWNLOAD_FILE}/${workflowId}/${nodeId}/${sectionId}/${fileId}`;
+    
+    try {
+      const response = await fetch(downloadUrl);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('File not found in the specified section');
+        }
+        throw new Error('Network response was not ok');
+      }
 
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let serverFileName = fileName;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+        if (filenameMatch) {
+          serverFileName = filenameMatch[1];
+        }
+      }
+
+      const blob = await response.blob();
+
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: serverFileName,
+            types: [{
+              description: 'File',
+              accept: { [blob.type]: [`.${serverFileName.split('.').pop()}`] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            console.log('Download canceled by user');
+            return;
+          }
+          throw error;
+        }
+      } else {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = serverFileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  }
 
 </script>
+
+
 
 <main>
   <div>
@@ -891,6 +914,7 @@
     <button on:click={fetchWorkflow}>Add Workflow</button>
   </div>
 
+  <!-- right now the rendering logic is  -->
   {#if workflows.length === 0}
     <div>
       <input bind:value={workflowName} placeholder="Enter workflow name" />
@@ -943,7 +967,6 @@
           
 
 
-
           {#each node.sections as section}
 
 
@@ -977,8 +1000,6 @@
           <button on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>Remove Node</button>
         </section>
       {/each}
-
-
 
 
       {#if !workflow.is_locked}

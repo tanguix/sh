@@ -583,7 +583,7 @@ class HandleWorkflow:
 
     @staticmethod
     def _add_node(data: Dict[str, Any]) -> Dict[str, Any]:
-        workflow_id = data['workflowId']
+        workflow_id = data['workflow_id']
         workflow = db.workflows.find_one({"workflow_id": workflow_id})
         
         if workflow['is_locked']:
@@ -605,7 +605,7 @@ class HandleWorkflow:
 
         for section_data in node_data.get('sections', []):
             section = Section(
-                section_id=section_data.section_id,
+                section_id=section_data['section_id'],
                 node_id=node.node_id,
                 workflow_id=node.workflow_id,
                 label=section_data['label']
@@ -620,7 +620,7 @@ class HandleWorkflow:
             "node_id": node.node_id,
             "label": node.label,
             "status": node.status,
-            "sections": [{"label": section_data['label'], "id": section_data.get('id')} for section_data in node_data.get('sections', [])]
+            "sections": [{"label": section_data['label'], "id": section_data.get('section_id')} for section_data in node_data.get('sections', [])]
         }
 
 
