@@ -3,27 +3,27 @@
 
 <script lang="ts">
 
-    import { API_ENDPOINTS, constructUrl } from '../utils/api.ts'; // api helper function
-    import { page } from '$app/stores'  // this is the function to import if you want to use locals' value
-    import { get } from 'svelte/store'; // the correct way to retrieve locals values in .ts file
+  import { API_ENDPOINTS, constructUrl } from '../utils/api.ts'; // api helper function
+  import { page } from '$app/stores'  // this is the function to import if you want to use locals' value
+  import { get } from 'svelte/store'; // the correct way to retrieve locals values in .ts file
 
-    import { writable } from 'svelte/store';
-    import { unsavedChanges } from '$lib/stores/unsavedChanges.ts';
-    import { loadBase64Font, addImageToPDF, generatePDF } from '$lib/utils/pdf.ts';
+  import { writable } from 'svelte/store';
+  import { unsavedChanges } from '$lib/utils/vars';
+  import { loadBase64Font, addImageToPDF, generatePDF } from '$lib/utils/pdf.ts';
 
-    export let results: any[] = [];
-    export let deepCopiedResults: any[] = [];
+  export let results: any[] = [];
+  export let deepCopiedResults: any[] = [];
 
-    export let keysToExclude: string[] = ['image_url', 'categories', 'tags'];
-    let content: string = `
-        Marks & Order Nos.(标志及订单号码)\n
-        Description & Specifications (描述及规格)\n
-        Unit Price (单价)\n
-        Total Price (总值)\n
-        H.S.CODE (商品编码)\n
-        From 由\n
-        To 至
-    `;
+  export let keysToExclude: string[] = ['image_url', 'categories', 'tags'];
+  let content: string = `
+      Marks & Order Nos.(标志及订单号码)\n
+      Description & Specifications (描述及规格)\n
+      Unit Price (单价)\n
+      Total Price (总值)\n
+      H.S.CODE (商品编码)\n
+      From 由\n
+      To 至
+  `;
 
     const displayedForms = writable({});
     let selectedKeys = {};

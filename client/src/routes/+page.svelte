@@ -5,7 +5,7 @@
     import "../app.css";
     import { writable } from 'svelte/store';
     import { onMount, onDestroy } from 'svelte';
-    import { unsavedChanges } from '$lib/stores/unsavedChanges';
+    import { unsavedChanges } from '$lib/utils/vars';
     import { get } from 'svelte/store';
     import { goto } from '$app/navigation';
     import Modal from '../lib/components/Modal.svelte';

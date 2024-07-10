@@ -1,45 +1,43 @@
 <script lang="ts">
-
   import { onMount } from 'svelte';
-  import { writable, derived, get } from 'svelte/store';
-  import { API_ENDPOINTS, constructUrl } from '../utils/api';
+  import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
   import Pipeline from './Pipeline.svelte';
-  import type { Workflow, Node, Edge, Section, File } from '$lib/types';
-  import { unsavedChanges } from '$lib/stores/unsavedChanges';
-
-
-  // ----------------------------------------------------- "Type" specific to WorkFlow object -----------------------------------------------------
-  // "Change" type: used for keep track of instructions given by frontend
-  interface Change {
-    type: 
-      'create_workflow' | 
-      'confirm_workflow' | 
-      'add_node' | 
-      'remove_node' | 
-      'add_section' | 
-      'upload_file' | 
-      'update_lock_status';
-    data: any;
-  }
+  import type { Workflow, Node, Edge, Section, Change } from '$lib/types';
+  import { unsavedChanges } from '$lib/utils/vars';
+  import { eventBus } from '$lib/utils/eventBus';
+  import { WORKFLOW_CHANGE_EVENT } from '$lib/utils/vars'
 
 
   // ----------------------------------------------------- Variable Declaration -----------------------------------------------------
+  let workflows: Workflow[] = [];                     // array of workflow object
+  let workflowName = '';                              // workflowName used when creating workflow
+  let workflow_id = '';                               //
+  let isWorkflowLocked = false;                       // lock status TODO: later use for modification permission (now is reactive component)
+  let newNodeLabel = '';                              // newly added node's label (name)  (coming from html)
+  let newNodePrevLabel = '';                          // placeholder for previous node label (coming from html)
+  let newSectionLabel = '';                           // same
+  let addingSectionToNodeId: string | null = null;    // catch the section parent node id
 
-  let workflows: Workflow[] = [];           // an array of workflow object
-  let workflowName = '';                    // the name of certain workflow object
-  let workflow_id = '';                     // workflow id, unique identifier generated
-  const changes = writable<Change[]>([]);   // svelte reactive array of an array of "Change" type, 
-                                            // because needed to be constantly updated 
 
-  let isWorkflowLocked = false;             // Lock status of workflow, TODO: later use for modification permission (now is reactive component)
-  let newNodeLabel = '';                    // newly added node label
-  let newNodePrevLabel = '';                   // node's previous node's id in workflow data strcuture
-  let recentChange: Change | null = null;   // for tracking changes
- 
 
-  // new section label name (entered in the frontend)
-  let newSectionLabel = '';
-  let addingSectionToNodeId: string | null = null;
+
+  // ----------------------------------------------------- Frontend Interaction Function -----------------------------------------------------
+
+  // "CustomEvent" type is for event that parent send(dispatch 派遣) to child component for communication
+  // <Pipeline /> is created inside <WorkFlow />, so former is the parent, latter is the child
+  function handleNodeClick(event: CustomEvent<string>) {
+    const nodeId = event.detail;
+    const sectionElement = document.getElementById(nodeId);       // get the HTML element in the document with an ID matching nodeID
+    if (sectionElement) {
+      sectionElement.scrollIntoView({ behavior: 'smooth' });      // js built-in method, scroll to tag contains id=nodeID
+    }                                                             // scroll smoothly, rather than instantly
+  }
+
+  // strings after semi-colon ensure function will return one of the string (type safety)
+  // like the python def xxx() -> str:
+  function getNodeStatus(node: Node): 'Completed' | 'In Progress' | 'Not Started' | 'Error' {
+    return node.status;
+  }
 
   // assign values for rendering and backend record if add
   function startAddingSection(nodeId: string) {
@@ -53,93 +51,35 @@
     newSectionLabel = '';
   }
 
-    // const nodes = writable<Node[]>([]);
-    // const edges = writable<Edge[]>([]);
-    // const workflowStatus = writable('');
-    // const workflowState = writable<'draft' | 'confirmed'>('draft');
 
 
+  // ----------------------------------------------------- State Status Management eventBus -----------------------------------------------------
 
-
-
-
-  // TODO: remember to get the user from locals: 
-  // 1) pass user as key for workflow 
-  // 2) use users to set permission of lock button 
-  // 3) append the username to the end of (unique_id + timestemp) => workflow, node, section, file?
-
-
-
-
-  // ----------------------------------------------------- Debugging/Logging Function -----------------------------------------------------
-  // automatically track changes in "changes" variable
+  // constantly listen to changes happening across the web application, when changes found 
+  // add to listeners variable in eventBus.ts for execution
   onMount(() => {
-    const unsubscribe = changes.subscribe(value => {
-      console.log('Current changes:', value);
+    eventBus.on(WORKFLOW_CHANGE_EVENT, ({ workflowId, change }) => {
+      console.log(`Change in workflow ${workflowId}:`, change);
     });
-    return unsubscribe;
   });
 
-
-  // not sure if this is necessary
-  function logChange(newChange: Change) {
-    console.log('Recent change:', newChange);
-    recentChange = newChange;
+  // fire the instruction when this function is called 
+  // it must have the same name (string type) as the on: method in eventBus (you can know it anything)
+  // that's for eventBus to indentify which instruction should related to which action
+  function emitChange(workflowId: string, change: Change) {
+    eventBus.emit(WORKFLOW_CHANGE_EVENT, { workflowId, change });
+    unsavedChanges.set(true);
   }
-
-
-
-
-
-  // ----------------------------------------------------- Frontend Interaction Function -----------------------------------------------------
-
-  // "CustomEvent" type is for event that parent send(dispatch 派遣) to child component for communication
-  // <Pipeline /> is created inside <WorkFlow />, so former is the parent, latter is the child
-  function handleNodeClick(event: CustomEvent<string>) {
-    const nodeId = event.detail;                                      // extract the data(detail) in the event
-    const sectionElement = document.getElementById(nodeId);           // get the HTML element in the document with an ID matching nodeID
-    if (sectionElement) {
-      sectionElement.scrollIntoView({ behavior: 'smooth' });          // js built-in method, scroll to tag contains id=nodeID
-    }                                                                 // scroll smoothly, random than instantly
-  }
-
-  // strings after semi-colon ensure function will return one of the string (type safety)
-  // like the python def xxx() -> str:
-  function getNodeStatus(node: Node): 'Completed' | 'In Progress' | 'Not Started' | 'Error' {
-    return node.status;
-  }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
   // ----------------------------------------------------- Workflow Helper Function -----------------------------------------------------
 
 
-
-
   // 1)
   // checking existing ID, pass in obj_type and label to create unique ID
-  function generateUniqueId(
-    obj_type: 'workflow' | 'node' | 'section' | 'file',     // parameters => obj_type: (again, for type safety)
-    label: string,                                          // label: name of node 
-    existingItems: { 
-      id?: string; 
-      workflow_id?: string; 
-      node_id?: string; 
-      section_id?: string }[] ): string                     // passing array of different type for uniqueness checking
-
-    {
+  // parameters => obj_type: (again, for type safety)
+  function generateUniqueId(obj_type: 'workflow' | 'node' | 'section' | 'file', label: string, existingItems: any[]): string {
     // const prefix is like a json, obj_tyoe are keys, each key stand for a prefix string
     // basically you access the prefix using obj_type(key) passed in as parameter:  prefix = {json}[key]
     const prefix = { 'workflow': 'wf-', 'node': 'node-', 'section': 'section-', 'file': 'file-' }[obj_type];
@@ -157,22 +97,23 @@
       item.section_id === uniqueId
     )) {
       uniqueId = `${baseId}-${counter}`;
-      counter++;                            // plus one
+      counter++;
     }
+
+    // TODO: remember to get the user from locals: 
+    // 1) pass user as key for workflow 
+    // 2) use users to set permission of lock button 
+    // 3) append the username to the end of (unique_id + timestemp) => workflow, node, section, file?
+
     // Append the current timestamp
     return `${uniqueId}-${Date.now()}`;
-
-    // TODO: find username, and append to the end
   }
-
-
-
 
   // 2)
   // create default array of section type json: Section[], but leave it empty for now
+  // assume every node will have expense section
   function createDefaultSections(): Section[] {
     const sectionId = generateUniqueId('section', 'expense', []);
-    console.log(`Creating default section with ID: ${sectionId}`);
     return [
       {
         section_id: sectionId,
@@ -184,14 +125,10 @@
 
 
 
-
-
-
-
   // ------------------------------------------ Main WorkFlow Instruction (modify data sent to backend) ------------------------------------------
 
-  // 1)
-  // create a default workflow array
+  // 1) 
+  // create default workflow array 
   function createWorkflow() {
 
     if (!workflowName) {
@@ -216,64 +153,42 @@
       };
     });
 
-
     // iterate nodes and their corresponding indexes, create a new edge array
     const newEdges = newNodes.slice(0, -1).map((node, index) => ({
       from: node.node_id,
       to: newNodes[index + 1].node_id
     }));
 
-
     // create workflow object
     const newWorkflow: Workflow = { 
-        workflow_id: workflowId, 
-        name: workflowName, 
-        is_locked: isWorkflowLocked,
-        nodes: newNodes,
-        edges: newEdges,
-        status: 'created',
+      workflow_id: workflowId, 
+      name: workflowName, 
+      is_locked: isWorkflowLocked,
+      nodes: newNodes,
+      edges: newEdges,
+      status: 'created',
     };
 
-    // "..." operator mean spread the element in the array after it (workflows)
-    // after spreading adding the item or array(newWorkflow) after comma to it and create a new array
-    // this method does not modify the original array directly, 
-    // and js will free up memory when original one is not referred anymore
+    /* 
+    "..." operator mean spread the element in the array after it (workflows)
+    after spreading adding the item or array(newWorkflow) after comma to it and create a new array
+    this method does not modify the original array directly, 
+    and js will free up memory when original one is not referred anymore
+    */
     workflows = [...workflows, newWorkflow];
 
-    console.log('Newly created workflow:', newWorkflow); // Log created workflow
-
-    /* 
-    Few things to note: 
-    1) what's a callback function? 
-       - function A that was passed to another function B as an argument, A is intended to execute later
-       - executing later can mean: B will decide when to invoke A
-    2) svelte store 
-       - think of it as a class in python, you can create reactive object in store 
-       - here changes.update() is function B, const act => {} is function A, changes store frontend operation
-       - currentChange is temp variable hold the current value in changes array (reactive array)
-       - is like the "i" in for loop
-    3) update 
-       - below is updating the empty changes array
-    */
-    changes.update(act => {
-        const newChange = { 
-            type: 'create_workflow', 
-            data: { 
-                name: workflowName, 
-                workflow_id: workflowId, 
-                is_locked: isWorkflowLocked,
-                nodes: newWorkflow.nodes, 
-                edges: newWorkflow.edges,
-                status: newWorkflow.status,
-            } 
-        };
-        logChange(newChange)
-        return [...act, newChange];
+    emitChange(workflowId, { 
+      type: 'create_workflow', 
+      data: { 
+        name: workflowName, 
+        workflow_id: workflowId, 
+        is_locked: isWorkflowLocked,
+        nodes: newWorkflow.nodes, 
+        edges: newWorkflow.edges,
+        status: newWorkflow.status,
+      } 
     });
-    // set the unsavedChange status to true prevent user leaving unexpectedly
-    unsavedChanges.set(true);
   }
-
 
 
   // 2)
@@ -293,8 +208,7 @@
     */
     workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map((node) => {
       if (node.node_id === nodeId) {
-
-        let newStatus: 'Not Started' | 'In Progress' | 'Completed' | 'Error';   // type safety
+        let newStatus: 'Not Started' | 'In Progress' | 'Completed' | 'Error';
         switch (node.status) {
           case 'Not Started':
             newStatus = 'In Progress';
@@ -310,111 +224,60 @@
             break;
         }
 
-        // new status update, update changes to "changes" variable
-        changes.update(act => {
-          // create new variable for storing new changes
-          const newChange = { 
-            type: 'update_node_status',       // give it a type
-            data: { 
-              workflow_id: workflowId,        // workflow_id for identification
-              node_id: node.node_id,          // same for node_id
-              status: newStatus               // but set the new status
-            } 
-          };
-          logChange(newChange);
-          return [...act, newChange];         // spread out current actions, and append newChange
+        // append instruction to the changes list
+        emitChange(workflowId, { 
+          type: 'update_node_status',
+          data: { 
+            workflow_id: workflowId,
+            node_id: node.node_id,
+            status: newStatus
+          } 
         });
 
-        unsavedChanges.set(true);
-        return {...node, status: newStatus};  // BUG: here, don't know why, fix later
+        return {...node, status: newStatus};
       }
-
       return node;
     });
     workflows = [...workflows];
   }
 
 
-
-
-
   // 3)
   // lock the workflow, prevent users that don't have authorization to modify
-  function lockWorkflow(workflowId: string) {
-    
+  // not lock = release, so original release function is removed
+  function toggleLockStatus(workflowId: string) {
     // find workflow object based on index matching the workflowID
-    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-    if (workflowIndex === -1) {
-      alert('Workflow not found');
+    const workflow = workflows.find(w => w.workflow_id === workflowId);
+
+    if (workflow) {
+      const newLockStatus = !workflow.is_locked;  // set the is_locked attribute
+      workflow.is_locked = newLockStatus;         // assign
+
+      // simply modifying the array can't trigger svelte reactive re-rendering, creating new array can
+      // we want to see the lock effect immediately
+      workflows = [...workflows];
+
+      emitChange(workflowId, { 
+        type: 'update_lock_status', 
+        data: { 
+          workflow_id: workflowId, 
+          is_locked: newLockStatus 
+        } 
+      });
+    } else {
+      alert("Workflow not found")
       return;
     }
-
-    // set the is_locked attribute(key) to true (lock the workflow)
-    workflows[workflowIndex].is_locked = true;
-    // the above line can simply change the is_locked's value 
-    // this line is spread the original array and create new array 
-    // simply modifying the array can't trigger svelte reactive re-rendering, creating new array can
-    // we want to see the lock effect immediately
-    workflows = [...workflows];
-
-    // collect the instruction as changes, for later pass to backend
-    changes.update(c => [...c, { 
-      type: 'update_lock_status', 
-      data: { workflow_id: workflowId, is_locked: true } 
-    }]);
-    // you have change something
-    unsavedChanges.set(true);
   }
 
 
   // 4)
-  // release the workflow for modifying 
-  function releaseWorkflow(workflowId: string) {
-    // same, find workflow based on index matching with id
-    const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
-    if (workflowIndex === -1) return;
-
-    // set is_locked to false
-    workflows[workflowIndex].is_locked = false;
-    // reflect the changes
-    workflows = [...workflows];
-
-    // append the instructions
-    changes.update(c => [...c, { 
-      type: 'update_lock_status', 
-      data: { workflow_id: workflowId, is_locked: false } 
-    }]);
-    // update change variable
-    unsavedChanges.set(true);
-  }
-
-
-
-  // 5)
-  // toggle lock and release function
-  function toggleLockStatus(workflowId: string) {
-    // every workflow has its own button for controling lock and release status
-    // because there is a loop rendering all the existing workflow in the array, you can get the id for then
-    const workflow = workflows.find(w => w.workflow_id === workflowId);
-    if (workflow) {
-      if (workflow.is_locked) {
-        releaseWorkflow(workflowId);
-      } else {
-        lockWorkflow(workflowId);
-      }
-    }
-  }
-
-
-
-
-  // 6)
   // adding node to existing workflow array
   function addNode(workflowId: string) {
 
     // you are dealing with array of workflow, so you always need to find the 
-    // basically only if the workflow exist, then you can add node to it; also check if it's locked or not
     const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
+    // basically only if the workflow exist, then you can add node to it; also check if it's locked or not
     if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
       alert('Cannot add node. Workflow is locked or not found.');
       return;
@@ -437,23 +300,22 @@
     let updatedEdges = [...workflows[workflowIndex].edges];
 
     if (prevNode) {
-      // Connect the new node to the previous node
+      // Connect the new node to the previous node 
       updatedEdges.push({ from: prevNode.node_id, to: newNode.node_id });
-      
+
       // Check if the previous node has any outgoing edges
       // two conditions: 
       // 1) exist "from" property, which has previous node 
       // 2) don't have "to" property == newNode
       // these condition make sure you found a valid place to add node to existing workflow
       const nextEdge = updatedEdges.find(edge => edge.from === prevNode.node_id && edge.to !== newNode.node_id);
-      
       // if has nextEdge (identify it using previous node, meaning an edge after a previous node)
       // FULL LOGIC:
       // 1) Originally: A -> B 
       // 2) Imtermediately: A -> B, A -> NewNode (done right after if statement), NewNode -> B
       // 3) finally: A -> NewNode, NewNode -> B (below line replace the A -> B, break the links directly), maybe it's now how do in C++
       if (nextEdge) {
-        nextEdge.from = newNode.node_id;    // this line break the links by updating the from property of the targetted edge
+        nextEdge.from = newNode.node_id;
       }
     } else {
       console.log("Creating a new branch or starting node");
@@ -465,27 +327,24 @@
     workflows[workflowIndex].edges = updatedEdges;
     workflows = [...workflows];
 
-    // append instruction to the changes variable
-    changes.update(c => {
-      const newChange = { 
-        type: 'add_node', 
-        data: { 
-          workflow_id: workflowId,
-          node: newNode,
-          edges: updatedEdges
-        } 
-      };
-      logChange(newChange);
-      return [...c, newChange];
+    emitChange(workflowId, { 
+      type: 'add_node', 
+      data: { 
+        workflow_id: workflowId,
+        node: newNode,
+        edges: updatedEdges
+      } 
     });
 
-    unsavedChanges.set(true);
+    // used to have this: unsavedChanges.set(true);
+    // because whenever you made changes, you should notify the system 
+    // now this is handled inside emitChange(), so you just need to reset the Node and prevNode
     newNodeLabel = '';
     newNodePrevLabel = '';
   }
 
 
-  // 7) 
+  // 5) 
   // remove node
   function removeNode(workflowId: string, nodeId: string) {
 
@@ -523,28 +382,21 @@
     // trigger reactive
     workflows = [...workflows];
 
-    changes.update(c => {
-      const newChange = { 
-        type: 'remove_node', 
-        data: { 
-          workflow_id: workflowId,
-          node_id: nodeToRemove.node_id,
-          edges: updatedEdges
-        } 
-      };
-      logChange(newChange);
-      return [...c, newChange];
+    emitChange(workflowId, { 
+      type: 'remove_node', 
+      data: { 
+        workflow_id: workflowId,
+        node_id: nodeToRemove.node_id,
+        edges: updatedEdges
+      } 
     });
-    unsavedChanges.set(true);
   }
 
 
 
-
-  // 8)
+  // 6) 
   // given workflowId and nodeId, locate the place for section adding
   function addSection(workflowId: string, nodeId: string) {
-
     // always, first find the workflow using unique ID
     const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
     if (workflowIndex === -1 || workflows[workflowIndex].is_locked) {
@@ -565,65 +417,43 @@
     workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map(node => {
       if (node.node_id === nodeId) {
         const newSection = {
-          section_id: newSectionId,  // new unique sectionId just generated
+          section_id: newSectionId,
           label: newSectionLabel,
           files: []
         };
 
-        // update the instruction to changes
-        changes.update(c => {
-          const newChange = { 
-            type: 'add_section', 
-            data: { 
-              workflow_id: workflowId,
-              node_id: node.node_id,
-              section: newSection 
-            } 
-          };
-          console.log('Section added:', newChange);
-          return [...c, newChange];
+        // update the instruction
+        emitChange(workflowId, { 
+          type: 'add_section', 
+          data: { 
+            workflow_id: workflowId,
+            node_id: node.node_id,
+            section: newSection 
+          } 
         });
 
-        // reset the changes
-        unsavedChanges.set(true);
-        // two spreads here: 
-        // first execute the object level: find the node and goes into the nested one
-        // then execute the array level: node.sections spread, add new section 
-        // now located the next spreading node repeat the operation
         return {...node, sections: [...node.sections, newSection]};
       }
-      // if no node found, return node object as it is
       return node;
     });
 
-    // trigger reactive rendering
     workflows = [...workflows];
-    // reset section and node for next entered
     addingSectionToNodeId = null;
     newSectionLabel = '';
   }
 
 
-
-
-
-  // 9) quiet complicated file upload function
+  // 7) 
+  // quiet complicate function for uploading files
   async function uploadFiles(workflowId: string, nodeId: string, sectionId: string, event: Event) {
-    console.log(`uploadFiles called with workflowId: ${workflowId}, nodeId: ${nodeId}, sectionId: ${sectionId}`);
-        
-    // just for double checking the sections, normally don't need this checking
-    if (!sectionId || sectionId === 'undefined') {
-        console.error('Invalid section ID');
-        alert('Error: Invalid section ID. Please try again or contact support.');
-        return;
-    }
 
-    // if use open the file explorer by clicking file upload button 
-    // catch the upload behavior, but then cancel the upload behavior, this is for not raising an error 
+    // because this function is separated from instruction, it execute the upload directly so 
+    // first need to catch the event when user click button to browser files 
     const target = event.target as HTMLInputElement;
     if (!target.files || target.files.length === 0) {
-        console.error('No files selected');
-        return;
+      // catch cancel upload, so it won't become an alert or error
+      console.error('No files selected');
+      return;
     }
 
     // convert file into array, because we allow multiple files upload at the same time 
@@ -636,66 +466,55 @@
     formData.append('node_id', nodeId);
     formData.append('section_id', sectionId);
 
-    // checking lines, could be remove later
-    console.log(`FormData:`, {
-        workflow_id: formData.get('workflow_id'),
-        node_id: formData.get('node_id'),
-        section_id: formData.get('section_id')
-    });
-
-    // create the unique id and key properties for the each file inside the array 
+    // create the unique id and key properties for the each file inside the array
     const fileDataArray = files.map(file => ({
-        file_id: generateUniqueId('file', file.name, []),
-        name: file.name,
-        type: file.type,
-        size: file.size
+      file_id: generateUniqueId('file', file.name, []),
+      name: file.name,
+      type: file.type,
+      size: file.size
     }));
 
     // when you can upload multiple files to some components, you catch them together 
     // but in the end, you have to send them in form data, which means one by one added to formdata
     // below is doing the one by one adding by loop with key = "files" indicating this is file to send
     files.forEach((file, index) => {
-        formData.append('files', file);
+      formData.append('files', file);
     });
     // this is the array of all meta data of the files
     formData.append('file_data', JSON.stringify(fileDataArray));
 
     // open API routes
     try {
-      console.log('Attempting to upload files to:', API_ENDPOINTS.UPLOAD_FILE);
       const response = await fetch(API_ENDPOINTS.UPLOAD_FILE, {
-          method: 'POST',
-          body: formData
+        method: 'POST',
+        body: formData
       });
 
       if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-
       const result = await response.json();
-      console.log('Upload response:', result);
 
-      // Update local state to reflect the new files? HACK: didn't add comments yet
+      // basically you upload files to backend, and backend receive files and send response back 
+      // you use the workflow_id, node_id, section_id to located the correct section where you loaded files 
+      // flitering out unsuccessful file uploads using message received from backend, and reflect to frontend
       workflows = workflows.map(workflow => {
-        // match the correct workflow with id
         if (workflow.workflow_id === workflowId) {
-          // find nodes under correct workflow_id
           workflow.nodes = workflow.nodes.map(node => {
-            // match the correct node with id
             if (node.node_id === nodeId) {
-              // repeat for section
               node.sections = node.sections.map(section => {
                 if (section.section_id === sectionId) {
-                  // TODO: "r" implicitly has any type, to fix this warnings, solution is to create type interface, save it for later
-                  // same for upload 
+                  // r: response, this is a json object received from backend, so { message: string, file_id: string}
+                  // to fix type warnings, you have to declare and (r: UploadFileResponse) to surpress, so leave it alone right now
                   const successfulUploads = result.results.filter(r => r.message === "File uploaded successfully");
                   const newFiles = successfulUploads.map(upload => {
+                    // same for f
                     const fileData = fileDataArray.find(f => f.file_id === upload.file_id);
                     return fileData ? fileData : null;
                   }).filter(Boolean);
                       
+                  // update the section files
                   section.files = [...(section.files || []), ...newFiles];
                 }
                 return section;
@@ -708,30 +527,28 @@
       });
     } catch (error) {
       console.error('Error uploading files:', error);
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('Network error: Unable to connect to the server. Please check your internet connection and server status.');
-      }
       alert('Failed to upload files. Please try again later.');
     }
   }
 
 
+  // trigger eventBus's method, getChangesForWorkflow()
+  async function commitChanges(workflowId: string) {
+    const changes = eventBus.getChangesForWorkflow(workflowId);
+    if (changes.length === 0) {
+      console.log('No changes to commit for workflow:', workflowId);
+      return;
+    }
 
-  // this one is simple, send all frontend modification as instructions 
-  // for backend to process, exclude the file uploading part, because that was done directly
-  async function commitChanges() {
-    const allChanges = get(changes);
     try {
       const response = await fetch(API_ENDPOINTS.WORKFLOW_COMMIT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-
-      body: JSON.stringify({ changes: allChanges }),
+        body: JSON.stringify({ changes }),
       });
 
-      console.log("see the response:", response);
       if (!response.ok) {
         throw new Error('Failed to commit changes');
       }
@@ -739,7 +556,7 @@
       const result = await response.json();
       console.log('Changes committed successfully:', result);
 
-      changes.set([]);
+      eventBus.clearChanges(workflowId);
       unsavedChanges.set(false);
 
     } catch (error) {
@@ -749,9 +566,7 @@
   }
 
 
-
-
-  // ------------------------------------------ Retrieve Workflow (from backend) ------------------------------------------
+  // ------------------------------------------ Retrieve Workflow Data ------------------------------------------
 
   async function fetchWorkflow() {
     if (!workflow_id) {
@@ -773,8 +588,9 @@
       const workflow = await response.json();
       console.log('Fetched workflow:', workflow);
 
-      // Ensure that each node has a sections array and each section has a files array
-      const processedNodes = workflow.nodes.map(node => ({
+      // guess a unordered json array mixed with section and nodes is received, 
+      // so first spreading them into category
+      const processedNodes = workflow.nodes.map((node: Node) => ({
         ...node,
         sections: (node.sections || []).map(section => ({
           ...section,
@@ -782,14 +598,16 @@
         }))
       }));
 
+      // check if the workflow is display or not
       if (!workflows.some(w => w.workflow_id === workflow.workflow_id)) {
+        // if not yet, append it into the workflow array for displaying
         workflows = [...workflows, {
           workflow_id: workflow.workflow_id,
           name: workflow.name,
           is_locked: workflow.is_locked,
           nodes: sortNodesByEdges(processedNodes, workflow.edges),
           edges: workflow.edges,
-          status: workflow.status || 'saved',  // defaulting to 'saved' if not provided
+          status: workflow.status || 'saved',
         }];
       } else {
         alert('This workflow is already displayed.');
@@ -804,35 +622,46 @@
 
 
 
-  // sorting the nodes based on edge before displaying them when fetch back from the backend
+  // sorting with dfs
   function sortNodesByEdges(nodes: Node[], edges: Edge[]): Node[] {
-    const nodeMap = new Map(nodes.map(node => [node.node_id, node]));
-    const sortedNodes: Node[] = [];
-    const visited = new Set<string>();
 
+    const nodeMap = new Map(nodes.map(node => [node.node_id, node]));     // quick node lookup by ID
+    const sortedNodes: Node[] = [];                                       // store sorted node to array
+    const visited = new Set<string>();                                    // keep track of processed nodes
+
+    // simple dfs here
     function dfs(nodeId: string) {
+      // collect vistied node (nodeId is append to visited)
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
-        
+          
+      // find the node using id
       const node = nodeMap.get(nodeId);
       if (node) {
         sortedNodes.push(node);
       }
 
+      // Recursively visit all outgoing edges 
+      // use edge for finding nodes, like this "Node: A ->", edge is pointing somewhere 
+      // that's outgoing
       const outgoingEdges = edges.filter(edge => edge.from === nodeId);
       for (const edge of outgoingEdges) {
         dfs(edge.to);
       }
     }
 
+    // find node with no incoming edges (starting node)
+    // "-> some node"
     const startNodes = nodes.filter(node => 
       !edges.some(edge => edge.to === node.node_id)
     );
 
+    // you could have many workflow, for perform DFS for each Starting node
     for (const startNode of startNodes) {
       dfs(startNode.node_id);
     }
 
+    // add any unvisited nodes
     for (const node of nodes) {
       if (!visited.has(node.node_id)) {
         sortedNodes.push(node);
@@ -843,8 +672,7 @@
   }
 
 
-
-  // download the files
+  // open routes for download, independent from instructions
   async function downloadFile(workflowId: string, nodeId: string, sectionId: string, fileId: string, fileName: string) {
     const downloadUrl = `${API_ENDPOINTS.DOWNLOAD_FILE}/${workflowId}/${nodeId}/${sectionId}/${fileId}`;
     
@@ -858,55 +686,24 @@
         throw new Error('Network response was not ok');
       }
 
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let serverFileName = fileName;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-        if (filenameMatch) {
-          serverFileName = filenameMatch[1];
-        }
-      }
-
       const blob = await response.blob();
-
-      if ('showSaveFilePicker' in window) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: serverFileName,
-            types: [{
-              description: 'File',
-              accept: { [blob.type]: [`.${serverFileName.split('.').pop()}`] }
-            }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            console.log('Download canceled by user');
-            return;
-          }
-          throw error;
-        }
-      } else {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = serverFileName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (error) {
       console.error('Download failed:', error);
+      alert('Failed to download file. Please try again later.');
     }
   }
 
+
 </script>
-
-
 
 <main>
   <div>
@@ -914,14 +711,12 @@
     <button on:click={fetchWorkflow}>Add Workflow</button>
   </div>
 
-  <!-- right now the rendering logic is  -->
   {#if workflows.length === 0}
     <div>
       <input bind:value={workflowName} placeholder="Enter workflow name" />
       <button on:click={createWorkflow}>Create New Workflow</button>
     </div>
   {/if}
-
 
   {#each workflows as workflow (workflow.workflow_id)}
     <div class="workflow">
@@ -964,43 +759,35 @@
           {:else}
             <button on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>Add Section</button>
           {/if}
-          
-
 
           {#each node.sections as section}
-
-
-              <div>
-                <h4>{section.label}</h4>
-                <p>Debug: section.section_id = {section.section_id}</p>
-                {#if node.status === 'In Progress' && workflow.status === 'saved'}
-                  <input 
-                    type="file" 
-                    multiple
-                    on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
-                    disabled={workflow.is_locked}
-                  />
-                {/if}
-                {#if section.files && section.files.length > 0}
-                  <ul>
-                    {#each section.files as file}
-                      <li>
-                        {file.name} ({file.type})
-                        <button on:click={() => downloadFile(workflow.workflow_id, node.node_id, section.section_id, file.file_id, file.name)}>
-                            Download
-                        </button>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              </div>
-
- 
+            <div>
+              <h4>{section.label}</h4>
+              {#if node.status === 'In Progress' && workflow.status === 'saved'}
+                <input 
+                  type="file" 
+                  multiple
+                  on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
+                  disabled={workflow.is_locked}
+                />
+              {/if}
+              {#if section.files && section.files.length > 0}
+                <ul>
+                  {#each section.files as file}
+                    <li>
+                      {file.name} ({file.type})
+                      <button on:click={() => downloadFile(workflow.workflow_id, node.node_id, section.section_id, file.file_id, file.name)}>
+                        Download
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
           {/each}
           <button on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>Remove Node</button>
         </section>
       {/each}
-
 
       {#if !workflow.is_locked}
         <section>
@@ -1016,15 +803,17 @@
               <label>
                 Connect after node (enter node label):
                 <input type="text" bind:value={newNodePrevLabel} />
-                <!-- <p>{newNodePrevId}</p> -->
               </label>
             </div>
             <button type="submit">Add Node</button>
           </form>
         </section>
       {/if}
+
+      <button on:click={() => commitChanges(workflow.workflow_id)} 
+              disabled={eventBus.getChangesForWorkflow(workflow.workflow_id).length === 0}>
+        Commit Changes for {workflow.name}
+      </button>
     </div>
   {/each}
-
-  <button on:click={commitChanges} disabled={!$unsavedChanges}>Commit All Changes</button>
 </main>

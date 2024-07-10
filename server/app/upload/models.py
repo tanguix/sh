@@ -503,7 +503,6 @@ class HandleWorkflow:
 
 
 
-
     @staticmethod
     def _confirm_workflow(data: Dict[str, Any]) -> Dict[str, Any]:
         workflow_id = data['id']

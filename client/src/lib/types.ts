@@ -46,7 +46,21 @@ export interface Workflow {
 }
 
 
-
+// ----------------------------------------------------- "Type" specific to WorkFlow object -----------------------------------------------------
+// "Change" type: used for keep track of instructions given by frontend
+// this is used for event based operation, but specific for WorkFlow object
+export interface Change {
+  type: 
+    'create_workflow' | 
+    'confirm_workflow' | 
+    'add_node' | 
+    'remove_node' | 
+    'add_section' | 
+    'upload_file' | 
+    'update_lock_status' |
+    'update_node_status';
+  data: any;
+}
 
 
 

@@ -2,7 +2,7 @@
 <script lang="ts">
     import { page } from '$app/stores';                     
     import { writable, derived, get } from 'svelte/store';  
-    import { API_ENDPOINTS, constructUrl } from '../utils/api.ts';
+    import { API_ENDPOINTS, constructUrl } from '../utils/api';
 
 
     // Reactive variables for toggling each section
