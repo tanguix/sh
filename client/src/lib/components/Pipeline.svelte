@@ -1,7 +1,7 @@
 
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import type { Node, Edge, Workflow } from '$lib//types';
+    import type { Node, Edge, Workflow } from '$lib/types';
 
     export let activeWorkflow: Workflow | null = null;
     export let nodes: Node[] = [];
@@ -19,11 +19,11 @@
     function getNodeColor(node: Node): string {
       switch (node.status) {
         case 'Completed':
-          return '#4CAF50'; // Green for completed
-        case 'In Progress':
-          return '#FFC107'; // Amber for in-progress
+          return '#4CAF50'; // Green for completed, TODO: change better one
+        case 'Active':
+          return '#FFA726'; // Amber for in-progress TODO: change better one
         case 'Error':
-          return '#FF0000'; // Amber for in-progress
+          return '#EF5350'; // red for problem
         // case 'Not Started':
         default:
           return '#9E9E9E'; // Grey for not started
@@ -80,92 +80,137 @@
 </script>
 
 
-<div class="pipeline">
-  {#if activeNodes.length > 0}
-    {#each connectedNodes as path}
-      <div class="path">
-        {#each path as node, index}
-          <div class="node-container">
-            <button
-              type="button"
-              class="node"
-              on:click={() => handleClick(node)}
-              style="background-color: {getNodeColor(node)};"
-            >
-              {node.label}
-            </button>
-            {#if index < path.length - 1}
-              <div class="edge"></div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/each}
-  {:else}
-    <p>No nodes to display.</p>
-  {/if}
+<div class="pipeline-container">
+  <div class="pipeline">
+    {#if activeNodes.length > 0}
+      {#each connectedNodes as path}
+        <div class="path">
+          {#each path as node, index (node.node_id)}
+            <div class="node-container">
+              <button
+                type="button"
+                class="node"
+                on:click={() => handleClick(node)}
+                style="background-color: {getNodeColor(node)};"
+              >
+                {node.label}
+              </button>
+              {#if index < path.length - 1}
+                <div class="edge"></div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/each}
+    {:else}
+      <p>No nodes to display.</p>
+    {/if}
+  </div>
 </div>
 
-
-
 <style>
-  .pipeline {
+  .pipeline-container {
     display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .pipeline {
+    display: inline-flex;
     flex-direction: column;
     align-items: flex-start;
-    width: 100%;
     overflow-x: auto;
-    padding: 20px;
+    max-width: 100%;
   }
+
   .path {
     display: flex;
     align-items: center;
     margin-bottom: 20px;
-    min-width: max-content;
+    flex-shrink: 0;
   }
+
   .node-container {
     display: flex;
     align-items: center;
     position: relative;
+    padding: 2px 0;
   }
+
+
   .node {
-    padding: 10px;
-    border: 1px solid black;
-    border-radius: 4px;
+    font-family: "Ubuntu";
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 0 20px;
     transition: all 0.3s ease;
-    min-width: 100px;
-    height: 40px;
+    min-width: 120px;
+    height: 55px;
+    margin: 0;
     z-index: 1;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    color: #000000;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
   }
-  .node:hover {
-    opacity: 0.8;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  }
-  .edge {
+
+  .node::before {
+    content: '';
     position: absolute;
-    top: 50%;
-    right: -20px;
-    width: 40px;
-    height: 2px;
-    background-color: #000;
-    z-index: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0));
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
+
+  .node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .node:hover::before {
+    opacity: 1;
+  }
+
+  .node:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .edge {
+    width: 40px;
+    height: 3px; /* Increased thickness for better visibility */
+    background: linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0.3));
+    position: relative;
+    z-index: 0;
+    margin: 0 -1px;
+  }
+
   .edge::after {
     content: '';
     position: absolute;
-    right: 0;
-    top: -4px;
+    right: 0px; /* Slightly adjust to right overlap with the next node */
+    top: 50%;   /* Center vertically */
+    transform: translateY(-50%);  /* Ensure perfect centering */
     width: 0;
     height: 0;
-    border-left: 8px solid #000;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
+    border-left: 10px solid rgba(0,0,0,0.3);  /* Increased size */
+    border-top: 7px solid transparent;        /* Increased size */
+    border-bottom: 7px solid transparent;     /* Increased size */
   }
-</style>
 
+
+</style>
 

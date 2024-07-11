@@ -199,7 +199,7 @@ class Workflow:
 
 
 class Node:
-    def __init__(self, workflow_id, node_id, label, status="Not Started"):
+    def __init__(self, workflow_id, node_id, label, status="Sleep"):
         self._id = ObjectId()
         self.node_id = node_id
         self.workflow_id = workflow_id
@@ -624,7 +624,7 @@ class HandleWorkflow:
             workflow_id=workflow_id,
             node_id=node_data['node_id'],
             label=node_data['label'],
-            status=node_data.get('status', 'Not Started')
+            status=node_data.get('status', 'Sleep')
         )
         node.save()
 

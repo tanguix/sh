@@ -42,7 +42,7 @@
 
   // strings after semi-colon ensure function will return one of the string (type safety)
   // like the python def xxx() -> str:
-  function getNodeStatus(node: Node): 'Completed' | 'In Progress' | 'Not Started' | 'Error' {
+  function getNodeStatus(node: Node): 'Sleep' | 'Active' | 'Completed' | 'Error' {
     return node.status;
   }
 
@@ -160,7 +160,7 @@
       return {
         node_id: nodeId,
         label: label,
-        status: 'Not Started',
+        status: 'Sleep',
         sections: createDefaultSections()
       };
     });
@@ -210,6 +210,7 @@
     const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
     if (workflowIndex === -1) return;
 
+
     /* 
     .map is a built-in array method
         - create new array by calling a provided function (callback function) on every element
@@ -218,39 +219,40 @@
         - map to an node -> check the node id in callback -> modify the node status associated with that node_id
         - assign new status -> 
     */
-    workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map((node) => {
-      if (node.node_id === nodeId) {
-        let newStatus: 'Not Started' | 'In Progress' | 'Completed' | 'Error';
-        switch (node.status) {
-          case 'Not Started':
-            newStatus = 'In Progress';
-            break;
-          case 'In Progress':
-            newStatus = 'Error';
-            break;
-          case 'Error':
-            newStatus = 'Completed';
-            break;
-          case 'Completed':
-            newStatus = 'Not Started';
-            break;
-        }
+    workflows = workflows.map((workflow, index) => {
+      if (index === workflowIndex) {
+        return {
+          ...workflow,
+          nodes: workflow.nodes.map((node) => {
+            if (node.node_id === nodeId) {
+              let newStatus: 'Sleep' | 'Active' | 'Completed' | 'Error';
+              switch (node.status) {
+                case 'Sleep': newStatus = 'Active'; break;
+                case 'Active': newStatus = 'Error'; break;
+                case 'Error': newStatus = 'Completed'; break;
+                case 'Completed': newStatus = 'Sleep'; break;
+              }
 
-        emitChange(workflowId, { 
-          type: 'update_node_status',
-          data: { 
-            workflow_id: workflowId,
-            node_id: node.node_id,
-            status: newStatus
-          } 
-        });
+              emitChange(workflowId, { 
+                type: 'update_node_status',
+                data: { 
+                  workflow_id: workflowId,
+                  node_id: node.node_id,
+                  status: newStatus
+                } 
+              });
 
-        return {...node, status: newStatus};
+              return {...node, status: newStatus};
+            }
+            return node;
+          })
+        };
       }
-      return node;
+      return workflow;
     });
-    workflows = [...workflows];
   }
+
+
 
 
   // 3)
@@ -293,7 +295,7 @@
     const newNode: Node = {
       node_id: newNodeId,
       label: newNodeLabel,
-      status: 'Not Started',
+      status: 'Sleep',
       sections: createDefaultSections()
     };
       
@@ -418,33 +420,47 @@
     const newSectionId = generateUniqueId('section', newSectionLabel.toLowerCase(), []);
 
     // find the corresponding node
-    workflows[workflowIndex].nodes = workflows[workflowIndex].nodes.map(node => {
-      if (node.node_id === nodeId) {
-        const newSection = {
-          section_id: newSectionId,
-          label: newSectionLabel,
-          files: []
+    workflows = workflows.map(workflow => {
+      if (workflow.workflow_id === workflowId) {
+        return {
+          ...workflow,
+          nodes: workflow.nodes.map(node => {
+            if (node.node_id === nodeId) {
+              const newSection = {
+                section_id: newSectionId,
+                label: newSectionLabel,
+                files: []
+              };
+
+              // update the instruction
+              emitChange(workflowId, { 
+                type: 'add_section', 
+                data: { 
+                  workflow_id: workflowId,
+                  node_id: node.node_id,
+                  section: newSection 
+                } 
+              });
+
+              return {
+                ...node,
+                sections: [...node.sections, newSection]
+              };
+            }
+            return node;
+          })
         };
-
-        // update the instruction
-        emitChange(workflowId, { 
-          type: 'add_section', 
-          data: { 
-            workflow_id: workflowId,
-            node_id: node.node_id,
-            section: newSection 
-          } 
-        });
-
-        return {...node, sections: [...node.sections, newSection]};
       }
-      return node;
+      return workflow;
     });
 
-    workflows = [...workflows];
     addingSectionToNodeId = null;
     newSectionLabel = '';
   }
+
+
+
+
 
 
   // 7)
@@ -780,74 +796,88 @@
 
   {#each workflows as workflow (workflow.workflow_id)}
     <div class="workflow">
-      <h2>{workflow.name}</h2>
-      <button on:click={() => toggleLockStatus(workflow.workflow_id)}>
-        {workflow.is_locked ? 'Release' : 'Lock'}
-      </button>
+      <div class="workflow-header">
+        <h2>{workflow.name}</h2>
+        <button class="toggle-lock-button" on:click={() => toggleLockStatus(workflow.workflow_id)}>
+          {workflow.is_locked ? 'Release' : 'Lock'}
+        </button>
+      </div>
+
+
 
       <Pipeline nodes={workflow.nodes} edges={workflow.edges} on:nodeClick={handleNodeClick} />
 
-      {#each sortNodesByEdges(workflow.nodes, workflow.edges) as node}
-        <section id={node.node_id}>
-          <h3>{node.label}</h3>
-          <p>Status: {getNodeStatus(node)}</p>
-          <button on:click={() => toggleNodeStatus(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
-            {#if node.status === 'Not Started'}
-              Start Node
-            {:else if node.status === 'In Progress'}
-              Error
-            {:else if node.status === 'Error'}
-              Mark as Completed
-            {:else}
-              Reset to Not Started
-            {/if}
-          </button>
 
-          <p>Details about {node.label.toLowerCase()}...</p>
 
-          {#if addingSectionToNodeId === node.node_id}
-            <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)}>
-              <input 
-                type="text" 
-                bind:value={newSectionLabel} 
-                placeholder="Enter section label"
-                required
-              />
-              <button type="submit" disabled={workflow.is_locked}>Add</button>
-              <button type="button" on:click={cancelAddingSection}>Cancel</button>
-            </form>
-          {:else}
-            <button on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>Add Section</button>
-          {/if}
-
-          {#each node.sections as section}
-            <div>
-              <h4>{section.label}</h4>
-              {#if node.status === 'In Progress' && workflow.status !== 'created' }
-                <input 
-                  type="file" 
-                  multiple
-                  on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
-                  disabled={workflow.is_locked}
-                />
-              {/if}
-              {#if section.files && section.files.length > 0}
-                <ul class="list-unstyled">
-                  {#each section.files as file}
-                    <li>
-                      {file.name} ({file.type})
-                      <button on:click={() => downloadFile(workflow.workflow_id, node.node_id, section.section_id, file.file_id, file.name)}>
-                        Download
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
+      <div class="nodes-grid">
+        {#each sortNodesByEdges(workflow.nodes, workflow.edges) as node}
+          <section id={node.node_id} class="node-card">
+            <div class="node-header">
+              <h3>{node.label}</h3>
+              <button on:click={() => toggleNodeStatus(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
+                {getNodeStatus(node)}
+              </button>
             </div>
-          {/each}
-          <button on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>Remove Node</button>
-        </section>
-      {/each}
+
+            <p>Details about {node.label.toLowerCase()}...</p>
+
+
+            {#each node.sections as section}
+              <div>
+                <h4>{section.label}</h4>
+                {#if node.status === 'Active' && workflow.status !== 'created' }
+                  <input 
+                    type="file" 
+                    multiple
+                    on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
+                    disabled={workflow.is_locked}
+                  />
+                {/if}
+                {#if section.files && section.files.length > 0}
+                  <ul class="list-unstyled">
+                    {#each section.files as file}
+                      <li>
+                        {file.name} ({file.type})
+                        <button class="download-button" on:click={() => downloadFile(
+                                                  workflow.workflow_id, 
+                                                  node.node_id, 
+                                                  section.section_id, 
+                                                  file.file_id, file.name)}
+                        >
+                          下载
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            {/each}
+
+            <div class="node-actions">
+              <div class="node-action-buttons">
+                {#if addingSectionToNodeId === node.node_id}
+                  <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)}>
+                    <input 
+                      type="text" 
+                      bind:value={newSectionLabel} 
+                      placeholder="Enter section label"
+                      required
+                    />
+                    <button type="submit" disabled={workflow.is_locked}>Add</button>
+                    <button type="button" on:click={cancelAddingSection}>Cancel</button>
+                  </form>
+                {:else}
+                  <button on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>+ section</button>
+                {/if}
+                <button class="remove-node-button" on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
+                  - node
+                </button>
+              </div>
+            </div>
+
+          </section>
+        {/each}
+      </div>
 
       {#if !workflow.is_locked}
         <section>
@@ -874,10 +904,13 @@
         on:click={() => commitChanges(workflow.workflow_id)} 
         disabled={workflow.status === "saved" || eventBus.getChangesForWorkflow(workflow.workflow_id).length === 0}
       >
-        {workflow.status === "saved" ? 'Changes Saved' : `Commit Changes for ${workflow.name}`}
+        {workflow.status === "saved" ? 'Changes Saved' : `Commit for ${workflow.name}`}
       </button>
 
     </div>
+    {#if workflow !== workflows[workflows.length - 1]}
+      <hr class="workflow-separator">
+    {/if}
   {/each}
 </main>
 
@@ -885,6 +918,147 @@
 <style>
 
   /* if you want to override some global style, just re-define here, it will automatically be done */
+
+
+  .workflow {
+    margin-bottom: 2rem;
+  }
+
+
+  .workflow-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 1rem 0 1rem 0;
+  }
+
+  .toggle-lock-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .toggle-lock-button:hover {
+    background-color: #e0e0e0;
+  }
+
+
+
+
+  .node-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .node-header h3 {
+    margin: 0;
+    flex-grow: 1;
+  }
+
+  .node-header button {
+    padding: 0.5rem 1rem;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .node-header button:hover {
+    background-color: #e0e0e0;
+  }
+
+  .node-header button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+
+  .nodes-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+
+  .node-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1rem;
+    background-color: #f9f9f9;
+  }
+
+  .node-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .node-action-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .node-action-buttons button {
+    padding: 0.5rem 1rem;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .node-action-buttons button:hover {
+    background-color: #e0e0e0;
+  }
+
+  .node-action-buttons button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .remove-node-button {
+    background-color: #ffebee; /* Light red background */
+    color: #c62828; /* Dark red text */
+  }
+
+  .remove-node-button:hover {
+    background-color: #ffcdd2; /* Slightly darker red on hover */
+  }
+
+  /* Style for the form when adding a section */
+  .node-action-buttons form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .action-buttons form input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+  }
+
+  .action-buttons form button {
+    align-self: flex-start;
+  }
+
+
+  .workflow-separator {
+    margin: 2rem 0;
+    border: none;
+    border-top: 1px solid #e0e0e0;
+  }
 
 
   .workflow-input-section {
@@ -969,5 +1143,9 @@
     transform: translate(-50%, -50%) rotate(90deg);
   }
 
+  button.download-button {
+    padding: 5px;
+    border-radius: 20%;
+  }
   
 </style>

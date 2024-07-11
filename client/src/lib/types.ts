@@ -27,11 +27,10 @@ export interface Section {
 }
 
 
-// TODO: create a new status, warnings for something wrong(marked with color red)
 export interface Node {
   node_id: string;
   label: string;
-  status: 'Not Started' | 'In Progress' | 'Completed' | 'Error';
+  status: 'Sleep' | 'Active' | 'Completed' | 'Error';
   sections: Section[];
 }
 
