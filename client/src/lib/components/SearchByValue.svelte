@@ -4,7 +4,7 @@
     // onMount
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
-    import { API_ENDPOINTS, constructUrl } from '../utils/api.ts';
+    import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
 
     // typescript interface, think of Sample as a struct in python, is a object defining a object's shape and data type

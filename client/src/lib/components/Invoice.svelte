@@ -361,7 +361,7 @@ const rows = [
 
 </script>
 
-<button class='btn' on:click={() => generateInvoice(columns, rows)}>Invoice</button>
+<button on:click={() => generateInvoice(columns, rows)}>Invoice</button>
 
 
 

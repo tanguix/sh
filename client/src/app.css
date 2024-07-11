@@ -86,7 +86,7 @@ body {
 
 
 
-/* ------------------------------------------------- Component ------------------------------------------------- */
+/* ------------------------------------------------- CSS Styling ------------------------------------------------- */
 /* svg component has typescript for export class value, so their style need to be defined globally when imported */
 /* unless you tuck them in a <div> tag */
  .svg-icon {
@@ -94,10 +94,106 @@ body {
     height: 5rem;
  }
 
-.btn {
-   padding: 3px;
-   font-family: 'Ubuntu';
+.list-unstyled {
+  list-style: none;
+  padding-left: 0;
 }
+
+
+input {
+  padding: 8px 12px;
+  margin: 5px 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: #ffffff;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+input:focus {
+  border-color: #4a90e2;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 5px rgba(74, 144, 226, 0.3);
+}
+
+input::placeholder {
+  font-family: 'Ubuntu';
+  color: #aaa;
+  opacity: 1;
+}
+
+/* Ensure inputs take full width of their container */
+input[type="text"], input[type="file"] {
+  width: calc(100% - 24px); /* Full width minus padding */
+}
+
+/* Style for disabled inputs */
+input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+
+
+/* Smooth and subtle button styles */
+button {
+  font-family: "Ubuntu";
+  padding: 8px 16px;
+  margin: 5px 0;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  background-color: #f0f0f0;
+  border-color: #c0c0c0;
+}
+
+button:active {
+  background-color: #e8e8e8;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  transform: translateY(1px);
+}
+
+button:focus {
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3);
+}
+
+button:disabled {
+  background-color: #f5f5f5;
+  border-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Style variations for different button types */
+button[type="submit"] {
+  background-color: #4a90e2;
+  border-color: #3a80d2;
+  color: white;
+}
+
+button[type="submit"]:hover {
+  background-color: #3a80d2;
+}
+
+button[type="submit"]:active {
+  background-color: #3070c2;
+}
+
+
+
 
 
 

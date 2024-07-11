@@ -11,7 +11,7 @@
     <div class="modal">
         <p>{message}</p>
         <!-- <button class="btn" on:click={onConfirm}>Confirm</button> -->
-        <button class="btn" on:click={onCancel}>Cancel</button>
+        <button on:click={onCancel}>Cancel</button>
     </div>
 </div>
 

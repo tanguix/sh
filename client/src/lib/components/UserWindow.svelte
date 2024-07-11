@@ -107,7 +107,7 @@
   <div class="floating-window" style="max-height: {200 + $totalHeight}px;">
     <p>Welcome {$page.data.user.name}!</p>
     <div class="section">
-      <button class="header btn" on:click={toggleSection1} aria-expanded={$section1Open}>
+      <button class="header" on:click={toggleSection1} aria-expanded={$section1Open}>
         {#if $section1Open}
           Close Section 1
         {:else}
@@ -121,7 +121,7 @@
       </div>
     </div>
     <div class="section">
-      <button class="header btn" on:click={toggleSection2} aria-expanded={$section2Open}>
+      <button class="header" on:click={toggleSection2} aria-expanded={$section2Open}>
         {#if $section2Open}
           Close Section 2
         {:else}
@@ -135,7 +135,7 @@
       </div>
     </div>
     <div class="section">
-      <button class="header btn" on:click={toggleSampleToken} aria-expanded={$sampleToken}>
+      <button class="header" on:click={toggleSampleToken} aria-expanded={$sampleToken}>
         {#if $sampleToken}
           Close Section
         {:else}

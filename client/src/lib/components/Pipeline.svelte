@@ -6,7 +6,9 @@
     export let activeWorkflow: Workflow | null = null;
     export let nodes: Node[] = [];
     export let edges: Edge[] = [];
-    console.log('Received edges in Pipeline:', edges); // Add this line
+
+    // checking nodes
+    // console.log('Received edges in Pipeline:', edges);
 
     const dispatch = createEventDispatcher();
 
@@ -74,7 +76,37 @@
         console.log('Active Edges:', activeEdges);
         console.log('Connected Nodes:', connectedNodes);
     }
+
 </script>
+
+
+<div class="pipeline">
+  {#if activeNodes.length > 0}
+    {#each connectedNodes as path}
+      <div class="path">
+        {#each path as node, index}
+          <div class="node-container">
+            <button
+              type="button"
+              class="node"
+              on:click={() => handleClick(node)}
+              style="background-color: {getNodeColor(node)};"
+            >
+              {node.label}
+            </button>
+            {#if index < path.length - 1}
+              <div class="edge"></div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/each}
+  {:else}
+    <p>No nodes to display.</p>
+  {/if}
+</div>
+
+
 
 <style>
   .pipeline {
@@ -136,28 +168,4 @@
   }
 </style>
 
-<div class="pipeline">
-  {#if activeNodes.length > 0}
-    {#each connectedNodes as path}
-      <div class="path">
-        {#each path as node, index}
-          <div class="node-container">
-            <button
-              type="button"
-              class="node"
-              on:click={() => handleClick(node)}
-              style="background-color: {getNodeColor(node)};"
-            >
-              {node.label}
-            </button>
-            {#if index < path.length - 1}
-              <div class="edge"></div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/each}
-  {:else}
-    <p>No nodes to display.</p>
-  {/if}
-</div>
+

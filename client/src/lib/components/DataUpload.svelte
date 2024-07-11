@@ -198,7 +198,7 @@
     <div class="browser-file">
         <label for="image">Upload Image:</label>
         <input class="input" type="file" id="image" name="image_file" accept="image/*" on:change={handleFileSelect} required>
-        <button type="button" class="btn" on:click={handleClick}>Browse</button>
+        <button type="button" on:click={handleClick}>Browse</button>
     </div>
 
     <!-- drag and drop area div -->
@@ -228,7 +228,7 @@
     <div>
         <label for="category">Categories:</label>
         <input type="text" id="category" name="category" required>
-        <button class="btn" type="button" on:click={() => addItem(categories)}>add</button>
+        <button type="button" on:click={() => addItem(categories)}>add</button>
     </div>
 
     {#each $categories as category (category.id)}
@@ -236,7 +236,7 @@
             <label for="category-{category.id}">new cat:</label>
             <input type="text" id="category-{category.id}" bind:value={category.value} placeholder="Category">
 
-            <button class="btn" type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
+            <button type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
         </div>
     {/each}
 
@@ -244,7 +244,7 @@
     <div>
         <label for="tag">Tags:</label>
         <input type="text" id="tag" name="tag" required>
-        <button class="btn" type="button" on:click={() => addItem(tags)}>add</button>
+        <button type="button" on:click={() => addItem(tags)}>add</button>
     </div>
 
     {#each $tags as tag (tag.id)}
@@ -252,7 +252,7 @@
             <label for="tag-{tag.id}">new tag:</label>
             <input type="text" id="tag-{tag.id}" bind:value={tag.value} placeholder="Tag">
 
-            <button class="btn" type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
+            <button type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
         </div>
     {/each}
 
@@ -279,10 +279,10 @@
             <button type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
         </div>
     {/each}
-    <button type="button" class="btn" on:click={() => addItem(fields)}>Add Field</button>
+    <button type="button" on:click={() => addItem(fields)}>Add Field</button>
 
     <!-- submission button -->
-    <button type="submit" class="btn">Submit</button>
+    <button type="submit">Submit</button>
 </form>
 
 <style>

@@ -137,7 +137,7 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
 {/if}
 
 <a href="https://www.google.com">leave</a>
-<button class="btn" on:click={fetchExchangeRate}>Exchange Rates</button>
+<button on:click={fetchExchangeRate}>Exchange Rates</button>
 
 {#if $exchange_rate}
     <div class="ex-card">
