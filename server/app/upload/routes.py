@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, send_file
 import os
 import json
 from app.logger import logger
-from app.upload.models import Item, ItemBatch, Workflow, File
+from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow
 
 # create Blueprint object, which is this file
 upload_bp = Blueprint('upload', __name__)
@@ -94,37 +94,50 @@ def upload_sample():
 
 
 # --------------------------------------------- collective operation ----------------------------------------------
-# WorkFlow section backend handling
-# from app.upload.models import Workflow, Node, Section, File
-from app.upload.models import HandleWorkflow
 
 
-
-
-
-
-# Flask route remains the same
+# Update the API endpoint to handle potential multiple workflow error
 @upload_bp.route('/api/workflow_commit', methods=['POST'])
 def commit_changes():
     changes = request.json.get('changes')
     if not changes:
         return jsonify({"error": "No changes provided"}), 400
 
-    print('change:\n', changes)
     results = HandleWorkflow.process_changes(changes)
-    print('result:\n', results)
 
     if any("error" in result for result in results):
+        error_message = "Some changes could not be processed"
+        status_code = 400
+        status = "unsaved"
+
+        # Check for the specific multiple workflows error
+        if any(result.get("type") == "multiple_workflows" for result in results):
+            error_message = "Cannot process changes for multiple workflows in a single request"
+            status_code = 422  # Unprocessable Entity
+
         return jsonify({
-            "message": "Some changes could not be processed",
-            "results": results
-        }), 400
+            "message": error_message,
+            "results": results,
+            "status": status
+        }), status_code
     else:
         return jsonify({
             "message": "All changes committed successfully",
-            "results": results
+            "results": results,
+            "status": "saved"
         }), 200
 
+
+
+@upload_bp.route('/api/fetch_locked_workflow', methods=['GET'])
+def get_locked_workflows():
+    try:
+        locked_workflows = list(Workflow.get_locked_workflows())
+        locked_workflow_ids = [w['workflow_id'] for w in locked_workflows]
+        return jsonify(locked_workflow_ids), 200
+    except Exception as e:
+        logger.error(f"Error fetching locked workflows: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 
@@ -142,7 +155,7 @@ def get_workflow():
         workflow = Workflow.get_workflow_by_id(workflow_id)
         if workflow:
             logger.info(f"Successfully fetched workflow: {workflow_id}")
-            logger.debug(f"Workflow data: {workflow}")  # Ad            
+            logger.debug(f"Workflow data: {workflow}")
             return jsonify(workflow), 200
         else:
             logger.warning(f"Workflow not found: {workflow_id}")
@@ -150,6 +163,10 @@ def get_workflow():
     except Exception as e:
         logger.error(f"Error fetching workflow {workflow_id}: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+
+
 
 
 
@@ -185,6 +202,7 @@ def upload_files():
     else:
         logger.error(f"All file uploads failed. Results: {results}")
         return jsonify({"error": "All file uploads failed", "results": results}), 500
+
 
 
 

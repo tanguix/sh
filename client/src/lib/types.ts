@@ -42,7 +42,7 @@ export interface Workflow {
   is_locked: boolean;
   nodes: Node[];
   edges: Edge[];
-  status: 'created' | 'saved';
+  status: 'created' | 'saved' | 'unsaved';
 }
 
 

@@ -73,8 +73,7 @@ class Workflow:
         self.name = name
         self.node_ids = []
         self.edges = []
-        # self.status = status
-        self.status = 'saved'               # mannully set for condition rendering (wf: saved and n:in progress)
+        self.status = 'saved'
         self.is_locked = is_locked
 
     def save(self):
@@ -84,10 +83,20 @@ class Workflow:
             "name": self.name,
             "node_ids": self.node_ids,
             "edges": self.edges,
-            "status": self.status,        # later if further operation exist, modify the changes
+            "status": self.status,
             "is_locked": self.is_locked
         }
         return db.workflows.insert_one(data)
+
+
+
+    @staticmethod
+    def update_status(workflow_id: str, status: str):
+        return db.workflows.update_one(
+            {"workflow_id": workflow_id},
+            {"$set": {"status": status}}
+        )
+
 
     @staticmethod
     def update_lock_status(workflow_id, is_locked):
@@ -124,8 +133,6 @@ class Workflow:
             {"$set": {"status": "confirmed"}}
         )
 
-
-
     @staticmethod
     def get_workflow_by_id(workflow_id):
         try:
@@ -145,7 +152,6 @@ class Workflow:
 
                 for section in sections:
                     section['_id'] = str(section['_id'])
-                    # Fetch files for this section
                     files = list(db.files.find({"file_id": {"$in": section.get('file_ids', [])}}))
                     section['files'] = [{
                         "file_id": file['file_id'],
@@ -156,11 +162,9 @@ class Workflow:
                     node['sections'].append(section)
                 workflow['nodes'].append(node)
             
-            # Ensure edges are present and correctly formatted
             if 'edges' not in workflow or not workflow['edges']:
                 workflow['edges'] = []
 
-            # Update edges to include full node ids
             valid_edges = []
             for edge in workflow['edges']:
                 from_node_id = node_map.get(edge['from'])
@@ -169,7 +173,6 @@ class Workflow:
                     valid_edges.append({'from': from_node_id, 'to': to_node_id})
             workflow['edges'] = valid_edges
 
-            # Ensure is_locked is included in the response
             workflow['is_locked'] = workflow.get('is_locked', False)
             
             return workflow
@@ -177,9 +180,13 @@ class Workflow:
             print(f"Error fetching workflow with id {workflow_id}: {e}")
             return None
 
-
-
-
+    @staticmethod
+    def get_locked_workflows():
+        try:
+            return db.workflows.find({"is_locked": True}, {"workflow_id": 1, "_id": 0})
+        except Exception as e:
+            print(f"Error fetching locked workflows: {e}")
+            return []
 
 
 
@@ -446,13 +453,23 @@ class File:
 class HandleWorkflow:
 
 
+
+
+
     @staticmethod
     def process_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
+        workflow_ids = set()
+
         for change in changes:
             try:
                 if 'type' not in change or 'data' not in change:
                     raise KeyError("Change must have 'type' and 'data' keys")
+                
+                if 'workflow_id' not in change['data']:
+                    raise KeyError("Change data must include workflow_id")
+
+                workflow_ids.add(change['data']['workflow_id'])
                 
                 result = HandleWorkflow.process_change(change['type'], change['data'])
                 results.append(result)
@@ -465,8 +482,20 @@ class HandleWorkflow:
             except Exception as e:
                 logger.error(f"Unexpected error processing change: {str(e)}")
                 results.append({"error": "An unexpected error occurred", "type": change.get('type', 'unknown')})
-        return results
 
+        # Check if all changes are for the same workflow
+        if len(workflow_ids) != 1:
+            error_message = "All changes must be for the same workflow"
+            logger.error(error_message)
+            results.append({"error": error_message, "type": "multiple_workflows"})
+            return results
+
+        # After processing all changes, update the workflow status
+        if results and all(result.get('success', False) for result in results):
+            workflow_id = list(workflow_ids)[0]  # Safe to use [0] as we've confirmed there's only one ID
+            Workflow.update_status(workflow_id, "saved")
+
+        return results
 
 
 

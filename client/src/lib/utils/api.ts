@@ -19,10 +19,10 @@ export const API_ENDPOINTS = {
     UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
     UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
     WORKFLOW_COMMIT: `${BASE_URL}/upload/api/workflow_commit`,
+    FETCH_LOCKED_WORKFLOW: `${BASE_URL}/upload/api/fetch_locked_workflow`,
     FETCH_ALL_WORKFLOW: `${BASE_URL}/upload/api/fetch_all_workflow`,
     UPLOAD_FILE: `${BASE_URL}/upload/api/upload_file`,
     DOWNLOAD_FILE: `${BASE_URL}/upload/api/download_file`,
-    // FETCH_LOCKED_WORKFLOW: `${TEST_URL}/upload/api/fetch_locked_workflow`,
 
 
     FETCH_COLLECTIONS: `${BASE_URL}/search/api/collections`,
