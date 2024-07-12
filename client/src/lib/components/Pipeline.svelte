@@ -19,11 +19,13 @@
     function getNodeColor(node: Node): string {
       switch (node.status) {
         case 'Completed':
-          return '#4CAF50'; // Green for completed, TODO: change better one
+          // return '#00FF7F'; // Green for completed
+          return '#33fae8'; // Green for completed, TODO: change better one
         case 'Active':
-          return '#FFA726'; // Amber for in-progress TODO: change better one
+          return '#FFDE95'; // Amber for in-progress TODO: change better one
+          // return '#b1e4fe'; // Amber for in-progress
         case 'Error':
-          return '#EF5350'; // red for problem
+          return '#f88'; // red for problem
         // case 'Not Started':
         default:
           return '#9E9E9E'; // Grey for not started
@@ -136,22 +138,22 @@
     display: flex;
     align-items: center;
     position: relative;
-    padding: 2px 0;
+    padding: 3px 0;
   }
 
 
   .node {
     font-family: "Ubuntu";
-    padding: 12px 16px;
-    border: none;
+    padding: 10px 12px;
+    border: solid 1px #3E3859;
     border-radius: 8px;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
     transition: all 0.3s ease;
-    min-width: 120px;
-    height: 55px;
+    min-width: 112px;
+    height: 52px;
     margin: 0;
     z-index: 1;
     font-weight: 500;

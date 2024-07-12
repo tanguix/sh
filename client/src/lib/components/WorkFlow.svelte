@@ -144,7 +144,7 @@
   // create default workflow array 
   function createWorkflow() {
     if (!workflowName) {
-      alert('Please enter a workflow name');
+      console.log('Please enter a workflow name:');
       return;
     }
     
@@ -460,12 +460,28 @@
 
 
 
-
+  // 7.1) helper function for appearance when files selected
+  function handleFileSelect(event: any, sectionId: any) {
+    const input = event.target;
+    const fileName = input.files.length > 0 
+      ? input.files.length > 1 
+        ? `${input.files.length} files selected` 
+        : input.files[0].name
+      : "No file chosen";
+    const fileNameElement = document.querySelector(`#file-upload-${sectionId} + label + .file-name`);
+    if (fileNameElement) {
+      fileNameElement.textContent = fileName;
+    }
+  }
 
 
   // 7)
   // quiet complicate function for updating the files immediately (aside from instruction operation)
   async function uploadFiles(workflowId: string, nodeId: string, sectionId: string, event: Event) {
+
+
+    // handle selected files
+    handleFileSelect(event, sectionId);
 
     // because this function is separated from instructions, it execute the upload directory 
     // so first need to catch the event when user click button to browser files
@@ -632,7 +648,8 @@
   async function fetchWorkflow(id?: string) {
     const workflowIdToFetch = id || workflow_id;
     if (!workflowIdToFetch) {
-      alert('Please enter a workflow ID');
+      // don't need that much
+      console.log('Please enter a workflow ID:');
       return;
     }
 
@@ -747,21 +764,48 @@
         throw new Error('Network response was not ok');
       }
 
+      // Get the content type of the file, not in use right now
+      const contentType = response.headers.get('content-type');
+
+      // Create a blob from the response
       const blob = await response.blob();
+      
+      // Create a URL for the blob
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      // an URL is received, and open the URL in a new tab
+      window.open(url, '_blank');
+
+      // Clean up the object URL after a short delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+
     } catch (error) {
-      console.error('Download failed:', error);
-      alert('Failed to download file. Please try again later.');
+      console.error('Preview failed:', error);
+      alert('Failed to preview file. Please try again later.');
+    }
+
+
+  }
+
+
+  $: isWorkflowNameValid = workflowName.trim() !== '';
+  $: isWorkflowIdValid = workflow_id.trim() !== '';
+
+
+  // Function to handle create workflow
+  function handleCreateWorkflow() {
+    if (isWorkflowNameValid) {
+      createWorkflow();
     }
   }
+
+  // Function to handle fetch workflow
+  function handleFetchWorkflow() {
+    if (isWorkflowIdValid) {
+      fetchWorkflow();
+    }
+  }
+
 </script>
 
 
@@ -779,22 +823,47 @@
   {/if}
 
 
+
+
   <div class="workflow-input-section">
-
     <div class="input-button-group">
-      <input bind:value={workflowName} placeholder="Give it a name" />
-      <button class="icon-button" data-text="new" data-icon="+" on:click={createWorkflow}></button>
+      <input 
+        bind:value={workflowName} 
+        placeholder="Give it a name" 
+        required
+        class:invalid={!isWorkflowNameValid && workflowName.length > 0}
+      />
+      <button 
+        class="icon-button" 
+        data-text="new" 
+        data-icon="+" 
+        on:click={handleCreateWorkflow}
+        disabled={!isWorkflowNameValid}
+      ></button>
     </div>
-
     <div class="input-button-group">
-      <input bind:value={workflow_id} placeholder="Enter workflow ID" />
-      <button class="icon-button" data-text="add" data-icon="+" on:click={() => fetchWorkflow()}></button>
+      <input 
+        bind:value={workflow_id} 
+        placeholder="Enter workflow ID" 
+        required
+        class:invalid={!isWorkflowIdValid && workflow_id.length > 0}
+      />
+      <button 
+        class="icon-button" 
+        data-text="add" 
+        data-icon="+" 
+        on:click={handleFetchWorkflow}
+        disabled={!isWorkflowIdValid}
+      ></button>
     </div>
-
   </div>
 
 
+
+
+
   {#each workflows as workflow (workflow.workflow_id)}
+    <hr class="workflow-separator">
     <div class="workflow">
       <div class="workflow-header">
         <h2>{workflow.name}</h2>
@@ -819,44 +888,54 @@
               </button>
             </div>
 
-            <p>Details about {node.label.toLowerCase()}...</p>
+            <!-- <p>Details about {node.label.toLowerCase()}...</p> -->
 
 
             {#each node.sections as section}
               <div>
                 <h4>{section.label}</h4>
                 {#if node.status === 'Active' && workflow.status !== 'created' }
-                  <input 
-                    type="file" 
-                    multiple
-                    on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
-                    disabled={workflow.is_locked}
-                  />
+                  <div class="file-upload">
+                    <input 
+                      type="file" 
+                      id="file-upload-{section.section_id}"
+                      multiple
+                      on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
+                      disabled={workflow.is_locked}
+                      class="file-input"
+                    />
+                    <label for="file-upload-{section.section_id}" class="file-input-label">Choose Files</label>
+                    <span class="file-name">No file chosen</span>
+                  </div>
                 {/if}
+
                 {#if section.files && section.files.length > 0}
-                  <ul class="list-unstyled">
+                  <ul class="file-list">
                     {#each section.files as file}
-                      <li>
-                        {file.name} ({file.type})
+                      <li class="file-list-item">
+                        <span class="file-name">{file.name}</span>
                         <button class="download-button" on:click={() => downloadFile(
-                                                  workflow.workflow_id, 
-                                                  node.node_id, 
-                                                  section.section_id, 
-                                                  file.file_id, file.name)}
-                        >
-                          下载
+                          workflow.workflow_id, 
+                          node.node_id, 
+                          section.section_id, 
+                          file.file_id, 
+                          file.name
+                        )}>
+                          预览
                         </button>
                       </li>
                     {/each}
                   </ul>
                 {/if}
+
               </div>
             {/each}
 
-            <div class="node-actions">
-              <div class="node-action-buttons">
+
+
+              <div class="node-actions">
                 {#if addingSectionToNodeId === node.node_id}
-                  <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)}>
+                  <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)} class="add-section-form">
                     <input 
                       type="text" 
                       bind:value={newSectionLabel} 
@@ -866,14 +945,15 @@
                     <button type="submit" disabled={workflow.is_locked}>Add</button>
                     <button type="button" on:click={cancelAddingSection}>Cancel</button>
                   </form>
-                {:else}
-                  <button on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>+ section</button>
                 {/if}
-                <button class="remove-node-button" on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
-                  - node
-                </button>
+                <div class="node-action-buttons">
+                  <button on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>+ section</button>
+                  <button class="remove-node-button" on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
+                    - node
+                  </button>
+                </div>
               </div>
-            </div>
+
 
           </section>
         {/each}
@@ -908,22 +988,20 @@
       </button>
 
     </div>
-    {#if workflow !== workflows[workflows.length - 1]}
-      <hr class="workflow-separator">
-    {/if}
   {/each}
 </main>
+
+
+
 
 
 <style>
 
   /* if you want to override some global style, just re-define here, it will automatically be done */
 
-
   .workflow {
     margin-bottom: 2rem;
   }
-
 
   .workflow-header {
     display: flex;
@@ -945,14 +1023,13 @@
     background-color: #e0e0e0;
   }
 
-
-
-
   .node-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    border-bottom: solid #e0e0e0;
+    padding: 4px 0 5px 0;
   }
 
   .node-header h3 {
@@ -978,14 +1055,12 @@
     cursor: not-allowed;
   }
 
-
   .nodes-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
     margin-top: 1rem;
   }
-
 
   .node-card {
     border: 1px solid #e0e0e0;
@@ -997,13 +1072,15 @@
   .node-actions {
     margin-top: 1rem;
     display: flex;
-    justify-content: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   .node-action-buttons {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
     gap: 0.5rem;
   }
 
@@ -1014,6 +1091,7 @@
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    font-size: 12px;
   }
 
   .node-action-buttons button:hover {
@@ -1026,33 +1104,48 @@
   }
 
   .remove-node-button {
-    background-color: #ffebee; /* Light red background */
-    color: #c62828; /* Dark red text */
+    background-color: #ffebee;
+    color: #c62828;
   }
 
   .remove-node-button:hover {
-    background-color: #ffcdd2; /* Slightly darker red on hover */
+    background-color: #ffcdd2;
   }
 
-  /* Style for the form when adding a section */
-  .node-action-buttons form {
+  .add-section-form {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 0.5rem;
+    margin-bottom: 0.5rem;
   }
 
-  .action-buttons form input {
-    width: 100%;
+  .add-section-form input {
     padding: 0.5rem;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
+    font-size: 12px;
+    flex-grow: 1;
   }
 
-  .action-buttons form button {
-    align-self: flex-start;
+  .add-section-form button {
+    padding: 0.5rem 1rem;
+    font-size: 12px;
+    background-color: #f0f0f0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
   }
 
+  .add-section-form button:hover {
+    background-color: #e0e0e0;
+  }
+
+  .add-section-form button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .workflow-separator {
     margin: 2rem 0;
@@ -1060,18 +1153,21 @@
     border-top: 1px solid #e0e0e0;
   }
 
-
   .workflow-input-section {
     display: flex;
     justify-content: space-between;
-    gap: 20px; /* Adds space between the two groups */
-    width: 100%; /* Ensures the section takes full width */
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
   }
 
   .input-button-group {
     display: flex;
     align-items: center;
-    flex: 1; /* Makes each group grow equally */
+    flex: 1;
+    gap: 5px;
   }
 
   .input-button-group input {
@@ -1081,11 +1177,18 @@
     border: 1px solid #e0e0e0;
     border-radius: 4px;
     font-size: 14px;
-    margin-right: 10px;
+    transition: border-color 0.3s ease;
   }
 
+  .input-button-group input:focus {
+    outline: none;
+    border-color: #4CAF50;
+  }
 
-  /* Unified styles for icon buttons with spinning effect */
+  .input-button-group input.invalid {
+    border-color: #f44336;
+  }
+
   .icon-button {
     flex-shrink: 0;
     width: 40px;
@@ -1101,7 +1204,6 @@
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin: 0 10px;
     position: relative;
     overflow: hidden;
   }
@@ -1143,9 +1245,88 @@
     transform: translate(-50%, -50%) rotate(90deg);
   }
 
-  button.download-button {
-    padding: 5px;
-    border-radius: 20%;
+  .icon-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
-  
+
+  .file-upload {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .file-input-label {
+    font-family: "Ubuntu";
+    font-size: 12px;
+    padding: 8px 12px;
+    background-color: #e0e0e0;
+    color: #333;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    border-radius: 4px;
+    margin-right: 8px;
+  }
+
+  .file-input-label:hover {
+    background-color: #d0d0d0;
+  }
+
+  .file-upload:has(.file-input:disabled) {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .file-upload:has(.file-input:disabled) .file-input-label {
+    pointer-events: none;
+  }
+
+  .file-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+
+  .file-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+    padding: 2px 8px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+  }
+
+  .file-name {
+    font-family: "Ubuntu";
+    flex-grow: 1;
+    margin-right: 8px;
+    font-size: 12px;
+    color: #333;
+  }
+
+  button.download-button {
+    padding: 4px 8px;
+    background-color: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    transition: background-color 0.3s;
+  }
+
+  button.download-button:hover {
+    background-color: #e0e0e0;
+  }
 </style>
