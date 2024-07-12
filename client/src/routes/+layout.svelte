@@ -9,127 +9,93 @@
 
 -->
 
-
 <script lang="ts">
-    // page variable, for accessing locals 
-    import { page } from '$app/stores'
-
-    // other components
+    import { userRoles } from "$lib/utils/vars";
+    import { page } from '$app/stores';
+    import { onMount } from 'svelte';
     import Header from "$lib/components/Header.svelte";
+    import UserWindow from '$lib/components/UserWindow.svelte';
     import DataUpload from '../lib/components/DataUpload.svelte';
     import SearchByValue from '../lib/components/SearchByValue.svelte';
-    import UserWindow from '$lib/components/UserWindow.svelte';
+    import '../app.css';
 
-    // css style
-    import '../app.css'
+    // Helper function to capitalize first letter
+    const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+    let userRole = '';
+    let navLinks = <any>[];
+
+    // Function to check if the current user has access to a specific role's route
+    const hasAccess = (role: string) => userRole === 'ADMIN' || userRole === role.toUpperCase();
+
+    // Update navigation links when user role changes
+    $: {
+        console.log('User data updated:', $page.data.user); // Debug log
+        userRole = $page.data.user?.role || '';
+        navLinks = userRoles
+            .filter(role => hasAccess(role))
+            .map(role => ({
+                href: `/${role.toLowerCase()}`,
+                label: capitalize(role)
+            }));
+        console.log('Updated navLinks:', navLinks); // Debug log
+    }
+
+    onMount(() => {
+        console.log('Component mounted. Initial user data:', $page.data.user); // Debug log
+    });
 </script>
-
 
 <svelte:head>
     <title>SH System</title>
 </svelte:head>
 
-
-
 <main>
     <Header />
     <nav>
-        <!-- if logout, there are no cookies for client to send request get user, indicating no user login -->
-        {#if !$page.data.user}
+        {#if $page.data.user === undefined}
+            <p>Loading...</p>
+        {:else if !$page.data.user}
             <div class="auth-section">
                 <p><a href="/login">Login</a></p>
                 <p><a href="/register">Register</a></p>
             </div>
-
-
-        <!-- and we actually can add more link display here, just based on their roles level follow the same
-        structure, redirect stuff, also see if these part can be arrange to a single components 
-        should be fine, just import { page } in nav component 
-        
-        It's better to have all the function and components within different role's route, and for admin just need to 
-        be able to go to their route, in this case code in the layout.svelte won't be that messy and repeitive
-        -->
-        {:else if $page.data.user.role === "ADMIN"}
-            <a href="/admin">admin</a>
-            <a href="/sale">sale</a>
-            <a href="/data">data</a>
-            <a href="/finance">finance</a>
-            <a href="/procurement">procurement</a>
-            <a href="/production">production</a>
+        {:else}
+            {#each navLinks as { href, label }}
+                <a {href}>{label}</a>
+            {/each}
             <form class="logout" action="/logout" method="POST">
                 <button type="submit">Log Out</button>
             </form>
+        {/if}
+    </nav>
+
+    {#if $page.data.user}
+        {#if userRole === 'ADMIN' || userRole === 'DATA'}
             <hr>
             <h2>Data Upload</h2>
             <DataUpload />
+        {/if}
 
+        {#if ['ADMIN', 'DATA', 'SALE'].includes(userRole)}
             <hr>
             <h2>Search</h2>
             <SearchByValue />
-        <br>
+        {/if}
 
-
-        {:else if $page.data.user.role === "DATA"}
-            <a href="/data">data</a>
-            <form class="logout" action="/logout" method="POST">
-                <button type="submit">Log Out</button>
-            </form>
-            <hr>
-            <h2>Data Upload</h2>
-            <DataUpload />
-
-            <hr>
-            <h2>Search</h2>
-            <SearchByValue />
-        <br> 
-
-
-        <!-- a good practice to implement is to import components here I think, at least for right now 
-        but later definitely need to organize this part, also some functionality is sensitive, 
-        the problem need to consider is: 1) make functionality inaccessible or 2) to make data inaccessible -->
-        {:else if $page.data.user.role === "SALE"}
-            <a href="/sale">sale</a>
-            <form class="logout" action="/logout" method="POST">
-                <button type="submit">Log Out</button>
-            </form>
-
-            <hr>
-            <h2>Search</h2>
-            <SearchByValue />
-
+        {#if userRole === 'SALE'}
             <hr>
             <h2>Sampling (Prototype)</h2>
+            <!-- Add Sampling component here when it's ready -->
 
             <hr>
             <h2>Invoice</h2>
-        <br>
-
-
-
-        {:else if $page.data.user.role === "FINANCE"}
-            <a href="/finance">finance</a>
-            <form class="logout" action="/logout" method="POST">
-                <button type="submit">Log Out</button>
-            </form>
-        <br>
-
-
-
-        {:else if $page.data.user.role === "PROCUREMENT"}
-            <a href="/procurement">procurement</a>
-            <form class="logout" action="/logout" method="POST">
-                <button type="submit">Log Out</button>
-            </form>
-        <br>
+            <!-- Add Invoice component here when it's ready -->
         {/if}
-
-
-    </nav>
+    {/if}
 
     <UserWindow />
     <slot />
-
-
 </main>
 
 <style>
@@ -144,7 +110,7 @@
         text-decoration: none;
         border: solid;
         border-radius: 8px;
-        padding: 5px 7px;
+        padding: 10px;
         color: var(--color-black);
     }
 
@@ -159,7 +125,6 @@
     .auth-section {
         display: flex;
         justify-content: center;
-        align-item: center;
         gap: 10px;
         margin: 1rem 0rem;
     }

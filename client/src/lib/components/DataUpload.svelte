@@ -1,7 +1,7 @@
 
 <script lang="ts">
     import { writable } from 'svelte/store';    // reactive method by default
-    import { API_ENDPOINTS, constructUrl } from '../utils/api.ts'; // api helper function
+    import { API_ENDPOINTS, constructUrl } from '$lib/utils/api'; // api helper function
 
 
     // user-defined type for additional field (key: value) in json
@@ -41,7 +41,7 @@
     // function takes in an id for locating the object (key: value)
     // filter() method remove items in the array if condition evaluate to false
     // click "remove" button activate evaluation(for field, tag, category)
-    function removeItem(store, id: number) {
+    function removeItem(store: any, id: number) {
         store.update(currentItems => currentItems.filter(item => item.id !== id));
     }
 
