@@ -818,171 +818,175 @@
 
 
 <main>
-  <h2>Workflow Section</h2>
 
-  {#if isLoading || !initialLoadComplete}
-    <div transition:fade="{{ duration: fadeDuration }}">
-      <Loader message="Loading workflows..." />
-    </div>
 
-  {:else}
-    <div transition:fade="{{ duration: fadeDuration }}">
-      {#if !hasLockedWorkflows && workflows.length === 0}
-        <div class="no-locked-workflows">
-          <p>No locked workflows found.</p>
-        </div>
-      {:else}
-        <div class="workflow-input-section">
-          <div class="input-button-group">
-            <input 
-              bind:value={workflowName} 
-              placeholder="Give it a name" 
-              required
-              class:invalid={!isWorkflowNameValid && workflowName.length > 0}
-            />
-            <button 
-              class="icon-button" 
-              data-text="new" 
-              data-icon="+" 
-              on:click={handleCreateWorkflow}
-              disabled={!isWorkflowNameValid}
-            ></button>
+  <div class="workflow-container">
+    <h2>Workflow Section</h2>
+
+    {#if isLoading || !initialLoadComplete}
+      <div transition:fade="{{ duration: fadeDuration }}">
+        <Loader message="Loading workflows..." />
+      </div>
+
+    {:else}
+      <div transition:fade="{{ duration: fadeDuration }}">
+        {#if !hasLockedWorkflows && workflows.length === 0}
+          <div class="no-locked-workflows">
+            <p>No locked workflows found.</p>
           </div>
-          <div class="input-button-group">
-            <input 
-              bind:value={workflow_id} 
-              placeholder="Enter workflow ID" 
-              required
-              class:invalid={!isWorkflowIdValid && workflow_id.length > 0}
-            />
-            <button 
-              class="icon-button" 
-              data-text="add" 
-              data-icon="+" 
-              on:click={handleFetchWorkflow}
-              disabled={!isWorkflowIdValid}
-            ></button>
-          </div>
-        </div>
-
-
-        {#each workflows as workflow (workflow.workflow_id)}
-          <hr class="workflow-separator">
-          <div class="workflow">
-            <div class="workflow-header">
-              <h2>{workflow.name}</h2>
-              <button class="toggle-lock-button" on:click={() => toggleLockStatus(workflow.workflow_id)}>
-                {workflow.is_locked ? 'Release' : 'Lock'}
-              </button>
+        {:else}
+          <div class="workflow-input-section">
+            <div class="input-button-group">
+              <input 
+                bind:value={workflowName} 
+                placeholder="Give it a name" 
+                required
+                class:invalid={!isWorkflowNameValid && workflowName.length > 0}
+              />
+              <button 
+                class="icon-button" 
+                data-text="new" 
+                data-icon="+" 
+                on:click={handleCreateWorkflow}
+                disabled={!isWorkflowNameValid}
+              ></button>
             </div>
+            <div class="input-button-group">
+              <input 
+                bind:value={workflow_id} 
+                placeholder="Enter workflow ID" 
+                required
+                class:invalid={!isWorkflowIdValid && workflow_id.length > 0}
+              />
+              <button 
+                class="icon-button" 
+                data-text="add" 
+                data-icon="+" 
+                on:click={handleFetchWorkflow}
+                disabled={!isWorkflowIdValid}
+              ></button>
+            </div>
+          </div>
 
-            <Pipeline nodes={workflow.nodes} edges={workflow.edges} on:nodeClick={handleNodeClick} />
 
-            <div class="nodes-grid">
-              {#each sortNodesByEdges(workflow.nodes, workflow.edges) as node}
-                <section id={node.node_id} class="node-card">
-                  <div class="node-header">
-                    <h3>{node.label}</h3>
-                    <button on:click={() => toggleNodeStatus(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
-                      {getNodeStatus(node)}
-                    </button>
-                  </div>
+          {#each workflows as workflow (workflow.workflow_id)}
+            <hr class="workflow-separator">
+            <div class="workflow">
+              <div class="workflow-header">
+                <h2>{workflow.name}</h2>
+                <button class="toggle-lock-button" on:click={() => toggleLockStatus(workflow.workflow_id)}>
+                  {workflow.is_locked ? 'Release' : 'Lock'}
+                </button>
+              </div>
 
-                  {#each node.sections as section}
-                    <div>
-                      <h4>{section.label}</h4>
-                      {#if node.status === 'Active' && workflow.status !== 'created' }
-                        <div class="file-upload">
-                          <input 
-                            type="file" 
-                            id="file-upload-{section.section_id}"
-                            multiple
-                            on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
-                            disabled={workflow.is_locked}
-                            class="file-input"
-                          />
-                          <label for="file-upload-{section.section_id}" class="file-input-label">Browse Files</label>
-                          <span class="file-name">No File Selected</span>
-                        </div>
-                      {/if}
+              <Pipeline nodes={workflow.nodes} edges={workflow.edges} on:nodeClick={handleNodeClick} />
 
-                      {#if section.files && section.files.length > 0}
-                        <ul class="file-list">
-                          {#each section.files as file}
-                            <li class="file-list-item">
-                              <span class="file-name">{file.name}</span>
-                              <button class="download-button" on:click={() => downloadFile(
-                                workflow.workflow_id, 
-                                node.node_id, 
-                                section.section_id, 
-                                file.file_id, 
-                                file.name
-                              )}>
-                                预览
-                              </button>
-                            </li>
-                          {/each}
-                        </ul>
-                      {/if}
-                    </div>
-                  {/each}
-
-                  <div class="node-actions">
-                    {#if addingSectionToNodeId === node.node_id}
-                      <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)} class="add-section-form">
-                        <input 
-                          type="text" 
-                          bind:value={newSectionLabel} 
-                          placeholder="Enter section label"
-                          required
-                        />
-                        <button type="submit" class="confirm-section-button" disabled={workflow.is_locked}>Add</button>
-                        <button type="button" class="cancel-section-button" on:click={cancelAddingSection}>Cancel</button>
-                      </form>
-                    {/if}
-                    <div class="node-action-buttons">
-                      <button class="add-section-button" on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>+ section</button>
-                      <button class="remove-node-button" on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
-                        - node
+              <div class="nodes-grid">
+                {#each sortNodesByEdges(workflow.nodes, workflow.edges) as node}
+                  <section id={node.node_id} class="node-card">
+                    <div class="node-header">
+                      <h3>{node.label}</h3>
+                      <button on:click={() => toggleNodeStatus(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
+                        {getNodeStatus(node)}
                       </button>
                     </div>
-                  </div>
+
+                    {#each node.sections as section}
+                      <div>
+                        <h4>{section.label}</h4>
+                        {#if node.status === 'Active' && workflow.status !== 'created' }
+                          <div class="file-upload">
+                            <input 
+                              type="file" 
+                              id="file-upload-{section.section_id}"
+                              multiple
+                              on:change={(event) => uploadFiles(workflow.workflow_id, node.node_id, section.section_id, event)} 
+                              disabled={workflow.is_locked}
+                              class="file-input"
+                            />
+                            <label for="file-upload-{section.section_id}" class="file-input-label">Browse Files</label>
+                            <span class="file-name">No File Selected</span>
+                          </div>
+                        {/if}
+
+                        {#if section.files && section.files.length > 0}
+                          <ul class="file-list">
+                            {#each section.files as file}
+                              <li class="file-list-item">
+                                <span class="file-name">{file.name}</span>
+                                <button class="download-button" on:click={() => downloadFile(
+                                  workflow.workflow_id, 
+                                  node.node_id, 
+                                  section.section_id, 
+                                  file.file_id, 
+                                  file.name
+                                )}>
+                                  预览
+                                </button>
+                              </li>
+                            {/each}
+                          </ul>
+                        {/if}
+                      </div>
+                    {/each}
+
+                    <div class="node-actions">
+                      {#if addingSectionToNodeId === node.node_id}
+                        <form on:submit|preventDefault={() => addSection(workflow.workflow_id, node.node_id)} class="add-section-form">
+                          <input 
+                            type="text" 
+                            bind:value={newSectionLabel} 
+                            placeholder="Enter section label"
+                            required
+                          />
+                          <button type="submit" class="confirm-section-button" disabled={workflow.is_locked}>Add</button>
+                          <button type="button" class="cancel-section-button" on:click={cancelAddingSection}>Cancel</button>
+                        </form>
+                      {/if}
+                      <div class="node-action-buttons">
+                        <button class="add-section-button" on:click={() => startAddingSection(node.node_id)} disabled={workflow.is_locked}>+ section</button>
+                        <button class="remove-node-button" on:click={() => removeNode(workflow.workflow_id, node.node_id)} disabled={workflow.is_locked}>
+                          - node
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                {/each}
+              </div>
+
+              {#if !workflow.is_locked}
+                <section>
+                  <h3>Add New Node</h3>
+                  <form on:submit|preventDefault={() => addNode(workflow.workflow_id)}>
+                    <div>
+                      <label>
+                        Label:
+                        <input type="text" bind:value={newNodeLabel} required />
+                      </label>
+                    </div>
+                    <div>
+                      <label>
+                        Connect after node (enter node label):
+                        <input type="text" bind:value={newNodePrevLabel} />
+                      </label>
+                    </div>
+                    <button type="submit">Add Node</button>
+                  </form>
                 </section>
-              {/each}
+              {/if}
+
+              <button 
+                on:click={() => commitChanges(workflow.workflow_id)} 
+                disabled={workflow.status === "saved" || eventBus.getChangesForWorkflow(workflow.workflow_id).length === 0}
+              >
+                {workflow.status === "saved" ? 'Changes Saved' : `Commit for ${workflow.name}`}
+              </button>
             </div>
-
-            {#if !workflow.is_locked}
-              <section>
-                <h3>Add New Node</h3>
-                <form on:submit|preventDefault={() => addNode(workflow.workflow_id)}>
-                  <div>
-                    <label>
-                      Label:
-                      <input type="text" bind:value={newNodeLabel} required />
-                    </label>
-                  </div>
-                  <div>
-                    <label>
-                      Connect after node (enter node label):
-                      <input type="text" bind:value={newNodePrevLabel} />
-                    </label>
-                  </div>
-                  <button type="submit">Add Node</button>
-                </form>
-              </section>
-            {/if}
-
-            <button 
-              on:click={() => commitChanges(workflow.workflow_id)} 
-              disabled={workflow.status === "saved" || eventBus.getChangesForWorkflow(workflow.workflow_id).length === 0}
-            >
-              {workflow.status === "saved" ? 'Changes Saved' : `Commit for ${workflow.name}`}
-            </button>
-          </div>
-        {/each}
-      {/if}
-    </div>
-  {/if}
+          {/each}
+        {/if}
+      </div>
+    {/if}
+  </div>
 </main>
 
 
@@ -994,13 +998,12 @@
 <style>
 
   /* if you want to override some global style, just re-define here, it will automatically be done */
-  main {
-    padding: 20px;
-    max-width: 1200px;        /* Adjust as needed */
-    margin: 0 auto;
-    box-sizing: border-box;
-  }
 
+  .workflow-container {
+    width: 100%;
+    max-width: 1000px; /* Should match the max-width in main */
+    margin: 0 auto;
+  }
 
   .workflow-separator {
     margin: 1rem 0 2rem 0;

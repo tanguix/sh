@@ -76,14 +76,21 @@ section {
 /* ------------------------------------------------- Main Layout ------------------------------------------------- */
 /*  viewport (vh) could make the padding dynamic when resizing windows 
     setting percentage is respect to parent box  */
+
 body {
    display: flex;
-   padding: 5rem 5rem;
-   margin: 0rem auto;
-   max-width: 900px;
+   justify-content: center;
+   padding: 5rem 0;
+   margin: 0 auto;
+   min-width: 100vw;
 }
 
-
+main {
+   width: 100%;
+   max-width: 1000px; /* Adjust this value as needed */
+   padding: 0 2rem;
+   box-sizing: border-box;
+}
 
 
 /* ------------------------------------------------- CSS Styling ------------------------------------------------- */
@@ -179,17 +186,17 @@ button:disabled {
 
 /* Style variations for different button types */
 button[type="submit"] {
-  background-color: #4a90e2;
-  border-color: #3a80d2;
-  color: white;
+  background-color: #f8f8f8;
+  border-color: #e0e0e0;
+  color: black;
 }
 
 button[type="submit"]:hover {
-  background-color: #3a80d2;
+  background-color: #f0f0f0;
 }
 
 button[type="submit"]:active {
-  background-color: #3070c2;
+  background-color: #f0f0f0;
 }
 
 
