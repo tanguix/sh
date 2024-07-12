@@ -20,10 +20,11 @@
       switch (node.status) {
         case 'Completed':
           // return '#00FF7F'; // Green for completed
-          return '#33fae8'; // Green for completed, TODO: change better one
+          // return '#33fae8'; // Green for completed, TODO: change better one
+          return '#65B2FF'
         case 'Active':
-          return '#FFDE95'; // Amber for in-progress TODO: change better one
-          // return '#b1e4fe'; // Amber for in-progress
+          // return '#FFDE95'; // Amber for in-progress TODO: change better one
+          return '#22EAAA'; // Amber for in-progress
         case 'Error':
           return '#f88'; // red for problem
         // case 'Not Started':
@@ -80,6 +81,7 @@
     }
 
 </script>
+
 
 
 <div class="pipeline-container">
