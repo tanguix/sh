@@ -5,7 +5,7 @@
 
 import type { LayoutServerLoad } from './$types'
 
-export const load: LayputServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals }) => {
     // console.log(locals)
     return {
         user: locals.user

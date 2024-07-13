@@ -4,7 +4,10 @@
     export let form: ActionData
 </script>
 
-<h1>Login</h1>
+
+<br>
+<br>
+<h1>Login (this below section is in auth route)</h1>
 
 <form action="?/login" method="POST">
     <div>
