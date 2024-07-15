@@ -94,9 +94,11 @@
                     <a {href}>{label}</a>
                 {/each}
               </div>
+              <div class="logout-section">
                 <form class="logout" action="/logout" method="POST">
                     <button type="submit">Log Out</button>
                 </form>
+              </div>
           {/if}
       </nav>
 
@@ -125,7 +127,9 @@
     </div>
 
     <div class="right-layout">
-      <UserWindow />
+      <div class="user-window-wrapper">
+        <UserWindow />
+      </div>
     </div>
   </div>
 </main>
@@ -142,37 +146,54 @@
   think of
   */
 
+
   .main-layout {
+    --main-padding: 20px 60px;
+    --right-width: 450px;
+    --gap: 2rem;
+
     display: flex;
-    width: 100%;
+    width: calc(100% - (var(--main-padding) * 2));
     max-width: 1500px;
     margin: 0 auto;
-    gap: 5rem;
+    padding: var(--main-padding);
+    gap: var(--gap);
+    box-sizing: border-box;
   }
 
   .left-layout {
+    /* flex: none; */
+    /* setting flex = 1 will take up all space after left with .right-layout */
     flex: 1;
-    min-width: 0; /* This prevents flex items from overflowing */
+    min-width: 0;       /* this prevernt flex items from overflowing */
+    width: calc(100% - var(--right-width) - var(--gap)); /* subtract right layout width and gap */
   }
+
 
   .right-layout {
-    width: 470px; /* Increased from 450px to allow for shadow */
+    width: var(--right-width);
     flex-shrink: 0;
-    box-sizing: border-box;
-    position: sticky;
-    top: 20px; /* Adjust this value to set how far from the top it sticks */
-    height: calc(100vh - 40px); /* Full viewport height minus top and bottom margin */
-    overflow-y: auto; /* Allow scrolling within the left layout if content overflows */
   }
 
 
+  .user-window-wrapper {
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
 
   .auth-section {
     display: flex;
-    justify-content: left;
+    justify-content: center;
     gap: 10px;
     margin: 1rem 0rem;
     padding: 1rem 0 1rem 0;
+  }
+
+  .logout-section {
+    display: flex;
+    justify-content: center;
   }
 
   a {

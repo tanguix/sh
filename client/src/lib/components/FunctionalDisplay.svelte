@@ -1,15 +1,10 @@
-
-
-
 <script lang="ts">
-
-  import { API_ENDPOINTS, constructUrl } from '../utils/api.ts'; // api helper function
-  import { page } from '$app/stores'  // this is the function to import if you want to use locals' value
-  import { get } from 'svelte/store'; // the correct way to retrieve locals values in .ts file
-
+  import { API_ENDPOINTS, constructUrl } from '../utils/api';
+  import { page } from '$app/stores';
+  import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
   import { unsavedChanges } from '$lib/utils/vars';
-  import { loadBase64Font, addImageToPDF, generatePDF } from '$lib/utils/pdf.ts';
+  import { loadBase64Font, addImageToPDF, generatePDF } from '$lib/utils/pdf';
 
   export let results: any[] = [];
   export let deepCopiedResults: any[] = [];
@@ -25,370 +20,511 @@
       To 至
   `;
 
-    const displayedForms = writable({});
-    let selectedKeys = {};
-    let selectedDates = writable({});
-    let removeClickCounts = writable({}); // To track remove button clicks
-    let selectedForRemoval = writable({}); // To track selected keys for removal
+  const displayedForms = writable({});
+  let selectedKeys = {};
+  let selectedDates = writable({});
+  let removeClickCounts = writable({});
+  let selectedForRemoval = writable({});
+  let unsavedChangesByIndex = writable({});
+  let formActionClicked = writable({});
 
-    function filterDisplayedKeys(result) {
-        const filteredResult = {};
-        for (const key in result) {
-            if (!keysToExclude.includes(key)) {
-                filteredResult[key] = result[key];
-            }
-        }
-        return filteredResult;
+  function filterDisplayedKeys(result) {
+    return Object.fromEntries(
+      Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
+    );
+  }
+
+  function formatPropertyValue(value) {
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    } else if (typeof value === 'object' && value !== null) {
+      return JSON.stringify(value);
     }
+    return value;
+  }
 
-    async function generatePDFWrapper() {
-        await generatePDF(results, content);
-    }
+  async function generatePDFWrapper() {
+    await generatePDF(results, content);
+  }
 
-    function addForm(index: number) {
-        displayedForms.update(forms => {
-            if (!forms[index]) {
-                forms[index] = [];
-            }
-            forms[index].push({ key: '', value: '', isRemove: false });
-            return forms;
-        });
-    }
+  function addForm(index: number) {
+    displayedForms.update(forms => {
+      if (!forms[index]) {
+        forms[index] = [];
+      }
+      forms[index].push({ key: '', value: '', isRemove: false });
+      return forms;
+    });
+    setUnsavedChanges(index, true);
+    formActionClicked.update(clicked => {
+      clicked[index] = true;
+      return clicked;
+    });
+  }
 
-    function removeKey(index: number) {
-        displayedForms.update(forms => {
-            if (!forms[index]) {
-                forms[index] = [];
-            }
-            forms[index].push({ key: '', isRemove: true });
-            return forms;
-        });
-
-        removeClickCounts.update(counts => {
-            counts[index] = (counts[index] || 0) + 1;
-            return counts;
-        });
-    }
-
-    function lessForm(index: number) {
-        displayedForms.update(forms => {
-            if (!forms || !forms[index] || forms[index].length === 0) {
-                console.error("Attempt to remove a form from an uninitialized index or empty forms array.");
-                return forms;
-            }
-            const lastForm = forms[index].pop();
-            if (lastForm && lastForm.isRemove) {
-                removeClickCounts.update(counts => {
-                    counts[index] = (counts[index] || 1) - 1;
-                    return counts;
-                });
-            }
-            if (forms[index].length === 0) {
-                delete forms[index];
-            }
-            return forms;
-        });
-
-        selectedForRemoval.update(selections => {
-            delete selections[index];
-            return selections;
-        });
-    }
-
-    function clearForms(index: number) {
-        displayedForms.update(forms => {
-            if (forms[index]) {
-                forms[index] = [];
-            }
-            return forms;
-        });
-
-        removeClickCounts.update(counts => {
-            counts[index] = 0;
-            return counts;
-        });
-
-        selectedForRemoval.update(selections => {
-            selections[index] = [];
-            return selections;
-        });
-    }
-
-
-
-
-    function updateForm(index: number, entryIndex: number, field: string, value: string) {
-        displayedForms.update(forms => {
-            if (forms[index] && forms[index][entryIndex]) {
-                if (field === 'value' && forms[index][entryIndex].isDate) {
-                    // Convert the date value to a suitable format if necessary
-                    const dateValue = new Date(value).toISOString().split('T')[0];
-                    forms[index][entryIndex][field] = dateValue;
-                } else {
-                    forms[index][entryIndex][field] = value;
-                }
-            }
-            return forms;
-        });
-    }
-
-
-
-
-    function toggleDateInput(index: number, entryIndex: number) {
-        displayedForms.update(forms => {
-            if (forms[index] && forms[index][entryIndex]) {
-                forms[index][entryIndex].isDate = !forms[index][entryIndex].isDate;
-                if (forms[index][entryIndex].isDate) {
-                    forms[index][entryIndex].key = 'delivery_date';
-                    forms[index][entryIndex].value = ''; // Clear the value when toggling to date
-                } else {
-                    forms[index][entryIndex].key = '';
-                    forms[index][entryIndex].value = ''; // Clear the value when toggling to text
-                }
-            }
-            return forms;
-        });
-    }
-
-
-
-    function updateResults(index: number) {
-        const user = get(page).data.user;
-
-        if (user) {
-            const formData = $displayedForms[index] || [];
-            const updates = formData.reduce((acc, curr) => {
-                if (curr.key && curr.value && !curr.isRemove) {
-                    acc[curr.key] = curr.value;
-                } else if (curr.key && curr.isRemove) {
-                    delete results[index][curr.key];
-                }
-                return acc;
-            }, {});
-
-            console.log("Original deepCopiedResults:", deepCopiedResults);
-
-            results[index] = { ...results[index], ...updates };
-
-            // Handle modifiedBy field
-            if (results[index].modifiedBy) {
-                if (Array.isArray(results[index].modifiedBy)) {
-                    results[index].modifiedBy.push(user);
-                } else {
-                    results[index].modifiedBy = [results[index].modifiedBy, user];
-                }
-            } else {
-                results[index].modifiedBy = [user];
-            }
-
-            console.log("Updated results:", results);
-
-            clearForms(index);
-            unsavedChanges.set(true);
-        } else {
-            console.log("undefined user");
-        }
-    }
-
-
-
-    function arraysEqual(a, b) {
-        a = JSON.stringify(a);
-        b = JSON.stringify(b);
-
-        return a === b;
-    }
-
-
-    function countRemovableKeys(result) {
-        return Object.keys(result).filter(key => !keysToExclude.includes(key)).length;
-    }
-
-    function canRemoveKeys(index) {
-        const result = results[index];
-        const removableKeysCount = countRemovableKeys(result);
-        const formData = $displayedForms[index] || [];
-        const existingRemoves = formData.filter(form => form.isRemove).length;
-        return removableKeysCount > existingRemoves;
-    }
-
-    $: canRemove = results.map((result, index) => {
-        const formData = $displayedForms[index] || [];
-        const existingRemoves = formData.filter(form => form.isRemove).length;
-        const removableKeysCount = countRemovableKeys(result);
-        return removableKeysCount > existingRemoves;
+  function removeKey(index: number) {
+    displayedForms.update(forms => {
+      if (!forms[index]) {
+        forms[index] = [];
+      }
+      forms[index].push({ key: '', isRemove: true });
+      return forms;
     });
 
+    removeClickCounts.update(counts => {
+      counts[index] = (counts[index] || 0) + 1;
+      return counts;
+    });
+    setUnsavedChanges(index, true);
+    formActionClicked.update(clicked => {
+      clicked[index] = true;
+      return clicked;
+    });
+  }
 
 
 
-    // after push to the database, remmeber to make a blinking realtime effect showing the unique identifier for a side tab 
-    // mostly they don't need to use that immediately so user windows' update could use traditional way: fetch responds 
-    // but if they want to use that immediately, they can copy from the blinking tab
 
 
-    async function pushChangesToBackend() {
-        try{
-            if (!arraysEqual(deepCopiedResults, results)) {
-                console.log("Pushing changes to the database:", results);
 
-                // results is an array, need to convert into JSON object for sending, but still backend will receive array
-                // create api endpoint: original url ('http://localhost:5000/upload/api/upload_sample')
-                const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(results), // convert the result to a JSON object
-                });
 
-                if (!response.ok) {
-                    throw new Error('Failed to upload sample data');
-                }
+  function lessForm(index: number) {
+    displayedForms.update(forms => {
+      if (!forms || !forms[index] || forms[index].length === 0) {
+        return forms;
+      }
+      forms[index].pop();
+      if (forms[index].length === 0) {
+        delete forms[index];
+      }
+      return forms;
+    });
 
-                unsavedChanges.set(false);
-                const sampling_response = await response.json();
-                console.log(sampling_response.message, ":", sampling_response.sample_token)
+    removeClickCounts.update(counts => {
+      if (counts[index] > 0) {
+        counts[index]--;
+      }
+      return counts;
+    });
 
-            } else {
-                console.log("No changes to push");
-            }
-        } catch (error) {
-            console.error("Caught unexpected error:", error.message)
+    selectedForRemoval.update(selections => {
+      delete selections[index];
+      return selections;
+    });
+
+    if (!hasDisplayedForms(index)) {
+      results[index] = { ...deepCopiedResults[index] };
+      setUnsavedChanges(index, false);
+      formActionClicked.update(clicked => {
+        clicked[index] = false;
+        return clicked;
+      });
+    }
+  }
+
+  function hasDisplayedForms(index: number): boolean {
+    return $displayedForms[index] && $displayedForms[index].length > 0;
+  }
+
+
+
+
+
+
+
+
+
+  function updateForm(index: number, entryIndex: number, field: string, value: string) {
+    displayedForms.update(forms => {
+      if (forms[index] && forms[index][entryIndex]) {
+        if (field === 'value' && forms[index][entryIndex].isDate) {
+          const dateValue = new Date(value).toISOString().split('T')[0];
+          forms[index][entryIndex][field] = dateValue;
+        } else {
+          forms[index][entryIndex][field] = value;
         }
+      }
+      return forms;
+    });
+    setUnsavedChanges(index, true);
+  }
+
+  function toggleDateInput(index: number, entryIndex: number) {
+    displayedForms.update(forms => {
+      if (forms[index] && forms[index][entryIndex]) {
+        forms[index][entryIndex].isDate = !forms[index][entryIndex].isDate;
+        if (forms[index][entryIndex].isDate) {
+          forms[index][entryIndex].key = 'delivery_date';
+          forms[index][entryIndex].value = '';
+        } else {
+          forms[index][entryIndex].key = '';
+          forms[index][entryIndex].value = '';
+        }
+      }
+      return forms;
+    });
+    setUnsavedChanges(index, true);
+  }
+
+  function updateResults(index: number) {
+    const user = get(page).data.user;
+    if (!user) {
+      console.log("undefined user");
+      return;
     }
 
+    const formData = $displayedForms[index] || [];
+    const updates = formData.reduce((acc, curr) => {
+      if (curr.key && curr.value && !curr.isRemove) {
+        acc[curr.key] = curr.value;
+      } else if (curr.key && curr.isRemove) {
+        delete results[index][curr.key];
+      }
+      return acc;
+    }, {});
+
+    results[index] = { ...results[index], ...updates };
+
+    if (results[index].modifiedBy) {
+      results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
+        ? [...results[index].modifiedBy, user]
+        : [results[index].modifiedBy, user];
+    } else {
+      results[index].modifiedBy = [user];
+    }
+
+    displayedForms.update(forms => {
+      delete forms[index];
+      return forms;
+    });
+    setUnsavedChanges(index, false);
+    formActionClicked.update(clicked => {
+      clicked[index] = false;
+      return clicked;
+    });
+  }
+
+  async function pushChangesToBackend() {
+    try {
+      if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results)) {
+        const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(results),
+        });
+
+        if (!response.ok) throw new Error('Failed to upload sample data');
+
+        unsavedChanges.set(false);
+        unsavedChangesByIndex.set({});
+        const sampling_response = await response.json();
+        console.log(sampling_response.message, ":", sampling_response.sample_token);
+      } else {
+        console.log("No changes to push");
+      }
+    } catch (error) {
+      console.error("Caught unexpected error:", error.message);
+    }
+  }
 
 
 
+  function setUnsavedChanges(index: number, value: boolean) {
+    unsavedChangesByIndex.update(changes => {
+      changes[index] = value;
+      return changes;
+    });
+    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
+  }
 
-
+  $: canRemove = results.map((result, index) =>
+    Object.keys(filterDisplayedKeys(result)).length >
+    ($removeClickCounts[index] || 0)
+  );
 </script>
 
-<div id="result">
-    {#if results.length > 0}
-        {#each results as result, index}
-            <h3>{content}</h3>
-            <div class="result-container">
-                <pre>{JSON.stringify(filterDisplayedKeys(result), null, 2)}</pre>
-                {#if result.image_url}
-                    <img src={result.image_url} alt="searched_image" onerror="this.onerror=null;this.src='fallback-image-url';">
-                {/if}
+
+
+
+<div class="results-container">
+  {#if results.length > 0}
+    {#each results as result, index}
+      <div class="result-card">
+        <h3>{content}</h3>
+        <div class="result-content-wrapper">
+          <div class="result-content">
+            <div class="image-container">
+              {#if result.image_url}
+                <div class="image-frame">
+                  <img src={result.image_url} alt="searched_image" on:error={(e) => e.target.src = 'fallback-image-url'}>
+                </div>
+              {:else}
+                <div class="no-image">No image available</div>
+              {/if}
             </div>
-            <button on:click={() => addForm(index)}>Add</button>
-            {#if canRemove[index]}
-                <button on:click={() => removeKey(index)}>Remove</button>
-            {/if}
-            {#if $displayedForms[index]}
-                {#each $displayedForms[index] as form, entryIndex}
-                    <div>
-                        <form>
-
-                            {#if form.isRemove}
-                                <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
-                                <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
-                                    <option value="">Select key</option>
-                                    {#each Object.keys(results[index]) as key}
-                                        {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
-                                            <option value={key}>{key}</option>
-                                        {/if}
-                                    {/each}
-                                </select>
-                            {:else}
-                                <label for={`key-${index}-${entryIndex}`}>Key:</label>
-                                <input id={`key-${index}-${entryIndex}`} type="text" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
-                                <label for={`value-${index}-${entryIndex}`}>Value:</label>
-                                <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.value} />
-
-                                <label class="custom-checkbox">
-                                    <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
-                                    <span class="outer-circle">
-                                        <span class="inner-circle"></span>
-                                    </span>
-                                    Date Type
-                                </label>
-                            {/if}
-
-                        </form>
-                    </div>
-                {/each}
-            {/if}
-            <button on:click={() => updateResults(index)}>Update</button>
-            <button on:click={() => lessForm(index)}>Cancel</button>
-        {/each}
-        <div>
-            <br>
-            <hr>
-            <button on:click={pushChangesToBackend}>Push Changes</button>
-            <button on:click={generatePDFWrapper}>Download PDF</button>
+            <div class="properties-container">
+              {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
+                <div class="property-item">
+                  <span class="property-key">{key}:</span>
+                  <span class="property-value">{formatPropertyValue(value)}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
         </div>
-    {:else}
-        <p>No results found</p>
-    {/if}
+        <div class="form-controls">
+          <button on:click={() => addForm(index)}>Add Field</button>
+          {#if canRemove[index]}
+            <button on:click={() => removeKey(index)}>Remove Field</button>
+          {/if}
+        </div>
+        {#if $displayedForms[index]}
+          <div class="additional-forms">
+            {#each $displayedForms[index] as form, entryIndex}
+              <div class="form-entry">
+                <form>
+                  {#if form.isRemove}
+                    <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
+                    <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
+                      <option value="">Select key</option>
+                      {#each Object.keys(results[index]) as key}
+                        {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
+                          <option value={key}>{key}</option>
+                        {/if}
+                      {/each}
+                    </select>
+                  {:else}
+                    <div class="input-group">
+                      <input id={`key-${index}-${entryIndex}`} type="text" placeholder="Key" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
+                      <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.value} />
+                    </div>
+                    <label class="custom-checkbox">
+                      <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
+                      <span class="checkbox-text">Date Type</span>
+                    </label>
+                  {/if}
+                </form>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <div class="action-buttons">
+          {#if $unsavedChangesByIndex[index]}
+            <button on:click={() => updateResults(index)}>Update</button>
+          {/if}
+          {#if $formActionClicked[index]}
+            <button on:click={() => lessForm(index)} class="secondary">Cancel</button>
+          {/if}
+        </div>
+      </div>
+    {/each}
+    <div class="global-actions">
+      <button on:click={pushChangesToBackend}>Push Changes</button>
+      <button on:click={generatePDFWrapper}>Download PDF</button>
+    </div>
+  {:else}
+    <p class="no-results">No results found</p>
+  {/if}
 </div>
 
 
 
 
-
 <style>
-    .result-container {
-        margin-top: 10px;
-        width: 100%;
-    }
-    img {
-        max-width: 70%;
-        height: auto;
-        display: block;
-        margin: 10px 0;
-    }
-    .custom-checkbox {
-        display: inline-block;
-        position: relative;
-        padding-left: 35px;
-        margin-top: 20px;
-        cursor: pointer;
-        font-size: 16px;
-        user-select: none;
+  .results-container {
+    font-family: 'Ubuntu', sans-serif;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .result-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    padding: 20px;
+  }
+
+  h3 {
+    color: #333;
+    margin-bottom: 15px;
+  }
+
+  .result-content-wrapper {
+    overflow: hidden;
+  }
+
+  .result-content {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+  }
+
+  .image-container {
+    flex: 0 0 66.67%;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .image-frame {
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .image-frame img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .no-image {
+    color: #999;
+    font-style: italic;
+  }
+
+  .properties-container {
+    flex: 0 0 33.33%;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    padding: 15px;
+    overflow-y: auto;
+    max-height: 400px;
+  }
+
+  .property-item {
+    width: 100%;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    line-height: 1.4;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .property-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .property-key {
+    font-weight: bold;
+    color: #555;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .property-value {
+    display: block;
+    word-break: break-word;
+    color: #007bff;
+  }
+
+  .form-controls, .action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+
+  button {
+    padding: 8px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    background-color: #ccc;
+  }
+
+  button:hover {
+    background-color: #FFE6B3;
+  }
+
+  button.secondary {
+    background-color: #ccc;
+  }
+
+  button.secondary:hover {
+    background-color: #FFE6B3;
+  }
+
+  .additional-forms {
+    margin-top: 15px;
+  }
+
+  .form-entry {
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 10px;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  input[type="text"], input[type="date"], select {
+    flex-grow: 1;
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  .custom-checkbox {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+  }
+
+  .checkbox-text {
+    margin-left: 5px;
+  }
+
+  .global-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+  }
+
+  .global-actions button {
+    color: #fff;
+    background: #007bff;
+  }
+
+  .no-results {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+  }
+
+  @media (max-width: 768px) {
+    .result-content {
+      flex-direction: column;
     }
 
-    .custom-checkbox input {
-        position: absolute;
-        opacity: 0;
-        cursor: pointer;
-        height: 0;
-        width: 0;
+    .image-container, .properties-container {
+      flex: 0 0 auto;
+      width: 100%;
     }
 
-    .outer-circle {
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 20px;
-        width: 20px;
-        background-color: transparent;
-        border: 2px solid #ccc;
-        border-radius: 50%;
-        box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .image-container {
+      height: 300px;
     }
 
-    .inner-circle {
-        height: 12px;
-        width: 12px;
-        border: 2px solid #ccc;
-        background-color: transparent;
-        border-radius: 50%;
-        transition: background-color 0.3s;
+    .properties-container {
+      max-height: none;
     }
-
-    .custom-checkbox input:checked ~ .outer-circle .inner-circle {
-        background-color: #2196F3;
-    }
+  }
 </style>
-
-
-

@@ -1095,7 +1095,11 @@
     border-radius: 4px;
     padding: 1rem;
     background-color: #f9f9f9;
-    min-width: 260px;
+    /* 
+    later, we need to think of way to match with .main-layout width
+    so it can auto adjust together with main layout
+    */
+    min-width: 230px;
   }
 
   .node-actions {
@@ -1149,8 +1153,6 @@
   .add-section-form .cancel-section-button:hover {
     background-color: #d0d0d0;
   }
-
-
 
 
 

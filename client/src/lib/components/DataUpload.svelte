@@ -1,90 +1,68 @@
 
 <script lang="ts">
-    import { writable } from 'svelte/store';    // reactive method by default
-    import { API_ENDPOINTS, constructUrl } from '$lib/utils/api'; // api helper function
+    import { writable } from 'svelte/store';
+    import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
-
-    // user-defined type for additional field (key: value) in json
     type Field = {
         id: number;
         key: string;
         value: string;
     };
 
-    // declare Universial Type that could have array of attributes 
-    // Category and Tag
     type Item = {
         id: number;
         value: string;
     };
 
-    // create writtable array object for storing, an array of certain type
-    let fields = writable<Field[]>([]);             // Field array
-    let tags = writable<Item[]>([]);                // Tag array
-    let categories = writable<Item[]>([]);          // Category array
-    let imageFile: File | null = null;              // File API Interface, either be File or null, and it's null initially
-    let imagePath: string = '';                     // save image path (just filename)
-    let imagePreviewUrl: string = '';               // store the image preview URL object
+    let fields = writable<Field[]>([]);
+    let tags = writable<Item[]>([]);
+    let categories = writable<Item[]>([]);
+    let imageFile: File | null = null;
+    let imagePath: string = '';
+    let imagePreviewUrl: string = '';
 
+    // New variables for additional images
+    let additionalImages: File[] = [];
+    let additionalImagePreviews: string[] = [];
 
-
-    // ---------------------------------------------- Add/Remove Function ----------------------------------------------
-    // store is svelte class, allows both reading and updating its value, for managing states across svelte page 
-    // writable store is one type of store
-    function addItem(store) {                       // takes in store object 
-        store.update(currentItems => [              // update is a writable store method, takes function as parameter
-            ...currentItems,                        // ...currentItems: a shallow copy of the store array from currentItems
-            { id: Date.now(), value: '' }           // ensure existing/original array is immutate
+    function addItem(store) {
+        store.update(currentItems => [
+            ...currentItems,
+            { id: Date.now(), value: '' }
         ]);
     }
 
-    // function takes in an id for locating the object (key: value)
-    // filter() method remove items in the array if condition evaluate to false
-    // click "remove" button activate evaluation(for field, tag, category)
     function removeItem(store: any, id: number) {
         store.update(currentItems => currentItems.filter(item => item.id !== id));
     }
 
-
-    // ---------------------------------------- Image Drag-Drop Area (event) ----------------------------------------
-    // 1) event is an object, which is automatically passed to event-handler function when occurs
-    // 2) event.target refers to the element that triggered the event, it's a property of the event object
-    // 3) Default HTML events: dragover, drop, keydown, click, etc 
-    // 4) e.g. the 'dragover' event is fired when a dragged element is being dragged over a valid drop target(div tag)
-    // 5) e.g. the 'keydown' event is fired when a key is pressed down.
-    function handleFileSelect(event: Event) {               // event handle function, takes in event, cast to a specific type
-        const target = event.target as HTMLInputElement;    // "HTMLInputElement" type for safety check, event.target is
-                                                            // expected to be ('<input type="file"') = "browse file" button
-        if (target.files && target.files.length > 0) {          // check file existence
-            imageFile = target.files[0];                        // assign image value to imageFile
-            imagePath = target.files[0].name;                   // assign image name
-            imagePreviewUrl = URL.createObjectURL(imageFile);   // create image preview object
+    function handleFileSelect(event: Event) {
+        const target = event.target as HTMLInputElement;
+        if (target.files && target.files.length > 0) {
+            imageFile = target.files[0];
+            imagePath = target.files[0].name;
+            imagePreviewUrl = URL.createObjectURL(imageFile);
         }
     }
 
-    // Function to handle file drop
-    function handleDrop(event: DragEvent) {                     // drag event handler
-        event.preventDefault();                                 // browser by default doesn't not allow drag behavior, 
-                                                                // so prevent default
-        if (event.dataTransfer && event.dataTransfer.files.length > 0) {    // event.dataTransfer == <on:drop>
+    function handleDrop(event: DragEvent) {
+        event.preventDefault();
+        if (event.dataTransfer && event.dataTransfer.files.length > 0) {
             imageFile = event.dataTransfer.files[0];
             imagePath = imageFile.name;
             imagePreviewUrl = URL.createObjectURL(imageFile);
         }
     }
 
-    // allow dragging
     function handleDragOver(event: DragEvent) {
         event.preventDefault();
     }
 
-    // Function to handle click event for file input, above is for handling select
     function handleClick() {
         const fileInput = document.getElementById('image') as HTMLInputElement;
         fileInput.click();
     }
 
-    // Function to handle key down event
     function handleKeyDown(event: KeyboardEvent) {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -92,10 +70,43 @@
         }
     }
 
-    // ---------------------------------------------- API request ----------------------------------------------
-    // Function to send sample data to the backend
+    // New functions for additional images
+    function handleAdditionalFileSelect(event: Event) {
+        const target = event.target as HTMLInputElement;
+        if (target.files) {
+            for (let i = 0; i < target.files.length; i++) {
+                if (target.files[i].type.startsWith('image/')) {
+                    additionalImages = [...additionalImages, target.files[i]];
+                    additionalImagePreviews = [...additionalImagePreviews, URL.createObjectURL(target.files[i])];
+                }
+            }
+        }
+    }
+
+    function handleAdditionalDrop(event: DragEvent) {
+        event.preventDefault();
+        if (event.dataTransfer && event.dataTransfer.files) {
+            for (let i = 0; i < event.dataTransfer.files.length; i++) {
+                const file = event.dataTransfer.files[i];
+                if (file.type.startsWith('image/')) {
+                    additionalImages = [...additionalImages, file];
+                    additionalImagePreviews = [...additionalImagePreviews, URL.createObjectURL(file)];
+                }
+            }
+        }
+    }
+
+
+
+    function removeAdditionalImage(event: Event, index: number) {
+        event.stopPropagation();
+        additionalImages = additionalImages.filter((_, i) => i !== index);
+        additionalImagePreviews = additionalImagePreviews.filter((_, i) => i !== index);
+    }
+
+
+
     async function sendSampleData(combinedFormData: FormData) {
-        // create api endpoint
         const response = await fetch(API_ENDPOINTS.UPLOAD_DATA, {
             method: 'POST',
             body: combinedFormData, 
@@ -108,29 +119,31 @@
         return await response.json();
     }
 
-    // Form Submission handling function
+
+
     function handleSubmit(event: Event) {
-        event.preventDefault();                         // prevent default reload after submitted form
+        event.preventDefault();
         const form = event.target as HTMLFormElement;
         const formData = new FormData(form);
 
-        // check if imageFile exist, this is a "File" type Web API Interface object 
-        // "File" type can be sent over the network as part of multipart/form-data, not directly as json (json is text)
         if (imageFile) {
             formData.append('image', imageFile);
         }
 
-        // Record is a default type
+        // Append additional images
+        additionalImages.forEach((image, index) => {
+            formData.append(`additional_image_${index}`, image);
+        });
+
         const additionalFields: Record<string, string> = {};
-        fields.subscribe(currentFields => {             // subscribe: writable method allow you to listen to change
-            currentFields.forEach(field => {            // for loop in python: "for field in currentFields:"
-                if (field.key) {                        // if exist a new key, add it to the array for appending
+        fields.subscribe(currentFields => {
+            currentFields.forEach(field => {
+                if (field.key) {
                     additionalFields[field.key] = field.value;
                 }
             });
         })();
 
-        // for Tags, array of string
         const additionalTags: string[] = [];
         tags.subscribe(currentTags => {
             currentTags.forEach(tag => {
@@ -140,7 +153,6 @@
             });
         })();
 
-        // For Category, array of string
         const additionalCategories: string[] = [];
         categories.subscribe(currentCategories => {
             currentCategories.forEach(category => {
@@ -150,23 +162,20 @@
             });
         })();
 
-        // retrieve original Tags, and trims(remove) whitespace (first entered Tag)
         const originalTags = formData.get('tag') ? 
             formData.get('tag').toString().split(',').map(tag => tag.trim()) : [];
-        // retrieve original category (first entered category)
         const originalCategories = formData.get('category') ? 
             formData.get('category').toString().split(',').map(category => category.trim()) : [];
 
-        // conact them in a unified array
         const allTags = originalTags.concat(additionalTags);
         const allCategories = originalCategories.concat(additionalCategories);
 
-        // append them into multipart/formdata
         formData.append('tags', JSON.stringify(allTags));
         formData.append('categories', JSON.stringify(allCategories));
         formData.append('additional_fields', JSON.stringify(additionalFields));
 
-        // send formData
+
+
         sendSampleData(formData)
             .then(response => {
                 console.log('Upload successful:', response);
@@ -175,8 +184,6 @@
                 console.error('Upload failed:', error);
             });
 
-        // reset all the field entered, by default page will refresh after form sbumission, but we had prevent that
-        // so mannully reset all entries
         form.reset();
         fields.set([]);
         tags.set([]);
@@ -184,144 +191,214 @@
         imageFile = null;
         imagePath = '';
         imagePreviewUrl = '';
+        additionalImages = [];
+        additionalImagePreviews = [];
     }
 </script>
 
 
-<!----------------------------------------------------- HTML ----------------------------------------------------->
 
-
-<!-- the big form to submit -->
 <form action="?/upload" method="POST" on:submit={handleSubmit} enctype="multipart/form-data">
+    <div class="upload-container">
+        <div class="upload-left">
+            <div class="browser-file">
+                <label for="image">Upload Image:</label>
+                <input class="input" type="file" id="image" name="image_file" accept="image/*" on:change={handleFileSelect} required>
+                <button type="button" on:click={handleClick}>Browse</button>
+            </div>
 
-    <!-- file browsing div -->
-    <div class="browser-file">
-        <label for="image">Upload Image:</label>
-        <input class="input" type="file" id="image" name="image_file" accept="image/*" on:change={handleFileSelect} required>
-        <button type="button" on:click={handleClick}>Browse</button>
-    </div>
-
-    <!-- drag and drop area div -->
-    <div 
-        class="drag-drop-area {imagePreviewUrl ? 'highlight' : ''}"
-        role="button"
-        tabindex="0"
-        on:click={handleClick}
-        on:keydown={handleKeyDown}
-        on:drop={handleDrop} 
-        on:dragover={handleDragOver} 
-    >
-        <div>
-            {#if imagePreviewUrl}
-                <div class="image-preview">
-                    <img src={imagePreviewUrl} alt="preview file" />
+            <div 
+                class="drag-drop-area {imagePreviewUrl ? 'highlight' : ''}"
+                role="button"
+                tabindex="0"
+                on:click={handleClick}
+                on:keydown={handleKeyDown}
+                on:drop={handleDrop} 
+                on:dragover={handleDragOver} 
+            >
+                <div class="image-preview-container">
+                    {#if imagePreviewUrl}
+                        <div class="image-preview">
+                            <img src={imagePreviewUrl} alt="preview file" />
+                        </div>
+                    {/if}
+                    {#if imagePath}
+                        <p>{imagePath}</p>
+                    {/if}
+                    {!imagePath && !imagePreviewUrl ? '< main image >' : ''}
                 </div>
-            {/if}
-            {#if imagePath}
-                <p>{imagePath}</p>
-            {/if}
-            {!imagePath && !imagePreviewUrl ? 'Drag and drop an image here or click to select.' : ''}
+            </div>
+
+            <!-- New section for additional images -->
+            <div class="additional-images">
+                <h3>Additional Images:</h3>
+                <div class="browser-file">
+                    <label for="additional-images">Upload Additional Images:</label>
+                    <input class="input" type="file" id="additional-images" name="additional_images" accept="image/*" on:change={handleAdditionalFileSelect} multiple>
+                    <button type="button" on:click={() => document.getElementById('additional-images').click()}>Browse</button>
+                </div>
+
+                <div 
+                    class="drag-drop-area additional-images-area"
+                    role="button"
+                    tabindex="0"
+                    on:click={() => document.getElementById('additional-images').click()}
+                    on:keydown={handleKeyDown}
+                    on:drop={handleAdditionalDrop} 
+                    on:dragover={handleDragOver} 
+                >
+                    {#if additionalImagePreviews.length > 0}
+                        <div class="additional-images-container">
+                            <div class="additional-image-previews">
+                                {#each additionalImagePreviews as preview, index}
+                                    <div class="additional-image-preview">
+                                        <img src={preview} alt={`Additional image ${index + 1}`} />
+                                        <button type="button" on:click={(event) => removeAdditionalImage(event, index)}>remove</button>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {:else}
+                        <p>Drag and drop additional images here.</p>
+                    {/if}
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-right">
+            <!-- Categories -->
+            <div class="input-group">
+                <div class="input-button-group">
+                    <input type="text" id="category" name="category" placeholder="Categories" required>
+                    <button type="button" on:click={() => addItem(categories)}>add</button>
+                </div>
+            </div>
+
+            {#each $categories as category (category.id)}
+                <div class="input-group indent">
+                    <div class="input-button-group">
+                        <input type="text" id="category-{category.id}" bind:value={category.value} placeholder="New category">
+                        <button type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
+                    </div>
+                </div>
+            {/each}
+
+            <!-- Tags -->
+            <div class="input-group">
+                <div class="input-button-group">
+                    <input type="text" id="tag" name="tag" placeholder="Tags" required>
+                    <button type="button" on:click={() => addItem(tags)}>add</button>
+                </div>
+            </div>
+
+            {#each $tags as tag (tag.id)}
+                <div class="input-group indent">
+                    <div class="input-button-group">
+                        <input type="text" id="tag-{tag.id}" bind:value={tag.value} placeholder="New tag">
+                        <button type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
+                    </div>
+                </div>
+            {/each}
+
+            <!-- Reference Number -->
+            <div class="input-group">
+                <input type="text" id="reference_no" name="reference_no" placeholder="Reference Number" required>
+            </div>
+
+            <!-- Separator -->
+            <hr class="separator">
+
+            <!-- Additional Fields -->
+            {#each $fields as field (field.id)}
+                <div class="input-group additional-field">
+                    <div class="feature-value-group">
+                        <div class="input-label-group">
+                            <input type="text" id="key-{field.id}" bind:value={field.key} placeholder="Field name">
+                        </div>
+                        <div class="input-label-group">
+                            <input type="text" id="value-{field.id}" bind:value={field.value} placeholder="Value">
+                        </div>
+                    </div>
+                    <button type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
+                </div>
+            {/each}
+            <button type="button" on:click={() => addItem(fields)}>Add Field</button>
         </div>
     </div>
-
-    <!-- category entry div -->
-    <div>
-        <label for="category">Categories:</label>
-        <input type="text" id="category" name="category" required>
-        <button type="button" on:click={() => addItem(categories)}>add</button>
-    </div>
-
-    {#each $categories as category (category.id)}
-        <div class="indent">
-            <label for="category-{category.id}">new cat:</label>
-            <input type="text" id="category-{category.id}" bind:value={category.value} placeholder="Category">
-
-            <button type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
-        </div>
-    {/each}
-
-    <!-- Tag entry div -->
-    <div>
-        <label for="tag">Tags:</label>
-        <input type="text" id="tag" name="tag" required>
-        <button type="button" on:click={() => addItem(tags)}>add</button>
-    </div>
-
-    {#each $tags as tag (tag.id)}
-        <div class="indent">
-            <label for="tag-{tag.id}">new tag:</label>
-            <input type="text" id="tag-{tag.id}" bind:value={tag.value} placeholder="Tag">
-
-            <button type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
-        </div>
-    {/each}
-
-    <!-- all other single entry div -->
-    <div>
-        <label for="reference_no">Reference Number:</label>
-        <input type="text" id="reference_no" name="reference_no" required>
-    </div>
-    <!-- <div> -->
-    <!--     <label for="quantity">Quantity:</label> -->
-    <!--     <input type="text" id="quantity" name="quantity" required> -->
-    <!-- </div> -->
-
-
-    <!-- additional field div -->
-    {#each $fields as field (field.id)}
-        <div>
-            <label for="key-{field.id}">Feature:</label>
-            <input type="text" id="key-{field.id}" bind:value={field.key} placeholder="Field name">
-
-            <label for="value-{field.id}">Value:</label>
-            <input type="text" id="value-{field.id}" bind:value={field.value} placeholder="Value">
-
-            <button type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
-        </div>
-    {/each}
-    <button type="button" on:click={() => addItem(fields)}>Add Field</button>
 
     <!-- submission button -->
-    <button type="submit">Submit</button>
+    <div class="submit-button">
+      <button type="submit">Submit</button>
+    </div>
 </form>
 
 <style>
-
     form {
         font-family: "Ubuntu";
     }
 
-    div {
-        padding: 5px;
+    .upload-container {
+        display: flex;
+        gap: 2rem;
+    }
+
+    .upload-left, .upload-right {
+        flex: 1;
+    }
+
+    .upload-right {
+        padding-top: 3.5rem;
+    }
+
+    .input-group {
+        margin-bottom: 1rem;
+    }
+
+    .input-button-group {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .input-button-group input {
+        flex-grow: 1;
     }
 
     .indent {
-        margin: 0 0 0 1.4rem;
+        margin-left: 1.4rem;
+    }
+
+    .additional-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .feature-value-group {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .input-label-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
     }
 
     .input {
-        display: none; /* by default input tag will come with Choose button, disable it */
+        display: none;
     }
 
     .browser-file {
-        /* border: solid; */
+        margin-bottom: 1rem;
     }
-
 
     .drag-drop-area {
         border: 2px dashed #ccc;
         text-align: center;
-        margin-bottom: 10px;
-        position: relative;
+        padding: 2rem;
         cursor: pointer;
         transition: border-color 0.3s, background-color 0.3s;
-        width: 30rem;
-        height: auto;
-        display: flex;
-        align-items: center; /* Center items vertically */
-        justify-content: center; /* Center items horizontally */
     }
-
 
     .drag-drop-area:hover {
         border-color: #007bff;
@@ -329,13 +406,98 @@
     }
 
     .image-preview {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        max-width: 80%;
-        max-height: 80%;
+        max-width: 100%;
+        margin-top: 1rem;
     }
-    
+
+    .image-preview img {
+        max-width: 100%;
+        height: auto;
+    }
 
 
+    .image-preview-container p {
+        padding: 10px 0 0 0;
+    }
+
+    button {
+        margin-top: 0.5rem;
+        white-space: nowrap;
+    }
+
+    /* Styles for additional images */
+    .additional-images {
+        margin-top: 2rem;
+    }
+
+    .additional-images-area {
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .additional-images-container {
+        display: flex;
+        justify-content: center;
+        max-width: 100%;
+    }
+
+    .additional-image-previews {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .additional-image-preview {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        overflow: hidden;
+    }
+
+    .additional-image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .additional-image-preview button {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 12px;
+        line-height: 1.5;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .additional-image-preview button:hover {
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    .separator {
+        border: 0;
+        height: 1px;
+        background: #ccc;
+        margin: 2.5rem 0 1rem 0;
+    }
+
+    .additional-field {
+        margin-top: 2rem;
+    }
+
+    .submit-button {
+        display: flex;
+        align-items: left;
+        justify-content: left;
+        margin: 0.5rem 0;
+    }
 </style>
+

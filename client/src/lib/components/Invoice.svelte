@@ -4,6 +4,9 @@
 
 <script lang='ts'>
 
+
+// TODO: style the one like stripe company had (save in the root for references)
+
 // importing the company logo PNG 
 import logoPng from './png/logo.png'; // Adjust the path to your PNG file
 import jsPDF from 'jspdf';

@@ -41,6 +41,23 @@
 
 
 
+    // custom downdrop menu
+    let isDropdownOpen = false;
+    let selectedCollectionDisplay = 'Select Collection';
+
+    function toggleDropdown() {
+        isDropdownOpen = !isDropdownOpen;
+    }
+
+    function selectCollection(collection: string) {
+        selectedCollectionName = collection;
+        selectedCollectionDisplay = collection;
+        isDropdownOpen = false;
+        updateKeys();
+    }
+
+
+
     // automatically fetch collections list from the backend and display in the select for user to choose
     onMount(async () => {
         try {
@@ -182,70 +199,152 @@
         don't make it select tag, cause there are select tag for keys and collections already, I am tired of select tag
 -->
 <!-- Dropdown for selecting a collection -->
-<select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
-    <option value="">Collection</option>
-    {#each collections as collection}
-        <option value={collection}>{collection}</option>
-    {/each}
-</select>
 
 
-<!-- Input field for entering the value to search -->
-{#if searchOption === "sampling"}
-    <input type="text" bind:value={valueToSearch} placeholder="Enter reference number">
-    <button on:click={search}>Add</button>
-{:else}
-    <!-- Render this part if searchOption is not 'sampling' -->
-    <p>Non-sampling search mode</p>
-    <div>
-        <!-- Dropdown for selecting a key if keys exist in the selected collection -->
-        {#if keys.length > 0}
-            <select bind:value={selectedKey}>
-                <option value="">Select a key</option>
-                {#each keys as key}
-                    <option value={key}>{key}</option>
-                {/each}
-            </select>
+
+<div class="search-container">
+    <h2>Search</h2>
+    
+    <div class="search-controls">
+        <select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
+            <option value="">Select Collection</option>
+            {#each collections as collection}
+                <option value={collection}>{collection}</option>
+            {/each}
+        </select>
+
+        {#if searchOption === "sampling"}
+            <div class="input-group">
+                <input type="text" bind:value={valueToSearch} placeholder="Enter reference number">
+                <button on:click={search}>Add</button>
+            </div>
+        {:else}
+            <div class="non-sampling-search">
+                <p>Non-sampling search mode</p>
+                {#if keys.length > 0}
+                    <select class="custom-select" bind:value={selectedKey}>
+                        <option value="">Select a key</option>
+                        {#each keys as key}
+                            <option value={key}>{key}</option>
+                        {/each}
+                    </select>
+                {/if}
+                {#if selectedKey}
+                    <div class="input-group">
+                        <input type="text" bind:value={valueToSearch} placeholder="Enter search value">
+                        <button on:click={search}>Search</button>
+                    </div>
+                {/if}
+            </div>
         {/if}
     </div>
-     <div>
-        {#if selectedKey}
-            <input type="text" bind:value={valueToSearch} placeholder="Enter alternative value">
-            <button on:click={search}>Fuzzy Finder</button>
-        {/if}
-    </div>
-{/if}
+</div>
+
+
+
+
+
 
 
 
 <!-- Display the search results using DisplayResult component -->
 <FunctionalDisplay {results} {deepCopiedResults}/>
 
+
+
+
+
 <style>
-    select {
-        font-family: "Ubuntu";
+    .search-container {
+        font-family: 'Ubuntu', sans-serif;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    option {
-        font-family: "Ubuntu";
+    h2 {
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .search-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
     }
 
     .custom-select {
+        font-family: "Ubuntu";
         appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        background-color: #f0f0f0;
+        background-color: #fff;
         border: 1px solid #ccc;
         padding: 10px;
-        font-size: 14px;
-        border-radius: 10px;
-        width: 20%;
+        font-size: 16px;
+        border-radius: 4px;
+        width: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23333' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
         background-position: right 10px center;
     }
 
-    .custom-select:focus {
-        outline: none;
-        border-color: #007bff;
+
+    .custom-select option {
+        padding: 10px;
+        background-color: #fff;
+        color: #333;
+    }
+
+    .custom-select option:hover,
+    .custom-select option:focus,
+    .custom-select option:active {
+        background-color: #007bff;
+        color: #fff;
+    }
+
+
+    .input-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    input[type="text"] {
+        flex-grow: 1;
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    button {
+        padding: 10px 20px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #007bff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    button:hover {
+        background-color: #0056b3;
+    }
+
+    .non-sampling-search {
+        background-color: #fff;
+        padding: 15px;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .non-sampling-search p {
+        margin-bottom: 10px;
+        color: #666;
     }
 </style>
+
+
+

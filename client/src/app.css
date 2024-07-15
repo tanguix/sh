@@ -101,6 +101,7 @@ main {
     height: 5rem;
  }
 
+
 .list-unstyled {
   list-style: none;
   padding-left: 0;
@@ -120,10 +121,12 @@ input {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+
 input:focus {
   border-color: #4a90e2;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 5px rgba(74, 144, 226, 0.3);
 }
+
 
 input::placeholder {
   font-family: 'Ubuntu';
@@ -131,10 +134,12 @@ input::placeholder {
   opacity: 1;
 }
 
+
 /* Ensure inputs take full width of their container */
 input[type="text"], input[type="file"] {
   width: calc(100% - 24px); /* Full width minus padding */
 }
+
 
 /* Style for disabled inputs */
 input:disabled {
