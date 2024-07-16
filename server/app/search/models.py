@@ -74,8 +74,12 @@ class Collection:
 
                 # Construct the path url for frontend <img> to open
                 elif k == 'image_path':
-                    image_url = f"http://localhost:5000/search/api/images/{os.path.basename(v)}"
+
+                    # Remove the extra 'images/' from the beginning of the path
+                    image_path = v[7:] if v.startswith('images/') else v
+                    image_url = f"http://localhost:5000/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
+                    logger.info(f"Image URL constructed: {image_url}")
 
                 # Normal handling {key: value}
                 else:
@@ -83,7 +87,10 @@ class Collection:
 
             # Append result
             processed_results.append(processed_result)
-            print(processed_results)
+
+
+
+        logger.info(f"Processed results: {processed_results}")
         return processed_results
 
 

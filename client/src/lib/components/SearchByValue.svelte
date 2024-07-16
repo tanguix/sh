@@ -1,49 +1,42 @@
 
-<script lang="ts">
 
-    // onMount
+<script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
     import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
-
-    // typescript interface, think of Sample as a struct in python, is a object defining a object's shape and data type
-    // currently not in usually, but later could be used for "type checking", "code documentation", etc
     interface Sample {
         referenceNumber: string;
         tags: string[];
         date: string;
     }
 
-    // option instruction for search type (general search or sampling)
     export let searchOption = '';
-
-
-    // I should exclude whatever sensitive collection at the backend
-    // so the searchCollection variable here for filtering is not necessary, but just keep for now
     export let searchCollection: string[] = [];
-    // same here, because search method is separated with searchOption, so no need to bypass, but keep for now
     export let searchKey: string[] = [];
-    // export let keysForDisplay: string[] = [];
 
+    let collections: string[] = [];
+    let keys: string[] = [];
+    let results: any[] = [];
+    export let deepCopiedResults = [];
 
-    // backend return
-    let collections: string[] = [];                 // list of collections return from backend
-    let keys: string[] = [];                        // list of keys rethrn from backend
-    let results: any[] = [];                        // presumably(any), array of json object matched with key search from backend
-    export let deepCopiedResults = [];              // deep copy immediately after fetch from backend, pass to <FunctionalDisplay />
+    let selectedCollectionName: string = '';
+    let selectedKey: string = '';
+    let valueToSearch: string = '';
 
-
-    // frontend
-    let selectedCollectionName: string = '';        // user's selection from html select tag
-    let selectedKey: string = '';                   // same as above, let declarer make it changable compared to const
-    let valueToSearch: string = '';                 // user's entered for form entry
-
-
-
-    // custom downdrop menu
     let isDropdownOpen = false;
     let selectedCollectionDisplay = 'Select Collection';
+
+    $: isSamplingMode = searchOption === 'sampling';
+
+    function toggleMode() {
+        searchOption = isSamplingMode ? '' : 'sampling';
+        // Reset search fields when switching modes
+        selectedKey = '';
+        valueToSearch = '';
+        results = [];
+        deepCopiedResults = [];
+    }
 
     function toggleDropdown() {
         isDropdownOpen = !isDropdownOpen;
@@ -56,20 +49,14 @@
         updateKeys();
     }
 
-
-
-    // automatically fetch collections list from the backend and display in the select for user to choose
     onMount(async () => {
         try {
-            // user url const to fetch
             const response = await fetch(API_ENDPOINTS.FETCH_COLLECTIONS);
             if (response.ok) {
                 const data = await response.json();
-                // filter collection from frontend
                 collections = data.collections.filter(collection => 
                     searchCollection.length === 0 || searchCollection.includes(collection)
                 );
-                // console.log("Filtered collections:", collections);
             } else {
                 console.error('Failed to fetch collections');
             }
@@ -78,17 +65,13 @@
         }
     });
 
-    // fetch backend routes that only return keys
     async function updateKeys() {
         if (selectedCollectionName) {
             try {
-                // 'http://localhost:5000/search/api/keys?collection=${encodeURIComponent(selectedCollectionName)}';
-                // refer to the utils/api.ts for the API setup and constructUrl function
                 const url = constructUrl(API_ENDPOINTS.FETCH_KEYS, { collection: selectedCollectionName });
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
-                    // filter keys here if needed
                     keys = data.keys.filter(key => 
                         searchKey.length === 0 || searchKey.includes(key)
                     );
@@ -104,57 +87,15 @@
         selectedKey = ''; 
     }
 
-    // actual search method
     async function search() {
-
-
-        // make a check, if searchOption is passed in to this component, 
-        // for example "sampling" auto-assign key to reference_no
-        // and then you just need to conditionally render select or fixed form entry for search
-        if (searchOption === "sampling") {
+        if (isSamplingMode) {
             selectedKey = "reference_no";
-
-            try {
-
-                // construct the search url query, "?" parameter 
-                // will be append automatically by the constructUrl function
-                const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-                    collection: selectedCollectionName,
-                    key: selectedKey,
-                    value: valueToSearch
-                });
-
-                // construct url
-                const response = await fetch(url);
-
-                if (response.ok) {
-                    const data = await response.json();
-
-                    let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
-                    results = [...results, ...newResults];
-                    // deep copy immediately
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                    valueToSearch = ''; // Reset after adding
-
-                } else {
-                    const errorData = await response.json();
-                    console.error('Error searching collection:', errorData.error);
-                }
-            } catch (error) {
-                console.error('Error searching collection:', error);
-            }
         }
 
-
-
-
-        // normal check 
         if (!selectedCollectionName || !selectedKey || !valueToSearch) {
             return;
         }
 
-
-        // if not searching method specify, do the normal search, fetch all keys
         try {
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: selectedCollectionName,
@@ -162,18 +103,20 @@
                 value: valueToSearch
             });
 
-            // console.log("Search Url:", url)
-            // construct
             const response = await fetch(url);
-
 
             if (response.ok) {
                 const data = await response.json();
-                results = data;
-
-                // deep copy immediately
+                if (isSamplingMode) {
+                    let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
+                    results = [...results, ...newResults];
+                } else {
+                    results = data;
+                }
                 deepCopiedResults = JSON.parse(JSON.stringify(results));
-
+                if (isSamplingMode) {
+                    valueToSearch = ''; // Reset after adding in sampling mode
+                }
             } else {
                 const errorData = await response.json();
                 console.error('Error searching collection:', errorData.error);
@@ -183,28 +126,23 @@
             console.error('Error searching collection:', error);
             results = [];
         }
-    } 
+    }
 </script>
-
-
-
-
-
-<!-- 
-    design thought:  
-        I want to make a tab selection here, so fuzzy search based on any key values 
-        aside from fuzzy search, later you can also use unique identifier for invoice-generation search
-        
-        another tab for sampling search, where you can add item one by one for printing the sampling
-        don't make it select tag, cause there are select tag for keys and collections already, I am tired of select tag
--->
-<!-- Dropdown for selecting a collection -->
-
-
 
 <div class="search-container">
     <h2>Search</h2>
     
+
+    <div class="mode-switch">
+        <label class="switch">
+            <input type="checkbox" checked={isSamplingMode} on:change={toggleMode}>
+            <span class="slider round"></span>
+        </label>
+        <span class="mode-label">{isSamplingMode ? 'Sampling' : 'Normal'} Mode</span>
+    </div>
+
+
+
     <div class="search-controls">
         <select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
             <option value="">Select Collection</option>
@@ -213,14 +151,14 @@
             {/each}
         </select>
 
-        {#if searchOption === "sampling"}
+        {#if isSamplingMode}
             <div class="input-group">
                 <input type="text" bind:value={valueToSearch} placeholder="Enter reference number">
                 <button on:click={search}>Add</button>
             </div>
         {:else}
             <div class="non-sampling-search">
-                <p>Non-sampling search mode</p>
+                <p>Normal search mode</p>
                 {#if keys.length > 0}
                     <select class="custom-select" bind:value={selectedKey}>
                         <option value="">Select a key</option>
@@ -240,18 +178,7 @@
     </div>
 </div>
 
-
-
-
-
-
-
-
-<!-- Display the search results using DisplayResult component -->
-<FunctionalDisplay {results} {deepCopiedResults}/>
-
-
-
+<FunctionalDisplay {results} {deepCopiedResults} {searchOption} />
 
 
 <style>
@@ -344,6 +271,77 @@
         margin-bottom: 10px;
         color: #666;
     }
+
+
+    .mode-switch {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .mode-label {
+        margin-left: 0.5rem;
+    }
+
+    /* The switch - the box around the slider */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+
+    /* Hide default HTML checkbox */
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    /* The slider */
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+    }
+
+    input:checked + .slider {
+        background-color: #2196F3;
+    }
+
+    input:focus + .slider {
+        box-shadow: 0 0 1px #2196F3;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+
+    /* Rounded sliders */
+    .slider.round {
+        border-radius: 34px;
+    }
+
+    .slider.round:before {
+        border-radius: 50%;
+    }
+
 </style>
 
 

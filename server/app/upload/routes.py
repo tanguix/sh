@@ -24,49 +24,18 @@ if not os.path.exists(FILE_FOLDER):
 
 @upload_bp.route('/api/upload_data', methods=['POST'])
 def upload_data():
-    # create the folder if doesn't exist
     if not os.path.exists(IMAGE_FOLDER):
         os.makedirs(IMAGE_FOLDER)
 
-    # get all the data from multi-value form: files.get() for "image" and form.get() for "text"
-    image_file = request.files.get('image')
-    reference_no = request.form.get('reference_no')
-    categories = request.form.get('categories')
-    tags = request.form.get('tags')
-    additional_fields = request.form.get('additional_fields')
-
-    # all these variable sends array back, so load them
-    if tags:
-        tags = json.loads(tags)
-    if categories:
-        categories = json.loads(categories)
-    if additional_fields:
-        additional_fields = json.loads(additional_fields)
-
-    # create path variable for holding the path where image gonna be saved to
-    # in the database, you only save path, not the whole image file
-    image_file_path = None
-    # check if image file received
-    if image_file:
-        # TODO: Construct the relative path for the image file, need to be done in the models.py as method
-        relative_image_path = os.path.join('images', image_file.filename)
-        # Construct the absolute path using the server directory and relative path
-        absolute_image_path = os.path.join(SERVER_DIR, relative_image_path)
-        # Save the image file to the absolute path
-        image_file.save(absolute_image_path)
-        # Store only the relative path in the database
-        image_file_path = relative_image_path
-
-
-    # create Item object
-    # =========== add check method in the model.py to check if refernece number is unique, otherwise prevent inserting ==========
-    # to-do
-
-    print("Check the images path push to mongoDB: ", image_file_path)
-    sample = Item(reference_no, categories, tags, additional_fields, image_file_path)
-    # save_item() method that insert data into database
+    sample = Item.from_request(request, SERVER_DIR)
+    sample.process_files()
     result = sample.save_item()
-    return jsonify({"message": "Sample uploaded successfully", "id": str(result.inserted_id)}), 200
+
+    return jsonify({
+        "message": "Sample uploaded successfully",
+        "id": str(result.inserted_id)
+    }), 200
+
 
 
 

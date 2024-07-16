@@ -73,23 +73,20 @@ def searched_result():
 # because image path is constructed during search_by_key_value() method in the models.py 
 # so the url is already sent back to frontend <img> tag, and whenever <img> is needed to be display 
 # this trigger the default url GET method, and send to here
-@search_bp.route('/api/images/<filename>', methods=['GET'])
+@search_bp.route('/api/images/<path:filename>', methods=['GET'])
 def get_image(filename):
-
-    # Use absolute path relative to the main run.py, 
-    # setting the current directory as basic directory
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    # images folder is stored two levels up
     IMAGE_FOLDER = os.path.join(BASE_DIR, '../../images')
-    # extract filename, construct file path
+    
+    # Construct the full path to the image
     image_path = os.path.join(IMAGE_FOLDER, filename)
+    
+    logger.info(f"Attempting to serve image: {image_path}")
 
     try:
-        # send the file based on path
-        return send_file(image_path, mimetype='image/png')
-
+        return send_file(image_path, mimetype='image/jpeg')  # or 'image/png' if it's a PNG
     except FileNotFoundError:
+        logger.error(f"Image not found: {image_path}")
         return jsonify({"error": "Image not found"}), 404
     except Exception as e:
         logger.error(f"Error fetching image {filename}: {e}")

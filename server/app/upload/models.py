@@ -1,3 +1,5 @@
+
+
 import uuid
 from app.database import db
 from bson import ObjectId
@@ -5,6 +7,7 @@ from werkzeug.utils import secure_filename
 import os
 from app.logger import logger
 from typing import List
+import json
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
@@ -13,25 +16,77 @@ SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels t
 # create item (sample) that need to be stored in the database
 # [!] later you can defined other basic type here when needed
 class Item:
-    def __init__(self, reference_no, categories, tags, additional_fields, image_path):
+    def __init__(self, reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir):
         self.reference_no = reference_no
         self.categories = categories
         self.tags = tags
         self.additional_fields = additional_fields
-        self.image_path = image_path
+        self.image_file = image_file
+        self.additional_image_files = additional_image_files
+        self.server_dir = server_dir
+        self.image_path = None
+        self.additional_image_paths = []
 
-    # save and insert them into the database
+    def process_files(self):
+        if self.image_file:
+            self.image_path = self._save_main_image()
+            self._save_additional_images()
+
+    def _save_main_image(self):
+        file_name = os.path.splitext(self.image_file.filename)[0]
+        subdirectory = os.path.join(self.server_dir, 'images', file_name)
+        
+        if not os.path.exists(subdirectory):
+            os.makedirs(subdirectory)
+        
+        relative_image_path = os.path.join('images', file_name, self.image_file.filename)
+        absolute_image_path = os.path.join(self.server_dir, relative_image_path)
+        
+        self.image_file.save(absolute_image_path)
+        return relative_image_path
+
+    def _save_additional_images(self):
+        if not self.image_path:
+            return
+
+        file_name = os.path.splitext(self.image_file.filename)[0]
+        subdirectory = os.path.join(self.server_dir, 'images', file_name)
+
+        for additional_file in self.additional_image_files:
+            additional_filename = additional_file.filename
+            additional_relative_path = os.path.join('images', file_name, additional_filename)
+            additional_absolute_path = os.path.join(self.server_dir, additional_relative_path)
+            
+            additional_file.save(additional_absolute_path)
+            self.additional_image_paths.append(additional_relative_path)
+
     def save_item(self):
         data = {
             "reference_no": self.reference_no,
             "categories": self.categories,
             "tags": self.tags,
             "additional_fields": self.additional_fields,
-            "image_path": self.image_path
+            "image_path": self.image_path,
+            "additional_image_paths": self.additional_image_paths
         }
-        # print(data)
         result = db.samples.insert_one(data)
         return result
+
+    @staticmethod
+    def from_request(request, server_dir):
+        image_file = request.files.get('image')
+        reference_no = request.form.get('reference_no')
+        categories = json.loads(request.form.get('categories', '[]'))
+        tags = json.loads(request.form.get('tags', '[]'))
+        additional_fields = json.loads(request.form.get('additional_fields', '{}'))
+
+        additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
+
+        return Item(reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir)
+
+
+
+
 
 
 

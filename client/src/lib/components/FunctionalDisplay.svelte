@@ -8,6 +8,7 @@
 
   export let results: any[] = [];
   export let deepCopiedResults: any[] = [];
+  export let searchOption: string = '';
 
   export let keysToExclude: string[] = ['image_url', 'categories', 'tags'];
   let content: string = `
@@ -27,6 +28,8 @@
   let selectedForRemoval = writable({});
   let unsavedChangesByIndex = writable({});
   let formActionClicked = writable({});
+
+  $: isEditingEnabled = searchOption === 'sampling';
 
   function filterDisplayedKeys(result) {
     return Object.fromEntries(
@@ -82,12 +85,6 @@
     });
   }
 
-
-
-
-
-
-
   function lessForm(index: number) {
     displayedForms.update(forms => {
       if (!forms || !forms[index] || forms[index].length === 0) {
@@ -125,14 +122,6 @@
   function hasDisplayedForms(index: number): boolean {
     return $displayedForms[index] && $displayedForms[index].length > 0;
   }
-
-
-
-
-
-
-
-
 
   function updateForm(index: number, entryIndex: number, field: string, value: string) {
     displayedForms.update(forms => {
@@ -227,8 +216,6 @@
     }
   }
 
-
-
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
       changes[index] = value;
@@ -243,9 +230,6 @@
   );
 </script>
 
-
-
-
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
@@ -256,7 +240,14 @@
             <div class="image-container">
               {#if result.image_url}
                 <div class="image-frame">
-                  <img src={result.image_url} alt="searched_image" on:error={(e) => e.target.src = 'fallback-image-url'}>
+                  <img 
+                    src={result.image_url} 
+                    alt="searched_image" 
+                    on:error={(e) => {
+                      console.error(`Error loading image: ${result.image_url}`);
+                      e.target.src = 'fallback-image-url';
+                    }}
+                  >
                 </div>
               {:else}
                 <div class="no-image">No image available</div>
@@ -272,60 +263,66 @@
             </div>
           </div>
         </div>
-        <div class="form-controls">
-          <button on:click={() => addForm(index)}>Add Field</button>
-          {#if canRemove[index]}
-            <button on:click={() => removeKey(index)}>Remove Field</button>
+        {#if isEditingEnabled}
+          <div class="form-controls">
+            <button on:click={() => addForm(index)}>Add Field</button>
+            {#if canRemove[index]}
+              <button on:click={() => removeKey(index)}>Remove Field</button>
+            {/if}
+          </div>
+          {#if $displayedForms[index]}
+            <div class="additional-forms">
+              {#each $displayedForms[index] as form, entryIndex}
+                <div class="form-entry">
+                  <form>
+                    {#if form.isRemove}
+                      <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
+                      <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
+                        <option value="">Select key</option>
+                        {#each Object.keys(results[index]) as key}
+                          {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
+                            <option value={key}>{key}</option>
+                          {/if}
+                        {/each}
+                      </select>
+                    {:else}
+                      <div class="input-group">
+                        <input id={`key-${index}-${entryIndex}`} type="text" placeholder="Key" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
+                        <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.value} />
+                      </div>
+                      <label class="custom-checkbox">
+                        <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
+                        <span class="checkbox-text">Date Type</span>
+                      </label>
+                    {/if}
+                  </form>
+                </div>
+              {/each}
+            </div>
           {/if}
-        </div>
-        {#if $displayedForms[index]}
-          <div class="additional-forms">
-            {#each $displayedForms[index] as form, entryIndex}
-              <div class="form-entry">
-                <form>
-                  {#if form.isRemove}
-                    <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
-                    <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
-                      <option value="">Select key</option>
-                      {#each Object.keys(results[index]) as key}
-                        {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
-                          <option value={key}>{key}</option>
-                        {/if}
-                      {/each}
-                    </select>
-                  {:else}
-                    <div class="input-group">
-                      <input id={`key-${index}-${entryIndex}`} type="text" placeholder="Key" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
-                      <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.value} />
-                    </div>
-                    <label class="custom-checkbox">
-                      <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
-                      <span class="checkbox-text">Date Type</span>
-                    </label>
-                  {/if}
-                </form>
-              </div>
-            {/each}
+          <div class="action-buttons">
+            {#if $unsavedChangesByIndex[index]}
+              <button on:click={() => updateResults(index)}>Update</button>
+            {/if}
+            {#if $formActionClicked[index]}
+              <button on:click={() => lessForm(index)} class="secondary">Cancel</button>
+            {/if}
           </div>
         {/if}
-        <div class="action-buttons">
-          {#if $unsavedChangesByIndex[index]}
-            <button on:click={() => updateResults(index)}>Update</button>
-          {/if}
-          {#if $formActionClicked[index]}
-            <button on:click={() => lessForm(index)} class="secondary">Cancel</button>
-          {/if}
-        </div>
       </div>
     {/each}
     <div class="global-actions">
-      <button on:click={pushChangesToBackend}>Push Changes</button>
+      {#if isEditingEnabled}
+        <button on:click={pushChangesToBackend}>Push Changes</button>
+      {/if}
       <button on:click={generatePDFWrapper}>Download PDF</button>
     </div>
   {:else}
     <p class="no-results">No results found</p>
   {/if}
 </div>
+
+
 
 
 
