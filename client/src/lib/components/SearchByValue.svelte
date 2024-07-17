@@ -1,5 +1,6 @@
 
 
+
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -24,30 +25,11 @@
     let selectedKey: string = '';
     let valueToSearch: string = '';
 
-    let isDropdownOpen = false;
-    let selectedCollectionDisplay = 'Select Collection';
+    let selectedSamplingKey: string = 'reference_no';
+    let defaultSamplingCollection: string = 'samples';
+    let selectedSamplingCollection: string = defaultSamplingCollection;
 
     $: isSamplingMode = searchOption === 'sampling';
-
-    function toggleMode() {
-        searchOption = isSamplingMode ? '' : 'sampling';
-        // Reset search fields when switching modes
-        selectedKey = '';
-        valueToSearch = '';
-        results = [];
-        deepCopiedResults = [];
-    }
-
-    function toggleDropdown() {
-        isDropdownOpen = !isDropdownOpen;
-    }
-
-    function selectCollection(collection: string) {
-        selectedCollectionName = collection;
-        selectedCollectionDisplay = collection;
-        isDropdownOpen = false;
-        updateKeys();
-    }
 
     onMount(async () => {
         try {
@@ -57,6 +39,11 @@
                 collections = data.collections.filter(collection => 
                     searchCollection.length === 0 || searchCollection.includes(collection)
                 );
+                if (collections.includes(defaultSamplingCollection)) {
+                    selectedSamplingCollection = defaultSamplingCollection;
+                } else if (collections.length > 0) {
+                    selectedSamplingCollection = defaultSamplingCollection;
+                }
             } else {
                 console.error('Failed to fetch collections');
             }
@@ -64,6 +51,19 @@
             console.error('Error fetching collections:', error);
         }
     });
+
+    function toggleMode() {
+        searchOption = isSamplingMode ? '' : 'sampling';
+        selectedKey = '';
+        valueToSearch = '';
+        results = [];
+        deepCopiedResults = [];
+        if (isSamplingMode) {
+            selectedSamplingCollection = defaultSamplingCollection;
+        } else {
+            selectedCollectionName = '';
+        }
+    }
 
     async function updateKeys() {
         if (selectedCollectionName) {
@@ -88,18 +88,18 @@
     }
 
     async function search() {
-        if (isSamplingMode) {
-            selectedKey = "reference_no";
-        }
+        let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
+        let searchKey = isSamplingMode ? selectedSamplingKey : selectedKey;
 
-        if (!selectedCollectionName || !selectedKey || !valueToSearch) {
+        if (!searchCollection || !searchKey || !valueToSearch) {
+            console.error('Collection, key, and value must be provided');
             return;
         }
 
         try {
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-                collection: selectedCollectionName,
-                key: selectedKey,
+                collection: searchCollection,
+                key: searchKey,
                 value: valueToSearch
             });
 
@@ -115,7 +115,7 @@
                 }
                 deepCopiedResults = JSON.parse(JSON.stringify(results));
                 if (isSamplingMode) {
-                    valueToSearch = ''; // Reset after adding in sampling mode
+                    valueToSearch = '';
                 }
             } else {
                 const errorData = await response.json();
@@ -129,9 +129,11 @@
     }
 </script>
 
+
+
+
 <div class="search-container">
     <h2>Search</h2>
-    
 
     <div class="mode-switch">
         <label class="switch">
@@ -141,44 +143,46 @@
         <span class="mode-label">{isSamplingMode ? 'Sampling' : 'Normal'} Mode</span>
     </div>
 
-
-
     <div class="search-controls">
-        <select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
-            <option value="">Select Collection</option>
-            {#each collections as collection}
-                <option value={collection}>{collection}</option>
-            {/each}
-        </select>
-
         {#if isSamplingMode}
-            <div class="input-group">
-                <input type="text" bind:value={valueToSearch} placeholder="Enter reference number">
-                <button on:click={search}>Add</button>
-            </div>
+            <select class="custom-select" bind:value={selectedSamplingCollection}>
+                <option value="">Select Collection</option>
+                {#each collections as collection}
+                    <option value={collection}>{collection}</option>
+                {/each}
+            </select>
+            <select class="custom-select" bind:value={selectedSamplingKey}>
+                <option value="reference_no">Reference Number</option>
+                <option value="sample_token">Sample Token</option>
+            </select>
         {:else}
-            <div class="non-sampling-search">
-                <p>Normal search mode</p>
-                {#if keys.length > 0}
-                    <select class="custom-select" bind:value={selectedKey}>
-                        <option value="">Select a key</option>
-                        {#each keys as key}
-                            <option value={key}>{key}</option>
-                        {/each}
-                    </select>
-                {/if}
-                {#if selectedKey}
-                    <div class="input-group">
-                        <input type="text" bind:value={valueToSearch} placeholder="Enter search value">
-                        <button on:click={search}>Search</button>
-                    </div>
-                {/if}
-            </div>
+            <select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
+                <option value="">Select Collection</option>
+                {#each collections as collection}
+                    <option value={collection}>{collection}</option>
+                {/each}
+            </select>
+            {#if keys.length > 0}
+                <select class="custom-select" bind:value={selectedKey}>
+                    <option value="">Select a key</option>
+                    {#each keys as key}
+                        <option value={key}>{key}</option>
+                    {/each}
+                </select>
+            {/if}
         {/if}
+
+        <div class="input-group">
+            <input type="text" bind:value={valueToSearch} placeholder="Enter search value">
+            <button on:click={search}>{isSamplingMode ? 'Add' : 'Search'}</button>
+        </div>
     </div>
 </div>
 
 <FunctionalDisplay {results} {deepCopiedResults} {searchOption} />
+
+
+
 
 
 <style>
@@ -260,17 +264,7 @@
         background-color: #0056b3;
     }
 
-    .non-sampling-search {
-        background-color: #fff;
-        padding: 15px;
-        border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
 
-    .non-sampling-search p {
-        margin-bottom: 10px;
-        color: #666;
-    }
 
 
     .mode-switch {
