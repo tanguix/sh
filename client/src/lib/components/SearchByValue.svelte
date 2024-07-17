@@ -1,6 +1,7 @@
 
 
 
+
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -16,6 +17,10 @@
     export let searchOption = '';
     export let searchCollection: string[] = [];
     export let searchKey: string[] = [];
+
+    // Define the list of allowed keys and collections
+    const allowedKeys = ['reference_no', 'tags', 'categories'];
+    const allowedCollections = ['samples', 'samples_list'];
 
     let collections: string[] = [];
     let keys: string[] = [];
@@ -42,7 +47,8 @@
             if (response.ok) {
                 const data = await response.json();
                 collections = data.collections.filter(collection => 
-                    searchCollection.length === 0 || searchCollection.includes(collection)
+                    allowedCollections.includes(collection) &&
+                    (searchCollection.length === 0 || searchCollection.includes(collection))
                 );
                 if (collections.includes(defaultSamplingCollection)) {
                     selectedSamplingCollection = defaultSamplingCollection;
@@ -59,15 +65,24 @@
     }
 
     function toggleMode() {
+        clearResults();
         searchOption = isSamplingMode ? '' : 'sampling';
         resetSearch();
+    }
+
+    function clearResults() {
+        results = [];
+        deepCopiedResults = [];
+        console.log("Results cleared due to mode switch");
     }
 
     function resetSearch() {
         selectedKey = '';
         valueToSearch = '';
         if (isSamplingMode) {
-            selectedSamplingCollection = defaultSamplingCollection;
+            selectedSamplingCollection = collections.includes(defaultSamplingCollection) 
+                ? defaultSamplingCollection 
+                : (collections.length > 0 ? collections[0] : '');
         } else {
             selectedCollectionName = '';
         }
@@ -81,7 +96,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     keys = data.keys.filter(key => 
-                        searchKey.length === 0 || searchKey.includes(key)
+                        allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
                     );
                 } else {
                     throw new Error('Failed to fetch keys');
@@ -163,8 +178,9 @@
                 {/each}
             </select>
             <select class="custom-select" bind:value={selectedSamplingKey}>
-                <option value="reference_no">Reference Number</option>
-                <option value="sample_token">Sample Token</option>
+                {#each allowedKeys as key}
+                    <option value={key}>{key}</option>
+                {/each}
             </select>
         {:else}
             <select class="custom-select" bind:value={selectedCollectionName} on:change={updateKeys}>
@@ -191,9 +207,6 @@
 </div>
 
 <FunctionalDisplay {results} {deepCopiedResults} {searchOption} />
-
-
-
 
 <style>
     .search-container {
@@ -231,7 +244,6 @@
         background-position: right 10px center;
     }
 
-
     .custom-select option {
         padding: 10px;
         background-color: #fff;
@@ -244,7 +256,6 @@
         background-color: #007bff;
         color: #fff;
     }
-
 
     .input-group {
         display: flex;
@@ -274,9 +285,6 @@
         background-color: #0056b3;
     }
 
-
-
-
     .mode-switch {
         display: flex;
         align-items: center;
@@ -287,7 +295,6 @@
         margin-left: 0.5rem;
     }
 
-    /* The switch - the box around the slider */
     .switch {
         position: relative;
         display: inline-block;
@@ -295,14 +302,12 @@
         height: 34px;
     }
 
-    /* Hide default HTML checkbox */
     .switch input {
         opacity: 0;
         width: 0;
         height: 0;
     }
 
-    /* The slider */
     .slider {
         position: absolute;
         cursor: pointer;
@@ -337,7 +342,6 @@
         transform: translateX(26px);
     }
 
-    /* Rounded sliders */
     .slider.round {
         border-radius: 34px;
     }
@@ -345,9 +349,4 @@
     .slider.round:before {
         border-radius: 50%;
     }
-
-
 </style>
-
-
-

@@ -136,6 +136,19 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
         onCancel={cancelNavigation} />
 {/if}
 
+
+
+
+<!-- this is sampling -->
+<SearchByValue searchOption="sampling"/>
+<!-- invoice generation -->
+<Invoice />
+
+<hr>
+<br>
+<!-- <WorkFlow /> -->
+
+
 <a href="https://www.google.com">leave</a>
 <button on:click={fetchExchangeRate}>Exchange Rates</button>
 
@@ -152,19 +165,6 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
 {:else if $error}
     <p>{$error}</p>
 {/if}
-
-
-<!-- this is sampling -->
-<SearchByValue searchOption="sampling"/>
-<!-- invoice generation -->
-<Invoice />
-
-<hr>
-<br>
-<!-- <WorkFlow /> -->
-
-
-
 
 <style>
     .ex-card {

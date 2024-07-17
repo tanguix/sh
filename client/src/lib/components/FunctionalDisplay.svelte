@@ -13,7 +13,8 @@
   export let deepCopiedResults: any[] = [];
   export let searchOption: string = '';
 
-  export let keysToExclude: string[] = ['image_url', 'categories', 'tags'];
+  // for property
+  export let keysToExclude: string[] = ['image_url', 'categories', 'tags', 'file'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
       Description & Specifications (描述及规格)\n
@@ -40,14 +41,27 @@
     );
   }
 
-  function formatPropertyValue(value) {
-    if (Array.isArray(value)) {
+
+
+
+
+  function formatPropertyValue(key: string, value: any) {
+    if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
+      const lastModifier = value[value.length - 1];
+      return `${lastModifier.name} (${lastModifier.role})`;
+    } else if (Array.isArray(value)) {
       return value.join(', ');
     } else if (typeof value === 'object' && value !== null) {
       return JSON.stringify(value);
     }
     return value;
   }
+
+
+
+
+
+  
 
   async function generatePDFWrapper() {
     await generatePDF(results, content);
@@ -285,11 +299,12 @@
                 <div class="no-image">No image available</div>
               {/if}
             </div>
+
             <div class="properties-container">
               {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                 <div class="property-item">
                   <span class="property-key">{key}:</span>
-                  <span class="property-value">{formatPropertyValue(value)}</span>
+                  <span class="property-value">{formatPropertyValue(key, value)}</span>
                 </div>
               {/each}
             </div>
