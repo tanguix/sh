@@ -817,9 +817,10 @@
 
 
 
+
+
+
 <main>
-
-
   <div class="workflow-container">
     <h2>Workflow Section</h2>
 
@@ -827,48 +828,46 @@
       <div transition:fade="{{ duration: fadeDuration }}">
         <Loader message="Loading workflows..." />
       </div>
-
     {:else}
       <div transition:fade="{{ duration: fadeDuration }}">
+        <div class="workflow-input-section">
+          <div class="input-button-group">
+            <input 
+              bind:value={workflowName} 
+              placeholder="Give it a name" 
+              required
+              class:invalid={!isWorkflowNameValid && workflowName.length > 0}
+            />
+            <button 
+              class="icon-button" 
+              data-text="new" 
+              data-icon="+" 
+              on:click={handleCreateWorkflow}
+              disabled={!isWorkflowNameValid}
+            ></button>
+          </div>
+          <div class="input-button-group">
+            <input 
+              bind:value={workflow_id} 
+              placeholder="Enter workflow ID" 
+              required
+              class:invalid={!isWorkflowIdValid && workflow_id.length > 0}
+            />
+            <button 
+              class="icon-button" 
+              data-text="add" 
+              data-icon="+" 
+              on:click={handleFetchWorkflow}
+              disabled={!isWorkflowIdValid}
+            ></button>
+          </div>
+        </div>
+
         {#if !hasLockedWorkflows && workflows.length === 0}
           <div class="no-locked-workflows">
-            <p>No locked workflows found.</p>
+            <p>No workflows found. Create a new workflow or add an existing one using the options above.</p>
           </div>
         {:else}
-          <div class="workflow-input-section">
-            <div class="input-button-group">
-              <input 
-                bind:value={workflowName} 
-                placeholder="Give it a name" 
-                required
-                class:invalid={!isWorkflowNameValid && workflowName.length > 0}
-              />
-              <button 
-                class="icon-button" 
-                data-text="new" 
-                data-icon="+" 
-                on:click={handleCreateWorkflow}
-                disabled={!isWorkflowNameValid}
-              ></button>
-            </div>
-            <div class="input-button-group">
-              <input 
-                bind:value={workflow_id} 
-                placeholder="Enter workflow ID" 
-                required
-                class:invalid={!isWorkflowIdValid && workflow_id.length > 0}
-              />
-              <button 
-                class="icon-button" 
-                data-text="add" 
-                data-icon="+" 
-                on:click={handleFetchWorkflow}
-                disabled={!isWorkflowIdValid}
-              ></button>
-            </div>
-          </div>
-
-
           {#each workflows as workflow (workflow.workflow_id)}
             <hr class="workflow-separator">
             <div class="workflow">
@@ -988,6 +987,9 @@
     {/if}
   </div>
 </main>
+
+
+
 
 
 

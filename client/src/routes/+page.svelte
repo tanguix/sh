@@ -28,7 +28,7 @@
 
     async function fetchExchangeRate() {
         try {
-            const response = await fetch('http://localhost:5000/extra/api/exchange_rate');
+            const response = await fetch('http://192.168.110.120:5000/extra/api/exchange_rate');
             if (!response.ok) {
                 throw new Error('Failed to fetch exchange rates');
             }
@@ -146,8 +146,9 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
 
 <hr>
 <br>
-<!-- <WorkFlow /> -->
-
+<WorkFlow />
+<hr>
+<br>
 
 <a href="https://www.google.com">leave</a>
 <button on:click={fetchExchangeRate}>Exchange Rates</button>

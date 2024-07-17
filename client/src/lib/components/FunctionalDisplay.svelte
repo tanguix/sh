@@ -2,7 +2,7 @@
 
 
 <script lang="ts">
-  import { API_ENDPOINTS } from '../utils/api';
+  import { BASE_URL, API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
