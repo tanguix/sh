@@ -893,7 +893,7 @@
                     {#each node.sections as section}
                       <div>
                         <h4>{section.label}</h4>
-                        {#if node.status === 'Active' && workflow.status !== 'created' }
+                        {#if node.status === 'Active' && workflow.status === 'saved' }
                           <div class="file-upload">
                             <input 
                               type="file" 

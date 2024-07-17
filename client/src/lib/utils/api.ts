@@ -1,9 +1,9 @@
 
 // Base URL for all API calls
 
-export const LOCAL_HOST = 'http://192.168.110.120:5000';      // expose to local network 
+export const BACKEND_LOCAL_HOST = 'http://192.168.2.62:5000';      // this should be the flask address, it might change to be aware
 // export const BASE_URL = 'http://localhost:5000';
-export const BASE_URL = LOCAL_HOST;            // local network
+export const BASE_URL = BACKEND_LOCAL_HOST;            // local network
 
 
 // secure (https) network 
@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
 
     REGISTER: `${BASE_URL}/auth/api/register`,
     MATCH: `${BASE_URL}/auth/api/match`,
+
 
     UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
     UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
@@ -30,6 +31,8 @@ export const API_ENDPOINTS = {
     FETCH_SAMPLE_TOKEN: `${BASE_URL}/search/api/get_sample_tokens`,
     SEARCH_RESULTS: `${BASE_URL}/search/api/searched_result`,
 
+
+    EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,
 
 };
 

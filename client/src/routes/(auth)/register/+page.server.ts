@@ -6,7 +6,7 @@ import bcrypt from 'bcrypt'                                         // bcrypt li
 // import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
 
-import { API_ENDPOINTS, constructUrl } from '$lib/utils/api.ts';
+import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
 
 

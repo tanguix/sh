@@ -2,7 +2,7 @@
 import { fail, redirect } from '@sveltejs/kit'
 import bcrypt from 'bcrypt'
 import type { Action, Actions, PageServerLoad } from './$types'
-import { API_ENDPOINTS, constructUrl } from '$lib/utils/api.ts';
+import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
 
 export const load: PageServerLoad = async ({ locals }) => {

@@ -1,10 +1,12 @@
 
 from app.database import db
-import os
 from app.logger import logger
+
+from flask import current_app   # this line is for importing the config.py 
 
 # define the keys you want to exclude when frontend request all keys
 exclude_keys = {"_id", "quantity", "password", "role", "authToken", "image_path"}
+backend_local_url = current_app.config['BACKEND_LOCAL_URL']     # correct way of using predefined variable in config.py
 
 
 # most likely, this class is all method, right now it doesn't have data to initialize
@@ -79,7 +81,7 @@ class Collection:
                     image_path = v[7:] if v.startswith('images/') else v
                     # image_url = f"http://localhost:5000/search/api/images/{image_path}"
                     #TODO: unify this routes, fuck, it tortures me to death
-                    image_url = f"http://192.168.110.120:5000/search/api/images/{image_path}"
+                    image_url = f"{backend_local_url}/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
                     logger.info(f"Image URL constructed: {image_url}")
 

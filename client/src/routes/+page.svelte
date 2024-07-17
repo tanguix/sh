@@ -4,11 +4,12 @@
 <script lang="ts">
     import "../app.css";
     import { writable } from 'svelte/store';
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount } from 'svelte';
     import { unsavedChanges } from '$lib/utils/vars';
     import { get } from 'svelte/store';
     import { goto } from '$app/navigation';
     import Modal from '../lib/components/Modal.svelte';
+
 
     // Sampling Step
     import SearchByValue from '$lib/components/SearchByValue.svelte';
@@ -20,29 +21,13 @@
     import WorkFlow from '$lib/components/WorkFlow.svelte';
 
 
-    let exchange_rate = writable(null);
-    let error = writable('');
     let showModal = writable(false);
     let pendingNavigation = null;
     let pendingExternal = false;
 
-    async function fetchExchangeRate() {
-        try {
-            const response = await fetch('http://192.168.110.120:5000/extra/api/exchange_rate');
-            if (!response.ok) {
-                throw new Error('Failed to fetch exchange rates');
-            }
-            const data = await response.json();
-            exchange_rate.set(data);
-        } catch (err) {
-            error.set(err.message);
-        }
-    }
 
-    function formatTimestamp(timestamp: number): string {
-        const date = new Date(timestamp * 1000); // Convert seconds to milliseconds
-        return date.toLocaleString(); // Format date and time
-    }
+
+
 
     function handleNavigation(event: any) {
         if (get(unsavedChanges)) {
@@ -130,6 +115,9 @@
 you can add this line: onConfirm={confirmNavigation}
 above the onCancel={cancelNavigation}, to give user option to choose if that's not force 
 -->
+
+
+
 {#if $showModal}
     <Modal
         message="You have unsaved changes. Are you sure you want to leave?"
@@ -151,27 +139,4 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
 <br>
 
 <a href="https://www.google.com">leave</a>
-<button on:click={fetchExchangeRate}>Exchange Rates</button>
 
-{#if $exchange_rate}
-    <div class="ex-card">
-        <h4>Date: {$exchange_rate.date}</h4>
-        <h4>Time: {formatTimestamp($exchange_rate.timestamp)}</h4>
-        <h4>Base Currency: {$exchange_rate.base}</h4>
-    </div>
-    <!-- Loop to display all following rates -->
-    {#each Object.entries($exchange_rate.rates) as [currency, rate]}
-        <div class="ex-card"><h3>{currency}: {rate}</h3></div>
-    {/each}
-{:else if $error}
-    <p>{$error}</p>
-{/if}
-
-<style>
-    .ex-card {
-        border: 1px solid #ddd;
-        padding: 16px;
-        margin: 16px 0;
-        background-color: #f9f9f9;
-    }
-</style>
