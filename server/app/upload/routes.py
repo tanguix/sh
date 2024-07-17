@@ -44,21 +44,19 @@ def upload_sample():
     try:
         data = request.json  # receive data from frontend
         
-        # Check if data is a list
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
 
-        # Create ItemBatch object and save items
         sample_batch = ItemBatch(data)
         result = sample_batch.save_items()
         
         return jsonify({
             "message": "Samples uploaded successfully", 
             "inserted_ids": [str(id) for id in result.inserted_ids], 
+            "updated_ids": [str(id) for id in result.modified_ids],
             "sample_token": sample_batch.sample_token}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 

@@ -87,33 +87,58 @@ class Item:
 
 
 
-
-
-
 class ItemBatch:
     def __init__(self, items):
         self.items = items
         self.sample_token = ''
 
     def save_items(self):
-        # Process each item to ensure it fits the expected format
-        data = []
-        # all items use the same identifier
-        self.sample_token = str(uuid.uuid4())
-        for item in self.items:
-            # generate a unique identifier for each item 
-            # Initialize an empty dictionary to store the processed item
-            # later when scheme is used, you can leverage that for reducing the number of loop 
-            # match the keys in scheme as insertion, only loop those key pair not part of scheme
-            processed_item = {"sample_token": self.sample_token}
-            for key, value in item.items():
-                processed_item[key] = value
-            data.append(processed_item)
+        self._determine_sample_token()
+        
+        data_to_insert = []
+        ids_to_update = []
 
-        # Insert the list of processed items into the collection
-        result = db.samples_list.insert_many(data)
-        # print(data)
-        return result
+        for item in self.items:
+            if 'sample_token' in item and 'reference_no' in item:
+                existing_sample = db.samples_list.find_one({
+                    'sample_token': item['sample_token'],
+                    'reference_no': item['reference_no']
+                })
+                if existing_sample:
+                    ids_to_update.append(existing_sample['_id'])
+                    db.samples_list.update_one({'_id': existing_sample['_id']}, {'$set': item})
+                else:
+                    data_to_insert.append(self._process_item(item))
+            else:
+                data_to_insert.append(self._process_item(item))
+
+        insert_result = db.samples_list.insert_many(data_to_insert) if data_to_insert else None
+
+        class Result:
+            def __init__(self, inserted_ids, modified_ids):
+                self.inserted_ids = inserted_ids or []
+                self.modified_ids = modified_ids
+
+        return Result(
+            insert_result.inserted_ids if insert_result else [],
+            ids_to_update
+        )
+
+    def _determine_sample_token(self):
+        tokens = [item.get('sample_token') for item in self.items if 'sample_token' in item]
+        if tokens:
+            self.sample_token = tokens[0]
+        else:
+            self.sample_token = str(uuid.uuid4())
+
+    def _process_item(self, item):
+        processed_item = {"sample_token": self.sample_token}
+        for key, value in item.items():
+            if key != 'sample_token':
+                processed_item[key] = value
+        return processed_item
+
+
 
 
 

@@ -10,6 +10,7 @@
         referenceNumber: string;
         tags: string[];
         date: string;
+        sample_token?: string;
     }
 
     export let searchOption = '';
@@ -18,8 +19,8 @@
 
     let collections: string[] = [];
     let keys: string[] = [];
-    let results: any[] = [];
-    export let deepCopiedResults = [];
+    let results: Sample[] = [];
+    export let deepCopiedResults: Sample[] = [];
 
     let selectedCollectionName: string = '';
     let selectedKey: string = '';
@@ -32,6 +33,10 @@
     $: isSamplingMode = searchOption === 'sampling';
 
     onMount(async () => {
+        await fetchCollections();
+    });
+
+    async function fetchCollections() {
         try {
             const response = await fetch(API_ENDPOINTS.FETCH_COLLECTIONS);
             if (response.ok) {
@@ -42,22 +47,25 @@
                 if (collections.includes(defaultSamplingCollection)) {
                     selectedSamplingCollection = defaultSamplingCollection;
                 } else if (collections.length > 0) {
-                    selectedSamplingCollection = defaultSamplingCollection;
+                    selectedSamplingCollection = collections[0];
                 }
             } else {
-                console.error('Failed to fetch collections');
+                throw new Error('Failed to fetch collections');
             }
         } catch (error) {
             console.error('Error fetching collections:', error);
+            // Consider adding user-friendly error handling here
         }
-    });
+    }
 
     function toggleMode() {
         searchOption = isSamplingMode ? '' : 'sampling';
+        resetSearch();
+    }
+
+    function resetSearch() {
         selectedKey = '';
         valueToSearch = '';
-        results = [];
-        deepCopiedResults = [];
         if (isSamplingMode) {
             selectedSamplingCollection = defaultSamplingCollection;
         } else {
@@ -76,10 +84,11 @@
                         searchKey.length === 0 || searchKey.includes(key)
                     );
                 } else {
-                    console.error('Failed to fetch keys');
+                    throw new Error('Failed to fetch keys');
                 }
             } catch (error) {
                 console.error('Error fetching keys:', error);
+                // Consider adding user-friendly error handling here
             }
         } else {
             keys = [];
@@ -93,6 +102,7 @@
 
         if (!searchCollection || !searchKey || !valueToSearch) {
             console.error('Collection, key, and value must be provided');
+            // Consider adding user-friendly error message here
             return;
         }
 
@@ -107,30 +117,31 @@
 
             if (response.ok) {
                 const data = await response.json();
-                if (isSamplingMode) {
-                    let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
-                    results = [...results, ...newResults];
-                } else {
-                    results = data;
-                }
+                let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
+                
+                // Filter out duplicates based on reference_no
+                newResults = newResults.filter(newResult => 
+                    !results.some(existingResult => 
+                        existingResult.reference_no === newResult.reference_no
+                    )
+                );
+
+                results = [...results, ...newResults];
                 deepCopiedResults = JSON.parse(JSON.stringify(results));
+                
                 if (isSamplingMode) {
                     valueToSearch = '';
                 }
             } else {
                 const errorData = await response.json();
-                console.error('Error searching collection:', errorData.error);
-                results = [];
+                throw new Error(errorData.error || 'Error searching collection');
             }
         } catch (error) {
             console.error('Error searching collection:', error);
-            results = [];
+            // Consider adding user-friendly error handling here
         }
     }
 </script>
-
-
-
 
 <div class="search-container">
     <h2>Search</h2>
@@ -180,7 +191,6 @@
 </div>
 
 <FunctionalDisplay {results} {deepCopiedResults} {searchOption} />
-
 
 
 
@@ -335,6 +345,7 @@
     .slider.round:before {
         border-radius: 50%;
     }
+
 
 </style>
 

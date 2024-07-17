@@ -1,5 +1,8 @@
+
+
+
 <script lang="ts">
-  import { API_ENDPOINTS, constructUrl } from '../utils/api';
+  import { API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
@@ -158,7 +161,7 @@
   function updateResults(index: number) {
     const user = get(page).data.user;
     if (!user) {
-      console.log("undefined user");
+      console.error("User is undefined");
       return;
     }
 
@@ -191,11 +194,22 @@
       clicked[index] = false;
       return clicked;
     });
+
+    console.log(`Updated result at index ${index}:`, results[index]);
   }
 
   async function pushChangesToBackend() {
     try {
       if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results)) {
+        console.log("All results before pushing to backend:");
+        results.forEach((result, index) => {
+          console.log(`Result ${index}:`, {
+            sample_token: result.sample_token,
+            reference_no: result.reference_no,
+            // Add any other important fields you want to log
+          });
+        });
+
         const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -204,15 +218,26 @@
 
         if (!response.ok) throw new Error('Failed to upload sample data');
 
+        const sampling_response = await response.json();
+        console.log("Backend response:", sampling_response);
+
+        // Update the results with the new sample_token from the backend
+        if (sampling_response.sample_token) {
+          results = results.map(result => ({
+            ...result,
+            sample_token: sampling_response.sample_token
+          }));
+          deepCopiedResults = JSON.parse(JSON.stringify(results));
+        }
+
         unsavedChanges.set(false);
         unsavedChangesByIndex.set({});
-        const sampling_response = await response.json();
-        console.log(sampling_response.message, ":", sampling_response.sample_token);
       } else {
         console.log("No changes to push");
       }
     } catch (error) {
-      console.error("Caught unexpected error:", error.message);
+      console.error("Error pushing changes to backend:", error.message);
+      // Consider adding user-friendly error handling here
     }
   }
 
@@ -228,13 +253,20 @@
     Object.keys(filterDisplayedKeys(result)).length >
     ($removeClickCounts[index] || 0)
   );
+
+  function handleImageError(e: Event) {
+    const target = e.target as HTMLImageElement;
+    console.error(`Error loading image: ${target.src}`);
+    target.src = '/path/to/fallback-image.jpg'; // Replace with your fallback image path
+    target.alt = 'Image not available';
+  }
 </script>
 
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
       <div class="result-card">
-        <h3>{content}</h3>
+        <h3>{result.sample_token || 'No Sample Token'}</h3>
         <div class="result-content-wrapper">
           <div class="result-content">
             <div class="image-container">
@@ -242,11 +274,8 @@
                 <div class="image-frame">
                   <img 
                     src={result.image_url} 
-                    alt="searched_image" 
-                    on:error={(e) => {
-                      console.error(`Error loading image: ${result.image_url}`);
-                      e.target.src = 'fallback-image-url';
-                    }}
+                    alt="sample_image" 
+                    on:error={handleImageError}
                   >
                 </div>
               {:else}
@@ -274,7 +303,7 @@
             <div class="additional-forms">
               {#each $displayedForms[index] as form, entryIndex}
                 <div class="form-entry">
-                  <form>
+                  <form on:submit|preventDefault>
                     {#if form.isRemove}
                       <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
                       <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
@@ -321,9 +350,6 @@
     <p class="no-results">No results found</p>
   {/if}
 </div>
-
-
-
 
 
 
