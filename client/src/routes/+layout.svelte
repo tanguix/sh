@@ -19,6 +19,12 @@
   import '../app.css';
 
 
+  // Invoice Generation Step 
+  import Invoice from '$lib/components/Invoice.svelte';
+
+  // WorkFlow
+  import WorkFlow from '$lib/components/WorkFlow.svelte';
+
   // for type safety, define the Navlink object for loop the routes
   interface NavLink {
     href: string;
@@ -109,9 +115,21 @@
               <DataUpload />
           {/if}
           {#if ['ADMIN', 'DATA', 'SALE'].includes(userRole)}
+              <br>
               <hr>
               <h2>Search</h2>
               <SearchByValue />
+
+              <!-- this is sampling -->
+              <SearchByValue searchOption="sampling"/>
+              <!-- invoice generation -->
+              <Invoice />
+
+              <hr>
+              <br>
+              <WorkFlow user={$page.data.user}/>
+              <hr>
+              <br>
           {/if}
           {#if userRole === 'SALE'}
               <hr>

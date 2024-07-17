@@ -322,14 +322,13 @@
                     <button type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
                 </div>
             {/each}
-            <button type="button" on:click={() => addItem(fields)}>Add Field</button>
+            <div class="addfield-submit-button">
+              <button type="button" on:click={() => addItem(fields)}>Add Field</button>
+              <button type="submit">Submit</button>
+            </div>
         </div>
     </div>
 
-    <!-- submission button -->
-    <div class="submit-button">
-      <button type="submit">Submit</button>
-    </div>
 </form>
 
 <style>
@@ -493,11 +492,39 @@
         margin-top: 2rem;
     }
 
-    .submit-button {
-        display: flex;
-        align-items: left;
-        justify-content: left;
-        margin: 0.5rem 0;
-    }
+
+
+  .addfield-submit-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .addfield-submit-button button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .addfield-submit-button button:first-child {
+    background-color: #f0f0f0;
+    color: #333;
+  }
+
+  .addfield-submit-button button:last-child {
+    background-color: #007bff;
+    color: white;
+  }
+
+  /* Optional: Add some hover effects */
+  .addfield-submit-button button:hover {
+    opacity: 0.9;
+  }
+
+
+
 </style>
 

@@ -181,7 +181,7 @@ from bson import ObjectId
 from typing import Dict, Any
 
 class Workflow:
-    def __init__(self, name, workflow_id, is_locked, status):
+    def __init__(self, name, workflow_id, is_locked, status, owner):
         self._id = ObjectId()
         self.workflow_id = workflow_id
         self.name = name
@@ -189,6 +189,7 @@ class Workflow:
         self.edges = []
         self.status = 'saved'
         self.is_locked = is_locked
+        self.owner = owner  # owner of the workflow
 
     def save(self):
         data = {
@@ -198,7 +199,8 @@ class Workflow:
             "node_ids": self.node_ids,
             "edges": self.edges,
             "status": self.status,
-            "is_locked": self.is_locked
+            "is_locked": self.is_locked,
+            "owner": self.owner  # Include owner in the saved data
         }
         return db.workflows.insert_one(data)
 
@@ -254,6 +256,7 @@ class Workflow:
             if not workflow:
                 return None
             workflow['_id'] = str(workflow['_id'])
+
             nodes = list(db.nodes.find({"workflow_id": workflow_id}))
             workflow['nodes'] = []
             node_map = {node['node_id']: node['node_id'] for node in nodes}
@@ -288,6 +291,7 @@ class Workflow:
             workflow['edges'] = valid_edges
 
             workflow['is_locked'] = workflow.get('is_locked', False)
+            workflow['owner'] = workflow.get('owner', [])  # Include owner in the returned data
             
             return workflow
         except Exception as e:
@@ -569,7 +573,6 @@ class HandleWorkflow:
 
 
 
-
     @staticmethod
     def process_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
@@ -664,7 +667,8 @@ class HandleWorkflow:
             name=data['name'], 
             workflow_id=data['workflow_id'], 
             is_locked=data.get('is_locked', False), 
-            status=data.get('status', 'created')
+            status=data.get('status', 'created'),
+            owner=data.get('owner', [])  # Include owner data
         )
         workflow.edges = data.get('edges', [])
         
@@ -701,7 +705,8 @@ class HandleWorkflow:
             "node_ids": workflow.node_ids,
             "edges": workflow.edges,
             "status": workflow.status,
-            "is_locked": workflow.is_locked
+            "is_locked": workflow.is_locked,
+            "owner": workflow.owner  # Include owner in the return data
         }
 
 

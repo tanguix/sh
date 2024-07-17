@@ -11,15 +11,6 @@
     import Modal from '../lib/components/Modal.svelte';
 
 
-    // Sampling Step
-    import SearchByValue from '$lib/components/SearchByValue.svelte';
-
-    // Invoice Generation Step 
-    import Invoice from '$lib/components/Invoice.svelte';
-
-    // WorkFlow
-    import WorkFlow from '$lib/components/WorkFlow.svelte';
-
 
     let showModal = writable(false);
     let pendingNavigation = null;
@@ -127,16 +118,18 @@ above the onCancel={cancelNavigation}, to give user option to choose if that's n
 
 
 
-<!-- this is sampling -->
-<SearchByValue searchOption="sampling"/>
-<!-- invoice generation -->
-<Invoice />
+<div class="leave">
+  <a href="https://www.google.com">leave</a>
+</div>
 
-<hr>
-<br>
-<WorkFlow />
-<hr>
-<br>
 
-<a href="https://www.google.com">leave</a>
+<style>
 
+  .leave {
+    display: flex;
+    font-family: "Ubuntu";
+    align-items: center;
+    justify-content: center;
+  }
+
+</style>

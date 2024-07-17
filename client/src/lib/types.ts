@@ -42,7 +42,7 @@ export interface Workflow {
   nodes: Node[];
   edges: Edge[];
   status: 'created' | 'saved' | 'unsaved';
-  // owner: [string, string];
+  owner?: [string, string];
 }
 
 
