@@ -87,56 +87,90 @@ class Item:
 
 
 
+
 class ItemBatch:
     def __init__(self, items):
         self.items = items
-        self.sample_token = ''
+        self.main_sample_token = self._determine_main_sample_token()
+
+    def _determine_main_sample_token(self):
+        # Use the first sample_token found in the items, or generate a new one if none exists
+        for item in self.items:
+            if 'sample_token' in item and item['sample_token']:
+                logger.debug(f"Using existing sample_token as main: {item['sample_token']}")
+                return item['sample_token']
+        new_token = str(uuid.uuid4())
+        logger.debug(f"Generated new main sample_token: {new_token}")
+        return new_token
 
     def save_items(self):
-        self._determine_sample_token()
-        
-        data_to_insert = []
-        ids_to_update = []
+        try:
+            data_to_insert = []
+            ids_to_update = []
+            original_items_to_keep = []
 
-        for item in self.items:
-            if 'sample_token' in item and 'reference_no' in item:
-                existing_sample = db.samples_list.find_one({
-                    'sample_token': item['sample_token'],
-                    'reference_no': item['reference_no']
-                })
-                if existing_sample:
-                    ids_to_update.append(existing_sample['_id'])
-                    db.samples_list.update_one({'_id': existing_sample['_id']}, {'$set': item})
+            for item in self.items:
+                existing_item = self._find_existing_item(item)
+                
+                if existing_item:
+                    if existing_item['sample_token'] != self.main_sample_token:
+                        # Keep the original item and create a new one with the main sample_token
+                        original_items_to_keep.append(existing_item['_id'])
+                        new_item = self._process_item(item)
+                        data_to_insert.append(new_item)
+                        logger.debug(f"Keeping original item and creating new: {new_item}")
+                    else:
+                        # Update existing item
+                        update_id = existing_item['_id']
+                        ids_to_update.append(update_id)
+                        db.samples_list.update_one({'_id': update_id}, {'$set': self._process_item(item)})
+                        logger.debug(f"Updated item with ID: {update_id}")
                 else:
-                    data_to_insert.append(self._process_item(item))
-            else:
-                data_to_insert.append(self._process_item(item))
+                    # New item to insert
+                    new_item = self._process_item(item)
+                    data_to_insert.append(new_item)
+                    logger.debug(f"New item to insert: {new_item}")
 
-        insert_result = db.samples_list.insert_many(data_to_insert) if data_to_insert else None
+            insert_result = db.samples_list.insert_many(data_to_insert) if data_to_insert else None
+            logger.info(f"Inserted {len(data_to_insert)} new items")
+            logger.info(f"Updated {len(ids_to_update)} existing items")
+            logger.info(f"Kept {len(original_items_to_keep)} original items")
 
-        class Result:
-            def __init__(self, inserted_ids, modified_ids):
-                self.inserted_ids = inserted_ids or []
-                self.modified_ids = modified_ids
+            class Result:
+                def __init__(self, inserted_ids, modified_ids, kept_ids):
+                    self.inserted_ids = inserted_ids or []
+                    self.modified_ids = modified_ids
+                    self.kept_ids = kept_ids
 
-        return Result(
-            insert_result.inserted_ids if insert_result else [],
-            ids_to_update
-        )
-
-    def _determine_sample_token(self):
-        tokens = [item.get('sample_token') for item in self.items if 'sample_token' in item]
-        if tokens:
-            self.sample_token = tokens[0]
-        else:
-            self.sample_token = str(uuid.uuid4())
+            return Result(
+                insert_result.inserted_ids if insert_result else [],
+                ids_to_update,
+                original_items_to_keep
+            )
+        except Exception as e:
+            logger.exception("An error occurred in save_items method")
+            raise
 
     def _process_item(self, item):
-        processed_item = {"sample_token": self.sample_token}
+        processed_item = {"sample_token": self.main_sample_token}
         for key, value in item.items():
             if key != 'sample_token':
                 processed_item[key] = value
         return processed_item
+
+    def _find_existing_item(self, item):
+        # Check for existing item with same reference_no
+        if 'reference_no' in item:
+            existing = db.samples_list.find_one({'reference_no': item['reference_no']})
+            if existing:
+                logger.debug(f"Found existing item with reference_no: {item['reference_no']}")
+                return existing
+        return None
+
+    def _compare_items(self, item1, item2):
+        # Compare all fields except '_id', 'sample_token', and 'modifiedBy'
+        keys_to_compare = set(item1.keys()) & set(item2.keys()) - {'_id', 'sample_token', 'modifiedBy'}
+        return all(item1[key] == item2[key] for key in keys_to_compare)
 
 
 

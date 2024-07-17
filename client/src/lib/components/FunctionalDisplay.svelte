@@ -210,6 +210,9 @@
           });
         });
 
+
+        console.log("final: ", results)
+
         const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

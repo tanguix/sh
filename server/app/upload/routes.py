@@ -39,24 +39,34 @@ def upload_data():
 
 
 
+
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:
-        data = request.json  # receive data from frontend
+        data = request.json
+        logger.debug(f"Received data: {data}")
         
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
-
+        
         sample_batch = ItemBatch(data)
         result = sample_batch.save_items()
         
-        return jsonify({
+        response = {
             "message": "Samples uploaded successfully", 
             "inserted_ids": [str(id) for id in result.inserted_ids], 
             "updated_ids": [str(id) for id in result.modified_ids],
-            "sample_token": sample_batch.sample_token}), 201
+            "kept_ids": [str(id) for id in result.kept_ids],
+            "sample_token": sample_batch.main_sample_token
+        }
+        logger.debug(f"Response: {response}")
+        return jsonify(response), 201
     except Exception as e:
+        logger.exception("An error occurred while uploading samples")
         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 
