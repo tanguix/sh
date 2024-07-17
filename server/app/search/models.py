@@ -108,4 +108,9 @@ class Collection:
         return list(sample_tokens)
 
 
-
+    @staticmethod
+    def search_workflow_tokens_by_user(user_name, user_role):
+        query = {"owner": [user_name, user_role]}
+        documents = db.workflows.find(query, {"workflow_id": 1, "_id": 0})
+        workflow_tokens = [doc["workflow_id"] for doc in documents]
+        return workflow_tokens

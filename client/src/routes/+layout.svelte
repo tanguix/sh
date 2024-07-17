@@ -168,11 +168,11 @@
   .main-layout {
     --main-padding: 20px 60px;
     --right-width: 450px;
-    --gap: 2rem;
+    --gap: 8rem;
 
     display: flex;
     width: calc(100% - (var(--main-padding) * 2));
-    max-width: 1500px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: var(--main-padding);
     gap: var(--gap);

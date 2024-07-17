@@ -10,26 +10,19 @@
   let workflowToken = writable(false);
   let sampleToken = writable(false);
 
-  // New exchange rate related stores
+  // Exchange rate related stores
   let exchange_rate = writable(null);
   let error = writable('');
 
-  const sectionHeights = {
-    exchangeRateSection: 200,
-    workflowTokenSection: 200,
-    sampleTokenSection: 200
-  };
+  // Sample token related stores
+  const fetchedSampleTokens = writable([]);
+  let who = writable('');
+  let fetched = writable(false);
 
-  const totalHeight = derived(
-    [exchangeRate, workflowToken, sampleToken],
-    ([$exchangeRate, $workflowToken, $sampleToken]) => {
-      let height = 0;
-      if ($exchangeRate) height += sectionHeights.exchangeRateSection;
-      if ($workflowToken) height += sectionHeights.workflowTokenSection;
-      if ($sampleToken) height += sectionHeights.sampleTokenSection;
-      return height;
-    }
-  );
+  // Workflow token related stores
+  const fetchedWorkflowTokens = writable([]);
+  let workflowWho = writable('');
+  let workflowFetched = writable(false);
 
   const toggleExchangeRate = async () => {
     exchangeRate.update(n => !n);
@@ -37,17 +30,20 @@
       await fetchExchangeRate();
     }
   };
-  const toggleWorkflowToken = () => workflowToken.update(n => !n);
+
+  const toggleWorkflowToken = () => {
+    workflowToken.update(n => !n);
+    if (get(workflowToken) && !get(workflowFetched)) {
+      fetchWorkflowTokens();
+    }
+  };
+
   const toggleSampleToken = () => {
     sampleToken.update(n => !n);
     if (get(sampleToken) && !get(fetched)) {
       fetchSampleTokens();
     }
   };
-
-  const fetchedSampleTokens = writable([]);
-  let who = writable('');
-  let fetched = writable(false);
 
   async function fetchSampleTokens() {
     const user = get(page).data.user;
@@ -74,8 +70,36 @@
     }
   }
 
+  async function fetchWorkflowTokens() {
+    const user = get(page).data.user;
+    if (!user) {
+      console.log("User not defined");
+      return;
+    }
+
+    try {
+      const response = await fetch(API_ENDPOINTS.FETCH_WORKFLOW_TOKEN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: user.name, role: user.role })
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch workflow tokens');
+
+      const result = await response.json();
+      fetchedWorkflowTokens.set(result.workflow_tokens.reverse());
+      workflowFetched.set(true);
+      workflowWho.set(result.username === user.name ? 'you' : result.username);
+    } catch (error) {
+      console.error("Error fetching workflow tokens:", error);
+    }
+  }
+
   const latestTokens = derived(fetchedSampleTokens, $tokens => $tokens.slice(0, 9));
   const hasMoreTokens = derived(fetchedSampleTokens, $tokens => $tokens.length > 9);
+
+  const latestWorkflowTokens = derived(fetchedWorkflowTokens, $tokens => $tokens.slice(0, 9));
+  const hasMoreWorkflowTokens = derived(fetchedWorkflowTokens, $tokens => $tokens.length > 9);
 
   async function fetchExchangeRate() {
     try {
@@ -91,8 +115,8 @@
   }
 
   function formatTimestamp(timestamp: number): string {
-    const date = new Date(timestamp * 1000); // Convert seconds to milliseconds
-    return date.toLocaleString(); // Format date and time
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
   }
 </script>
 
@@ -103,7 +127,10 @@
     
     <div class="section">
       <button on:click={toggleExchangeRate}>
-        {$exchangeRate ? 'Hide' : 'Show'} Exchange Rate
+        <span class="toggle-text" class:hide={$exchangeRate} class:show={!$exchangeRate}>
+          {$exchangeRate ? 'Hide' : 'Show'}
+        </span>
+        Exchange Rate
       </button>
       <div class="section-content" class:open={$exchangeRate}>
         <h3>Exchange Rates</h3>
@@ -126,24 +153,38 @@
 
     <div class="section">
       <button on:click={toggleWorkflowToken}>
-        {$workflowToken ? 'Hide' : 'Show'} Workflow Id
+        <span class="toggle-text" class:hide={$workflowToken} class:show={!$workflowToken}>
+          {$workflowToken ? 'Hide' : 'Show'}
+        </span>
+        Workflow Tokens
       </button>
       <div class="section-content" class:open={$workflowToken}>
-        <h3>Section 2</h3>
-        <p>Content for Section 2...</p>
+        <h3>Workflow Tokens</h3>
+        <ul>
+          {#if $hasMoreWorkflowTokens}<li>...</li>{/if}
+          {#each $latestWorkflowTokens as token, index}
+            <li><p>{$workflowWho}: {token}</p></li>
+            {#if index === $latestWorkflowTokens.length - 1}
+              <p>(latest)</p>
+            {/if}
+          {/each}
+        </ul>
       </div>
     </div>
 
     <div class="section">
       <button on:click={toggleSampleToken}>
-        {$sampleToken ? 'Hide' : 'Show'} Sample Tokens
+        <span class="toggle-text" class:hide={$sampleToken} class:show={!$sampleToken}>
+          {$sampleToken ? 'Hide' : 'Show'}
+        </span>
+        Sample Tokens
       </button>
       <div class="section-content" class:open={$sampleToken}>
         <h3>Sample Tokens</h3>
         <ul>
           {#if $hasMoreTokens}<li>...</li>{/if}
           {#each $latestTokens as token, index}
-            <li>{$who}: {token}</li>
+            <li><p>{$who}: {token}</p></li>
             {#if index === $latestTokens.length - 1}
               <p>(latest)</p>
             {/if}
@@ -160,7 +201,7 @@
 
 <style>
   .user-window {
-    width: 85%;
+    width: 100%;
     max-width: 600px;
     margin: 0 auto;
     background-color: #f8f8f8;
@@ -171,7 +212,7 @@
   }
 
   .section {
-    width: 90%;
+    width: 100%;
     margin-bottom: 15px;
   }
 
@@ -204,19 +245,34 @@
     margin-bottom: 15px;
   }
 
-  button {
+  .section button {
     width: 100%;
     text-align: left;
     padding: 10px;
-    background-color: #ffffff;
+    background-color: #ffffff; /* Dimmed background */
     border: 1px solid #d0d0d0;
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
   }
 
-  button:hover {
-    background-color: #f0f0f0;
+  .section button:hover {
+    background-color: #e0e0e0;
+  }
+
+  .toggle-text {
+    margin-right: 10px;
+    font-weight: bold;
+  }
+
+  .toggle-text.show {
+    color: #7aa2f7; /* Green color for 'Show' */
+  }
+
+  .toggle-text.hide {
+    color: #ff757f; /* Red color for 'Hide' */
   }
 
   ul {
@@ -226,6 +282,7 @@
 
   li {
     margin-bottom: 5px;
+    font-family: "Ubuntu";
   }
 
   .ex-card {
@@ -235,3 +292,4 @@
     background-color: #f9f9f9;
   }
 </style>
+

@@ -120,4 +120,19 @@ def get_sample_tokens():
 
 
 
+@search_bp.route('/api/get_workflow_tokens', methods=['POST'])
+def get_workflow_tokens():
+    try:
+        data = request.json
+        user_name = data.get('name')
+        user_role = data.get('role')
 
+        if not user_name or not user_role:
+            return jsonify({"error": "Invalid user data"}), 400
+
+        workflow_tokens = Collection.search_workflow_tokens_by_user(user_name, user_role)
+
+        return jsonify({"workflow_tokens": workflow_tokens, "username": user_name}), 200
+    except Exception as e:
+        logger.error(f"Error fetching workflow tokens: {e}")
+        return jsonify({"error": str(e)}), 500

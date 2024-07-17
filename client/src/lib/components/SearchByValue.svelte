@@ -215,9 +215,10 @@
 
         <div class="input-group">
             <input type="text" bind:value={valueToSearch} placeholder="Enter search value">
+
             {#if isSamplingMode}
-                <button on:click={() => toggleAddRemove(true)} class:active={isAddOperation}>Add</button>
-                <button on:click={() => toggleAddRemove(false)} class:active={!isAddOperation}>Remove</button>
+                <button on:click={() => toggleAddRemove(true)} class="sampling-button" class:active={isAddOperation}>Add</button>
+                <button on:click={() => toggleAddRemove(false)} class="sampling-button" class:active={!isAddOperation}>Remove</button>
             {:else}
                 <button on:click={search}>Search</button>
             {/if}
@@ -289,28 +290,48 @@
         border-radius: 4px;
     }
 
-    .input-group button {
-        padding: 10px 20px;
-        font-size: 16px;
-        color: #fff;
-        background-color: #007bff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.3s;
-    }
 
-    .input-group button:hover {
-        background-color: #0056b3;
-    }
 
-    /* .input-group button.active { */
-    /*     background-color: #FFE6B3; */
-    /* } */
-    /**/
-    /* .input-group button.active:hover { */
-    /*     background-color: #FFE6C4; */
-    /* } */
+
+  .input-group button {
+      padding: 10px 20px;
+      font-size: 16px;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+  }
+
+  .input-group button:hover {
+      background-color: #0056b3;
+  }
+
+  .input-group button.sampling-button {
+      /* color: #040c24; */
+      /* background-color: #A1EFD3; */
+      background-color: #007bff;
+  }
+
+  .input-group button.sampling-button:hover {
+      background-color: #4fd6be;
+  }
+
+  .input-group button.sampling-button.active {
+      /* color: #040c24; */
+      /* background-color: #A1EFD3; */
+      background-color: #007bff;
+  }
+
+  /* New rule to ensure hover effect works on active buttons */
+  .input-group button.sampling-button.active:hover {
+      background-color: #4fd6be;
+  }
+
+
+
+
 
     .mode-switch {
         display: flex;
@@ -357,12 +378,13 @@
         transition: .4s;
     }
 
+
     input:checked + .slider {
-        background-color: #2196F3;
+        background-color: #4fd6be;
     }
 
     input:focus + .slider {
-        box-shadow: 0 0 1px #2196F3;
+        box-shadow: 0 0 1px #4fd6be;
     }
 
     input:checked + .slider:before {
