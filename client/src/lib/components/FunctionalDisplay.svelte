@@ -244,6 +244,14 @@
             ...result,
             sample_token: sampling_response.sample_token
           }));
+
+
+          // Handle kept IDs if necessary
+          if (sampling_response.kept_ids && sampling_response.kept_ids.length > 0) {
+            console.log("Some original items were kept:", sampling_response.kept_ids);
+            // You might want to add logic here to handle kept items in the UI
+          }
+
           deepCopiedResults = JSON.parse(JSON.stringify(results));
         }
 

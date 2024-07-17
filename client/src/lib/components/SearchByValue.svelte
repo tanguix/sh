@@ -1,7 +1,6 @@
 
 
 
-
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -19,7 +18,7 @@
     export let searchKey: string[] = [];
 
     // Define the list of allowed keys and collections
-    const allowedKeys = ['reference_no', 'tags', 'categories'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token'];
     const allowedCollections = ['samples', 'samples_list'];
 
     let collections: string[] = [];
@@ -34,6 +33,8 @@
     let selectedSamplingKey: string = 'reference_no';
     let defaultSamplingCollection: string = 'samples';
     let selectedSamplingCollection: string = defaultSamplingCollection;
+
+    let isAddOperation: boolean = true;
 
     $: isSamplingMode = searchOption === 'sampling';
 
@@ -134,18 +135,26 @@
                 const data = await response.json();
                 let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
                 
-                // Filter out duplicates based on reference_no
-                newResults = newResults.filter(newResult => 
-                    !results.some(existingResult => 
-                        existingResult.reference_no === newResult.reference_no
-                    )
-                );
-
-                results = [...results, ...newResults];
-                deepCopiedResults = JSON.parse(JSON.stringify(results));
-                
                 if (isSamplingMode) {
+                    if (isAddOperation) {
+                        // Filter out duplicates based on reference_no
+                        newResults = newResults.filter(newResult => 
+                            !results.some(existingResult => 
+                                existingResult.reference_no === newResult.reference_no
+                            )
+                        );
+                        results = [...results, ...newResults];
+                    } else {
+                        // Remove samples based on the search criteria
+                        results = results.filter(result => 
+                            !(result[searchKey] === valueToSearch)
+                        );
+                    }
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
                     valueToSearch = '';
+                } else {
+                    results = newResults;
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
                 }
             } else {
                 const errorData = await response.json();
@@ -155,6 +164,11 @@
             console.error('Error searching collection:', error);
             // Consider adding user-friendly error handling here
         }
+    }
+
+    function toggleAddRemove(add: boolean) {
+        isAddOperation = add;
+        search();
     }
 </script>
 
@@ -201,7 +215,12 @@
 
         <div class="input-group">
             <input type="text" bind:value={valueToSearch} placeholder="Enter search value">
-            <button on:click={search}>{isSamplingMode ? 'Add' : 'Search'}</button>
+            {#if isSamplingMode}
+                <button on:click={() => toggleAddRemove(true)} class:active={isAddOperation}>Add</button>
+                <button on:click={() => toggleAddRemove(false)} class:active={!isAddOperation}>Remove</button>
+            {:else}
+                <button on:click={search}>Search</button>
+            {/if}
         </div>
     </div>
 </div>
@@ -270,7 +289,7 @@
         border-radius: 4px;
     }
 
-    button {
+    .input-group button {
         padding: 10px 20px;
         font-size: 16px;
         color: #fff;
@@ -281,9 +300,17 @@
         transition: background-color 0.3s;
     }
 
-    button:hover {
+    .input-group button:hover {
         background-color: #0056b3;
     }
+
+    /* .input-group button.active { */
+    /*     background-color: #FFE6B3; */
+    /* } */
+    /**/
+    /* .input-group button.active:hover { */
+    /*     background-color: #FFE6C4; */
+    /* } */
 
     .mode-switch {
         display: flex;
