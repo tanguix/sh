@@ -3,7 +3,7 @@
 
 export const LOCAL_HOST = 'http://192.168.110.120:5000';      // expose to local network 
 // export const BASE_URL = 'http://localhost:5000';
-export const BASE_URL = 'http://192.168.110.120:5000';            // local network
+export const BASE_URL = LOCAL_HOST;            // local network
 
 
 // secure (https) network 

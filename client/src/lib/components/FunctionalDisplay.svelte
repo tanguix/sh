@@ -290,6 +290,7 @@
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
+      <!-- <p>{result.image_url}</p> -->
       <div class="result-card">
         <h3>{result.sample_token || 'No Sample Token'}</h3>
         <div class="result-content-wrapper">

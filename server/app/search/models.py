@@ -77,7 +77,9 @@ class Collection:
 
                     # Remove the extra 'images/' from the beginning of the path
                     image_path = v[7:] if v.startswith('images/') else v
-                    image_url = f"http://localhost:5000/search/api/images/{image_path}"
+                    # image_url = f"http://localhost:5000/search/api/images/{image_path}"
+                    #TODO: unify this routes, fuck, it tortures me to death
+                    image_url = f"http://192.168.110.120:5000/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
                     logger.info(f"Image URL constructed: {image_url}")
 

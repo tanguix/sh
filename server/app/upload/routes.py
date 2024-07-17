@@ -193,6 +193,7 @@ def download_file(workflow_id, node_id, section_id, file_id):
         return jsonify({"error": error}), 404
     
     absolute_path = os.path.join(SERVER_DIR, file_info['path'])
+    print(absolute_path)
     logger.info(f"Attempting to send file: {absolute_path}")
     
     try:
