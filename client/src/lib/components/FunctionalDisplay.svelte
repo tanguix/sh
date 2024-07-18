@@ -14,7 +14,7 @@
   export let searchOption: string = '';
 
   // for property
-  export let keysToExclude: string[] = ['image_url', 'categories', 'tags', 'file'];
+  export let keysToExclude: string[] = ['image_url', 'file'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
       Description & Specifications (描述及规格)\n

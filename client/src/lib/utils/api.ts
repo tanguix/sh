@@ -1,7 +1,8 @@
 
 // Base URL for all API calls
 
-export const BACKEND_LOCAL_HOST = 'http://192.168.2.62:5000';      // this should be the flask address, it might change to be aware
+// export const BACKEND_LOCAL_HOST = 'http://192.168.2.62:5000';      // this should be the flask address, it might change to be aware
+export const BACKEND_LOCAL_HOST = 'http://192.168.110.120:5000';      // like this 
 // export const BASE_URL = 'http://localhost:5000';
 export const BASE_URL = BACKEND_LOCAL_HOST;            // local network
 
