@@ -25,4 +25,5 @@ class Config:
     # MAIL_DEFAULT_SENDER = 'your_email@example.com'
     # SECRET_KEY = 'your_secret_key'
     # BACKEND_LOCAL_URL = 'http://192.168.2.62:5000'
-    BACKEND_LOCAL_URL = 'http://192.168.110.120:5000'
+    # BACKEND_LOCAL_URL = 'http://192.168.110.120:5000'
+    BACKEND_LOCAL_URL = 'http://localhost:5000'
