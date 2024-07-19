@@ -432,7 +432,7 @@
         position: relative;
         border: 2px dashed #ccc;
         text-align: center;
-        padding: 1rem;
+        padding: 8px 0;
         margin: 0.5rem 0;
         cursor: pointer;
         transition: border-color 0.3s, background-color 0.3s;

@@ -213,10 +213,24 @@
     });
   }
 
+
+
+  function isOwner(workflow: Workflow): boolean {
+    if (!user || !workflow.owner) return false;
+    return workflow.owner[0] === user.name && workflow.owner[1] === user.role;
+  }
+
+
+
   function toggleLockStatus(workflowId: string) {
     const workflow = workflows.find(w => w.workflow_id === workflowId);
 
     if (workflow) {
+      if (!isOwner(workflow)) {
+        alert("Only the owner can lock or release this workflow.");
+        return;
+      }
+
       const newLockStatus = !workflow.is_locked;
       workflow.is_locked = newLockStatus;
       workflows = [...workflows];
@@ -229,10 +243,12 @@
         } 
       });
     } else {
-      alert("Workflow not found")
+      alert("Workflow not found");
       return;
     }
   }
+
+
 
   function addNode(workflowId: string) {
     const workflowIndex = workflows.findIndex(w => w.workflow_id === workflowId);
@@ -730,9 +746,16 @@
                   {/if}
                   <span class="timestamp-info">{new Date(workflow.timestamp).toLocaleString()}&nbsp;)</span>
                 </div>
-                <button class="toggle-lock-button" on:click={() => toggleLockStatus(workflow.workflow_id)}>
+                <!-- the title message will be shown up when mouse is hover on the button -->
+                <button 
+                  class="toggle-lock-button" 
+                  on:click={() => toggleLockStatus(workflow.workflow_id)}
+                  disabled={!isOwner(workflow)}
+                  title={isOwner(workflow) ? "" : "Only the owner can lock or release this workflow"}
+                >
                   {workflow.is_locked ? 'Release' : 'Lock'}
                 </button>
+
               </div>
 
               <Pipeline nodes={workflow.nodes} edges={workflow.edges} on:nodeClick={handleNodeClick} />
@@ -936,6 +959,13 @@
   .toggle-lock-button:hover {
     background-color: #e0e0e0;
   }
+
+
+  .toggle-lock-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
 
   .node-header {
     display: flex;
