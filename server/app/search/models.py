@@ -12,8 +12,13 @@ backend_local_url = current_app.config['BACKEND_LOCAL_URL']     # correct way of
 # most likely, this class is all method, right now it doesn't have data to initialize
 class Collection:
 
+
     @staticmethod
     def get_all_collections():
+        '''
+        you can test the url, by printing out "backend_local_url" variable
+        '''
+        # print("your local host", backend_local_url)
         return db.list_collection_names()       # return all collections name in a database
 
 
