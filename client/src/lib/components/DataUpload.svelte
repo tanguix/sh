@@ -1,4 +1,6 @@
 
+
+
 <script lang="ts">
     import { writable } from 'svelte/store';
     import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
@@ -21,9 +23,11 @@
     let imagePath: string = '';
     let imagePreviewUrl: string = '';
 
-    // New variables for additional images
     let additionalImages: File[] = [];
     let additionalImagePreviews: string[] = [];
+
+    let isDragOverMain = false;
+    let isDragOverAdditional = false;
 
     function addItem(store) {
         store.update(currentItems => [
@@ -47,64 +51,93 @@
 
     function handleDrop(event: DragEvent) {
         event.preventDefault();
+        isDragOverMain = false;
         if (event.dataTransfer && event.dataTransfer.files.length > 0) {
             imageFile = event.dataTransfer.files[0];
             imagePath = imageFile.name;
             imagePreviewUrl = URL.createObjectURL(imageFile);
+            
+            const fileInput = document.getElementById('image') as HTMLInputElement;
+            if (fileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(imageFile);
+                fileInput.files = dataTransfer.files;
+            }
         }
+    }
+
+    function handleDragEnter(event: DragEvent) {
+        event.preventDefault();
+        isDragOverMain = true;
+    }
+
+    function handleDragLeave(event: DragEvent) {
+        event.preventDefault();
+        isDragOverMain = false;
     }
 
     function handleDragOver(event: DragEvent) {
         event.preventDefault();
     }
 
-    function handleClick() {
-        const fileInput = document.getElementById('image') as HTMLInputElement;
-        fileInput.click();
-    }
-
     function handleKeyDown(event: KeyboardEvent) {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            handleClick();
+            const fileInput = document.getElementById('image') as HTMLInputElement;
+            fileInput.click();
         }
     }
 
-    // New functions for additional images
     function handleAdditionalFileSelect(event: Event) {
         const target = event.target as HTMLInputElement;
         if (target.files) {
-            for (let i = 0; i < target.files.length; i++) {
-                if (target.files[i].type.startsWith('image/')) {
-                    additionalImages = [...additionalImages, target.files[i]];
-                    additionalImagePreviews = [...additionalImagePreviews, URL.createObjectURL(target.files[i])];
-                }
-            }
+            processAdditionalFiles(Array.from(target.files));
         }
     }
 
     function handleAdditionalDrop(event: DragEvent) {
         event.preventDefault();
+        isDragOverAdditional = false;
         if (event.dataTransfer && event.dataTransfer.files) {
-            for (let i = 0; i < event.dataTransfer.files.length; i++) {
-                const file = event.dataTransfer.files[i];
-                if (file.type.startsWith('image/')) {
-                    additionalImages = [...additionalImages, file];
-                    additionalImagePreviews = [...additionalImagePreviews, URL.createObjectURL(file)];
-                }
+            processAdditionalFiles(Array.from(event.dataTransfer.files));
+            
+            const fileInput = document.getElementById('additional-images') as HTMLInputElement;
+            if (fileInput) {
+                const dataTransfer = new DataTransfer();
+                Array.from(event.dataTransfer.files).forEach(file => {
+                    if (file.type.startsWith('image/')) {
+                        dataTransfer.items.add(file);
+                    }
+                });
+                fileInput.files = dataTransfer.files;
             }
         }
     }
 
+    function processAdditionalFiles(files: File[]) {
+        for (let file of files) {
+            if (file.type.startsWith('image/')) {
+                additionalImages = [...additionalImages, file];
+                additionalImagePreviews = [...additionalImagePreviews, URL.createObjectURL(file)];
+            }
+        }
+    }
 
+    function handleAdditionalDragEnter(event: DragEvent) {
+        event.preventDefault();
+        isDragOverAdditional = true;
+    }
+
+    function handleAdditionalDragLeave(event: DragEvent) {
+        event.preventDefault();
+        isDragOverAdditional = false;
+    }
 
     function removeAdditionalImage(event: Event, index: number) {
         event.stopPropagation();
         additionalImages = additionalImages.filter((_, i) => i !== index);
         additionalImagePreviews = additionalImagePreviews.filter((_, i) => i !== index);
     }
-
-
 
     async function sendSampleData(combinedFormData: FormData) {
         const response = await fetch(API_ENDPOINTS.UPLOAD_DATA, {
@@ -119,8 +152,6 @@
         return await response.json();
     }
 
-
-
     function handleSubmit(event: Event) {
         event.preventDefault();
         const form = event.target as HTMLFormElement;
@@ -130,7 +161,6 @@
             formData.append('image', imageFile);
         }
 
-        // Append additional images
         additionalImages.forEach((image, index) => {
             formData.append(`additional_image_${index}`, image);
         });
@@ -174,8 +204,6 @@
         formData.append('categories', JSON.stringify(allCategories));
         formData.append('additional_fields', JSON.stringify(additionalFields));
 
-
-
         sendSampleData(formData)
             .then(response => {
                 console.log('Upload successful:', response);
@@ -196,26 +224,29 @@
     }
 </script>
 
-
-
 <form action="?/upload" method="POST" on:submit={handleSubmit} enctype="multipart/form-data">
     <div class="upload-container">
         <div class="upload-left">
-            <div class="browser-file">
-                <label for="image">Upload Image:</label>
-                <input class="input" type="file" id="image" name="image_file" accept="image/*" on:change={handleFileSelect} required>
-                <button type="button" on:click={handleClick}>Browse</button>
-            </div>
-
+            <h3>Main Image:</h3>
             <div 
-                class="drag-drop-area {imagePreviewUrl ? 'highlight' : ''}"
+                class="drag-drop-area image-preview-main {imagePreviewUrl ? 'highlight' : ''} {isDragOverMain ? 'drag-over' : ''}"
                 role="button"
                 tabindex="0"
-                on:click={handleClick}
                 on:keydown={handleKeyDown}
-                on:drop={handleDrop} 
-                on:dragover={handleDragOver} 
+                on:drop={handleDrop}
+                on:dragenter={handleDragEnter}
+                on:dragleave={handleDragLeave}
+                on:dragover={handleDragOver}
             >
+                <input 
+                    type="file" 
+                    id="image" 
+                    name="image_file" 
+                    accept="image/*" 
+                    on:change={handleFileSelect} 
+                    required 
+                    class="file-input"
+                >
                 <div class="image-preview-container">
                     {#if imagePreviewUrl}
                         <div class="image-preview">
@@ -229,24 +260,27 @@
                 </div>
             </div>
 
-            <!-- New section for additional images -->
             <div class="additional-images">
                 <h3>Additional Images:</h3>
-                <div class="browser-file">
-                    <label for="additional-images">Upload Additional Images:</label>
-                    <input class="input" type="file" id="additional-images" name="additional_images" accept="image/*" on:change={handleAdditionalFileSelect} multiple>
-                    <button type="button" on:click={() => document.getElementById('additional-images').click()}>Browse</button>
-                </div>
-
                 <div 
-                    class="drag-drop-area additional-images-area"
+                    class="drag-drop-area additional-images-area {isDragOverAdditional ? 'drag-over' : ''}"
                     role="button"
                     tabindex="0"
-                    on:click={() => document.getElementById('additional-images').click()}
                     on:keydown={handleKeyDown}
-                    on:drop={handleAdditionalDrop} 
-                    on:dragover={handleDragOver} 
+                    on:drop={handleAdditionalDrop}
+                    on:dragenter={handleAdditionalDragEnter}
+                    on:dragleave={handleAdditionalDragLeave}
+                    on:dragover={handleDragOver}
                 >
+                    <input 
+                        type="file" 
+                        id="additional-images" 
+                        name="additional_images" 
+                        accept="image/*" 
+                        on:change={handleAdditionalFileSelect} 
+                        multiple 
+                        class="file-input"
+                    >
                     {#if additionalImagePreviews.length > 0}
                         <div class="additional-images-container">
                             <div class="additional-image-previews">
@@ -278,7 +312,7 @@
                 <div class="input-group indent">
                     <div class="input-button-group">
                         <input type="text" id="category-{category.id}" bind:value={category.value} placeholder="New category">
-                        <button type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
+                        <button class="remove-items" type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
                     </div>
                 </div>
             {/each}
@@ -295,7 +329,7 @@
                 <div class="input-group indent">
                     <div class="input-button-group">
                         <input type="text" id="tag-{tag.id}" bind:value={tag.value} placeholder="New tag">
-                        <button type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
+                        <button class="remove-items" type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
                     </div>
                 </div>
             {/each}
@@ -319,7 +353,7 @@
                             <input type="text" id="value-{field.id}" bind:value={field.value} placeholder="Value">
                         </div>
                     </div>
-                    <button type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
+                    <button class="remove-items" type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
                 </div>
             {/each}
             <div class="addfield-submit-button">
@@ -328,8 +362,11 @@
             </div>
         </div>
     </div>
-
 </form>
+
+
+
+
 
 <style>
     form {
@@ -345,8 +382,13 @@
         flex: 1;
     }
 
+    .upload-left {
+        display: flex;
+        flex-direction: column;
+    }
+
     .upload-right {
-        padding-top: 3.5rem;
+        margin: 1.5rem 0;
     }
 
     .input-group {
@@ -355,7 +397,8 @@
 
     .input-button-group {
         display: flex;
-        gap: 1rem;
+        align-items: center;
+        gap: 0.5rem;
     }
 
     .input-button-group input {
@@ -372,9 +415,11 @@
         gap: 0.5rem;
     }
 
+
+
     .feature-value-group {
         display: flex;
-        gap: 1rem;
+        gap: 0.5rem;
     }
 
     .input-label-group {
@@ -383,76 +428,103 @@
         flex: 1;
     }
 
-    .input {
-        display: none;
-    }
-
-    .browser-file {
-        margin-bottom: 1rem;
-    }
-
     .drag-drop-area {
+        position: relative;
         border: 2px dashed #ccc;
         text-align: center;
-        padding: 2rem;
+        padding: 1rem;
+        margin: 0.5rem 0;
         cursor: pointer;
         transition: border-color 0.3s, background-color 0.3s;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
     }
 
-    .drag-drop-area:hover {
+    .drag-drop-area:hover, .drag-over {
         border-color: #007bff;
         background-color: #e7f3ff;
     }
 
+    .file-input {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .image-preview-main {
+        height: 300px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .image-preview-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
     .image-preview {
         max-width: 100%;
-        margin-top: 1rem;
+        max-height: calc(100% - 30px);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
     }
 
     .image-preview img {
         max-width: 100%;
-        height: auto;
+        max-height: 100%;
+        object-fit: contain;
     }
-
 
     .image-preview-container p {
-        padding: 10px 0 0 0;
-    }
-
-    button {
-        margin-top: 0.5rem;
+        padding: 5px 0 0 0;
+        margin: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    /* Styles for additional images */
     .additional-images {
         margin-top: 2rem;
     }
 
     .additional-images-area {
-        min-height: 100px;
+        min-height: 150px;
+    }
+
+    .additional-images-container {
+        width: 100%;
         display: flex;
         justify-content: center;
         align-items: center;
     }
 
-    .additional-images-container {
-        display: flex;
-        justify-content: center;
-        max-width: 100%;
-    }
-
     .additional-image-previews {
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 0.5rem;
         justify-content: center;
+        align-items: center;
     }
 
     .additional-image-preview {
         position: relative;
-        width: 100px;
-        height: 100px;
+        width: 80px;
+        height: 80px;
         overflow: hidden;
     }
 
@@ -464,17 +536,18 @@
 
     .additional-image-preview button {
         position: absolute;
-        bottom: 5px;
-        right: 5px;
+        bottom: 2px;
+        right: 2px;
         background: rgba(0, 0, 0, 0.5);
         color: white;
         border: none;
         border-radius: 4px;
         padding: 2px 6px;
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: 10px;
+        line-height: 1;
         cursor: pointer;
         transition: background-color 0.3s ease;
+        margin: 0;
     }
 
     .additional-image-preview button:hover {
@@ -488,43 +561,119 @@
         margin: 2.5rem 0 1rem 0;
     }
 
-    .additional-field {
-        margin-top: 2rem;
+    .input-button-group button,
+    .additional-field button {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+        white-space: nowrap;
+        min-width: 60px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s, opacity 0.3s;
+        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
 
-
-  .addfield-submit-button {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
-
-  .addfield-submit-button button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-
-  .addfield-submit-button button:first-child {
-    background-color: #f0f0f0;
-    color: #333;
-  }
-
-  .addfield-submit-button button:last-child {
-    background-color: #007bff;
-    color: white;
-  }
-
-  /* Optional: Add some hover effects */
-  .addfield-submit-button button:hover {
-    opacity: 0.9;
-  }
+    .additional-field button {
+      width: 100%;
+    }
 
 
+    .input-button-group button:hover,
+    .additional-field button:hover {
+        opacity: 0.9;
+    }
 
+    .input-button-group button:last-child {
+        /* background-color: #4CAF50; */
+        color: black;
+    }
+
+    .input-button-group .indent button,
+    .additional-field button {
+        /* background-color: #f44336; */
+        color: black;
+    }
+
+    .input-button-group,
+    .additional-field .feature-value-group {
+        display: flex;
+        align-items: stretch;
+    }
+
+    .additional-field button {
+        align-self: flex-start;
+        margin-top: 0.25rem;
+    }
+
+    .addfield-submit-button {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    .addfield-submit-button button {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+        white-space: nowrap;
+        min-width: 60px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s, opacity 0.3s;
+    }
+
+    .addfield-submit-button button:first-child {
+        background-color: #f0f0f0;
+        color: #333;
+    }
+
+    .addfield-submit-button button:last-child {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .addfield-submit-button button:hover {
+        opacity: 0.9;
+    }
+
+    input[type="text"] {
+        height: 2rem;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+        border: 1px solid #ccc;
+    }
+
+    .remove-items {
+      background: #ccc;
+    }
+
+    /* Ensure responsiveness */
+    @media (max-width: 768px) {
+        .upload-container {
+            flex-direction: column;
+        }
+
+        .upload-left, .upload-right {
+            width: 100%;
+        }
+
+        .image-preview-main {
+            height: 200px; /* Reduce height on smaller screens */
+        }
+    }
 </style>
+
+
+
 

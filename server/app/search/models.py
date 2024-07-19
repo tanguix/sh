@@ -1,6 +1,7 @@
 
 from app.database import db
 from app.logger import logger
+import time
 
 from flask import current_app   # this line is for importing the config.py 
 
@@ -105,17 +106,48 @@ class Collection:
 
     @staticmethod
     def search_sample_tokens_by_user(user_name, user_role):
-        # make the collection select more flexible later
         query = {"modifiedBy": {"$elemMatch": {"name": user_name, "role": user_role}}}
-        documents = db.samples_list.find(query, {"sample_token": 1, "_id": 0})
-        # this make the result into a set, {} parentheses means a set, not "set" operator is needed
-        sample_tokens = {doc["sample_token"] for doc in documents}
-        return list(sample_tokens)
+        documents = db.samples_list.find(query, {"sample_token": 1, "timestamp": 1, "_id": 0})
+        
+        # Create a list of dictionaries containing sample_token and timestamp
+        sample_token_data = [
+            {"sample_token": doc["sample_token"], "timestamp": doc.get("timestamp", 0)}
+            for doc in documents
+        ]
+        
+        # Sort the list based on timestamp in descending order (newest first)
+        sorted_sample_token_data = sorted(sample_token_data, key=lambda x: x["timestamp"], reverse=False)
+        
+        # Extract only the sample_tokens from the sorted list
+        sorted_sample_tokens = [item["sample_token"] for item in sorted_sample_token_data]
+        
+        return sorted_sample_tokens
+
+
+
 
 
     @staticmethod
     def search_workflow_tokens_by_user(user_name, user_role):
         query = {"owner": [user_name, user_role]}
-        documents = db.workflows.find(query, {"workflow_id": 1, "_id": 0})
-        workflow_tokens = [doc["workflow_id"] for doc in documents]
-        return workflow_tokens
+        documents = db.workflows.find(query, {"workflow_id": 1, "timestamp": 1, "_id": 0})
+        
+        # Create a list of dictionaries containing workflow_id and timestamp
+        workflow_token_data = [
+            {
+                "workflow_id": doc["workflow_id"], 
+                "timestamp": doc.get("timestamp", int(time.time() * 1000))  # Use current time if no timestamp
+            }
+            for doc in documents
+        ]
+        
+        # Sort the list based on timestamp in descending order (newest first)
+        sorted_workflow_token_data = sorted(workflow_token_data, key=lambda x: x["timestamp"], reverse=False)
+        
+        # Extract only the workflow_ids from the sorted list
+        sorted_workflow_tokens = [item["workflow_id"] for item in sorted_workflow_token_data]
+        
+        return sorted_workflow_tokens
+
+
+

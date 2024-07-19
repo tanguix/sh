@@ -212,6 +212,9 @@
     console.log(`Updated result at index ${index}:`, results[index]);
   }
 
+
+
+
   async function pushChangesToBackend() {
     try {
       if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results)) {
@@ -224,13 +227,18 @@
           });
         });
 
+        // Add a timestamp to each result
+        const resultsWithTimestamp = results.map(result => ({
+          ...result,
+          timestamp: Date.now()
+        }));
 
-        console.log("final: ", results)
+        console.log("final: ", resultsWithTimestamp);
 
         const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(results),
+          body: JSON.stringify(resultsWithTimestamp),
         });
 
         if (!response.ok) throw new Error('Failed to upload sample data');
@@ -245,11 +253,9 @@
             sample_token: sampling_response.sample_token
           }));
 
-
           // Handle kept IDs if necessary
           if (sampling_response.kept_ids && sampling_response.kept_ids.length > 0) {
             console.log("Some original items were kept:", sampling_response.kept_ids);
-            // You might want to add logic here to handle kept items in the UI
           }
 
           deepCopiedResults = JSON.parse(JSON.stringify(results));
@@ -262,9 +268,12 @@
       }
     } catch (error) {
       console.error("Error pushing changes to backend:", error.message);
-      // Consider adding user-friendly error handling here
     }
   }
+
+
+
+
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {

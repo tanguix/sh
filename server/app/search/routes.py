@@ -97,25 +97,22 @@ def get_image(filename):
 
 @search_bp.route('/api/get_sample_tokens', methods=['POST'])
 def get_sample_tokens():
-
-    # temp: direct collection setup in the method
-
     try:
         data = request.json
         user_name = data.get('name')
         user_role = data.get('role')
-
         if not user_name or not user_role:
             return jsonify({"error": "Invalid user data"}), 400
-
-        sample_tokens = Collection.search_sample_tokens_by_user(user_name, user_role)
-        print(sample_tokens)
-
-        # current user_name is simple assigned, make sure to modify it when it gets complex
-        return jsonify({"sample_tokens": sample_tokens, "username": user_name}), 200
+        
+        sorted_sample_tokens = Collection.search_sample_tokens_by_user(user_name, user_role)
+        print(sorted_sample_tokens)
+        
+        return jsonify({"sample_tokens": sorted_sample_tokens, "username": user_name}), 200
     except Exception as e:
         logger.error(f"Error fetching sample tokens: {e}")
         return jsonify({"error": str(e)}), 500
+
+
 
 
 

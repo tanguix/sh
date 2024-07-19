@@ -43,6 +43,7 @@ export interface Workflow {
   edges: Edge[];
   status: 'created' | 'saved' | 'unsaved';
   owner?: [string, string];
+  timestamp: number;
 }
 
 

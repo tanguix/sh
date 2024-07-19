@@ -62,7 +62,7 @@
       if (!response.ok) throw new Error('Failed to fetch sample tokens');
 
       const result = await response.json();
-      fetchedSampleTokens.set(result.sample_tokens.reverse());
+      fetchedSampleTokens.set(result.sample_tokens);
       fetched.set(true);
       who.set(result.username === user.name ? 'you' : result.username);
     } catch (error) {
@@ -87,7 +87,7 @@
       if (!response.ok) throw new Error('Failed to fetch workflow tokens');
 
       const result = await response.json();
-      fetchedWorkflowTokens.set(result.workflow_tokens.reverse());
+      fetchedWorkflowTokens.set(result.workflow_tokens);
       workflowFetched.set(true);
       workflowWho.set(result.username === user.name ? 'you' : result.username);
     } catch (error) {
@@ -95,6 +95,8 @@
     }
   }
 
+
+  // here you set the number of display tokens limit
   const latestTokens = derived(fetchedSampleTokens, $tokens => $tokens.slice(0, 9));
   const hasMoreTokens = derived(fetchedSampleTokens, $tokens => $tokens.length > 9);
 

@@ -150,7 +150,8 @@
       nodes: newNodes,
       edges: newEdges,
       status: 'created',
-      owner: [user.name, user.role]  // Include owner information
+      owner: [user.name, user.role],  // Include owner information
+      timestamp: Date.now(),
     };
 
     workflows = [...workflows, newWorkflow];
@@ -164,7 +165,8 @@
         nodes: newWorkflow.nodes, 
         edges: newWorkflow.edges,
         status: newWorkflow.status,
-        owner: [user.name, user.role]  // Include owner information in the emitted change
+        owner: [user.name, user.role],  // Include owner information in the emitted change
+        timestamp: newWorkflow.timestamp
       } 
     });
   }
@@ -549,6 +551,7 @@
         }))
       }));
 
+
       if (!workflows.some(w => w.workflow_id === workflow.workflow_id)) {
         workflows = [...workflows, {
           workflow_id: workflow.workflow_id,
@@ -557,8 +560,9 @@
           nodes: sortNodesByEdges(processedNodes, workflow.edges),
           edges: workflow.edges,
           status: workflow.status || 'saved',
-          owner: workflow.owner || []  // Include owner information
-        }];
+          owner: workflow.owner || [],
+          timestamp: workflow.timestamp || Date.now()  // Add this line
+        }].sort((a, b) => a.timestamp - b.timestamp);
       } else if (!id) {
         alert('This workflow is already displayed.');
       }
@@ -722,8 +726,9 @@
                 <div class="workflow-title-container">
                   <h2>{workflow.name}</h2>
                   {#if workflow.owner && workflow.owner[0]}
-                    <span class="owner-info">( by {workflow.owner[0]} )</span>
+                    <span class="owner-info">(&nbsp;{workflow.owner[0]}:</span>
                   {/if}
+                  <span class="timestamp-info">{new Date(workflow.timestamp).toLocaleString()}&nbsp;)</span>
                 </div>
                 <button class="toggle-lock-button" on:click={() => toggleLockStatus(workflow.workflow_id)}>
                   {workflow.is_locked ? 'Release' : 'Lock'}
@@ -875,6 +880,13 @@
     vertical-align: middle; /* Aligns with the middle of the text */
   }
 
+
+  .timestamp-info {
+    font-family: "Ubuntu";
+    font-size: 0.8rem;
+    color: #666;
+    margin-left: 10px;
+  }
 
 
   .workflow-container {

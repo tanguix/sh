@@ -32,6 +32,14 @@
   }
 
 
+  // whether to show workflow, let user decide 
+  let showWorkflow = false;
+
+  function toggleWorkflow() {
+    showWorkflow = !showWorkflow;
+  }
+
+
   // Helper function to capitalize first letter
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
@@ -112,6 +120,7 @@
           {#if userRole === 'ADMIN' || userRole === 'DATA'}
               <hr>
               <h2>Data Upload</h2>
+              <br>
               <DataUpload />
           {/if}
           {#if ['ADMIN', 'DATA', 'SALE'].includes(userRole)}
@@ -127,7 +136,15 @@
 
               <hr>
               <br>
-              <WorkFlow user={$page.data.user}/>
+
+              <button on:click={toggleWorkflow}>
+                {showWorkflow ? 'Hide Workflow' : 'Show Workflow'}
+              </button>
+
+              {#if showWorkflow}
+                <WorkFlow user={$page.data.user}/>
+              {/if}
+
               <hr>
               <br>
           {/if}

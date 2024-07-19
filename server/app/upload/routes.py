@@ -49,7 +49,10 @@ def upload_sample():
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
         
-        sample_batch = ItemBatch(data)
+        # Sort the data by timestamp before creating the ItemBatch
+        sorted_data = sorted(data, key=lambda x: x.get('timestamp', 0))
+        
+        sample_batch = ItemBatch(sorted_data)
         result = sample_batch.save_items()
         
         response = {
@@ -64,10 +67,6 @@ def upload_sample():
     except Exception as e:
         logger.exception("An error occurred while uploading samples")
         return jsonify({"error": str(e)}), 500
-
-
-
-
 
 
 # --------------------------------------------- collective operation ----------------------------------------------
@@ -87,7 +86,6 @@ def commit_changes():
         status_code = 400
         status = "unsaved"
 
-        # Check for the specific multiple workflows error
         if any(result.get("type") == "multiple_workflows" for result in results):
             error_message = "Cannot process changes for multiple workflows in a single request"
             status_code = 422  # Unprocessable Entity
@@ -105,16 +103,6 @@ def commit_changes():
         }), 200
 
 
-
-@upload_bp.route('/api/fetch_locked_workflow', methods=['GET'])
-def get_locked_workflows():
-    try:
-        locked_workflows = list(Workflow.get_locked_workflows())
-        locked_workflow_ids = [w['workflow_id'] for w in locked_workflows]
-        return jsonify(locked_workflow_ids), 200
-    except Exception as e:
-        logger.error(f"Error fetching locked workflows: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
 
 
 
@@ -139,6 +127,21 @@ def get_workflow():
             return jsonify({"error": "Workflow not found"}), 404
     except Exception as e:
         logger.error(f"Error fetching workflow {workflow_id}: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+
+
+
+
+@upload_bp.route('/api/fetch_locked_workflow', methods=['GET'])
+def get_locked_workflows():
+    try:
+        locked_workflows = list(Workflow.get_locked_workflows())
+        locked_workflow_ids = [w['workflow_id'] for w in locked_workflows]
+        return jsonify(locked_workflow_ids), 200
+    except Exception as e:
+        logger.error(f"Error fetching locked workflows: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 

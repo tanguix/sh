@@ -3,11 +3,13 @@
 import uuid
 from app.database import db
 from bson import ObjectId
+from typing import Dict, Any
 from werkzeug.utils import secure_filename
 import os
 from app.logger import logger
 from typing import List
 import json
+import time
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
@@ -89,9 +91,13 @@ class Item:
 
 
 class ItemBatch:
+
     def __init__(self, items):
         self.items = items
         self.main_sample_token = self._determine_main_sample_token()
+        self.timestamp = int(time.time() * 1000)  # Current time in milliseconds
+
+
 
     def _determine_main_sample_token(self):
         # Use the first sample_token found in the items, or generate a new one if none exists
@@ -102,6 +108,8 @@ class ItemBatch:
         new_token = str(uuid.uuid4())
         logger.debug(f"Generated new main sample_token: {new_token}")
         return new_token
+
+
 
     def save_items(self):
         try:
@@ -151,12 +159,18 @@ class ItemBatch:
             logger.exception("An error occurred in save_items method")
             raise
 
+
     def _process_item(self, item):
-        processed_item = {"sample_token": self.main_sample_token}
+        processed_item = {
+            "sample_token": self.main_sample_token,
+            "timestamp": self.timestamp
+        }
         for key, value in item.items():
-            if key != 'sample_token':
+            if key not in ['sample_token', 'timestamp']:
                 processed_item[key] = value
         return processed_item
+
+
 
     def _find_existing_item(self, item):
         # Check for existing item with same reference_no
@@ -177,11 +191,9 @@ class ItemBatch:
 
 
 
-from bson import ObjectId
-from typing import Dict, Any
 
 class Workflow:
-    def __init__(self, name, workflow_id, is_locked, status, owner):
+    def __init__(self, name, workflow_id, is_locked, status, owner, timestamp=None):
         self._id = ObjectId()
         self.workflow_id = workflow_id
         self.name = name
@@ -189,7 +201,8 @@ class Workflow:
         self.edges = []
         self.status = 'saved'
         self.is_locked = is_locked
-        self.owner = owner  # owner of the workflow
+        self.owner = owner
+        self.timestamp = timestamp or int(time.time() * 1000)  # Use provided timestamp or current time
 
     def save(self):
         data = {
@@ -200,7 +213,8 @@ class Workflow:
             "edges": self.edges,
             "status": self.status,
             "is_locked": self.is_locked,
-            "owner": self.owner  # Include owner in the saved data
+            "owner": self.owner,
+            "timestamp": self.timestamp
         }
         return db.workflows.insert_one(data)
 
@@ -292,6 +306,7 @@ class Workflow:
 
             workflow['is_locked'] = workflow.get('is_locked', False)
             workflow['owner'] = workflow.get('owner', [])  # Include owner in the returned data
+            workflow['timestamp'] = workflow.get('timestamp', int(time.time() * 1000))
             
             return workflow
         except Exception as e:
@@ -572,7 +587,6 @@ class HandleWorkflow:
 
 
 
-
     @staticmethod
     def process_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
@@ -668,7 +682,8 @@ class HandleWorkflow:
             workflow_id=data['workflow_id'], 
             is_locked=data.get('is_locked', False), 
             status=data.get('status', 'created'),
-            owner=data.get('owner', [])  # Include owner data
+            owner=data.get('owner', []),  # Include owner data
+            timestamp=data.get('timestamp'),  # Use provided timestamp if available
         )
         workflow.edges = data.get('edges', [])
         
@@ -706,7 +721,8 @@ class HandleWorkflow:
             "edges": workflow.edges,
             "status": workflow.status,
             "is_locked": workflow.is_locked,
-            "owner": workflow.owner  # Include owner in the return data
+            "owner": workflow.owner,  # Include owner in the return data
+            "timestamp": workflow.timestamp,
         }
 
 

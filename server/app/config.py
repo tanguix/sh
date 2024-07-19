@@ -45,7 +45,6 @@ class Config:
     # SECRET_KEY = 'your_secret_key'
 
 
-
     # Dynamically set the backend URL
     LOCAL_IP = get_local_ip()
     PORT = 5000                                         # default flask port
