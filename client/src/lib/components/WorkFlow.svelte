@@ -816,7 +816,7 @@
                           <input 
                             type="text" 
                             bind:value={newSectionLabel} 
-                            placeholder="Enter section label"
+                            placeholder="Section Label"
                             required
                           />
                           <button type="submit" class="confirm-section-button" disabled={workflow.is_locked}>Add</button>

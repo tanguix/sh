@@ -173,14 +173,13 @@
 </script>
 
 <div class="search-container">
-    <h2>Search</h2>
 
     <div class="mode-switch">
         <label class="switch">
             <input type="checkbox" checked={isSamplingMode} on:change={toggleMode}>
             <span class="slider round"></span>
         </label>
-        <span class="mode-label">{isSamplingMode ? 'Sampling' : 'Normal'} Mode</span>
+        <h3><span class="mode-label">&nbsp;{isSamplingMode ? 'Sampling' : 'Normal'} Mode</span></h3>
     </div>
 
     <div class="search-controls">
@@ -220,6 +219,7 @@
                 <button on:click={() => toggleAddRemove(true)} class="sampling-button" class:active={isAddOperation}>Add</button>
                 <button on:click={() => toggleAddRemove(false)} class="sampling-button" class:active={!isAddOperation}>Remove</button>
             {:else}
+
                 <button on:click={search}>Search</button>
             {/if}
         </div>
@@ -239,10 +239,6 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    h2 {
-        color: #333;
-        margin-bottom: 20px;
-    }
 
     .search-controls {
         display: flex;
