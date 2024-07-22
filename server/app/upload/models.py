@@ -118,7 +118,6 @@ class Item:
 
 
 
-
 class ItemBatch:
     def __init__(self, items):
         self.items = items
@@ -126,94 +125,97 @@ class ItemBatch:
         self.timestamp = int(time.time() * 1000)  # Current time in milliseconds
 
     def _determine_main_sample_token(self):
-        # Use the first sample_token found in the items, or generate a new one if none exists
         for item in self.items:
             if 'sample_token' in item and item['sample_token']:
-                logger.debug(f"Using existing sample_token as main: {item['sample_token']}")
                 return item['sample_token']
-        new_token = str(uuid.uuid4())
-        logger.debug(f"Generated new main sample_token: {new_token}")
-        return new_token
-
-    def _item_has_changes(self, existing_item, new_item):
-        # Compare all fields except '_id', 'sample_token', and 'timestamp'
-        keys_to_compare = set(existing_item.keys()) & set(new_item.keys()) - {'_id', 'sample_token', 'timestamp'}
-        return any(existing_item[key] != new_item[key] for key in keys_to_compare)
-
-
+        return str(uuid.uuid4())
 
     def save_items(self):
         try:
             items_to_update = []
+            items_to_insert = []
+            processed_reference_nos = set()
 
             for item in self.items:
-                print(f"Processing item in save_items: {json_serialize(item)}")
                 existing_item = self._find_existing_item(item)
                 
                 if existing_item:
-                    # Prepare update operation
-                    update_operation = {'$set': {}, '$unset': {}}
-                    
-                    # Find keys to remove (keys in existing_item but not in item)
-                    keys_to_remove = set(existing_item.keys()) - set(item.keys())
-                    for key in keys_to_remove:
-                        if key not in ['_id', 'sample_token', 'timestamp']:
-                            update_operation['$unset'][key] = ""
-
-                    for key, value in item.items():
-                        if key not in ['_id', 'sample_token', 'timestamp']:
-                            if value is not None:
-                                if key in ['categories', 'tags']:
-                                    # Ensure the value is a list
-                                    update_operation['$set'][key] = value if isinstance(value, list) else [value]
-                                else:
-                                    update_operation['$set'][key] = value
-                            else:
-                                update_operation['$unset'][key] = ""
-                    
-                    # Always set the sample_token and timestamp
-                    update_operation['$set']['sample_token'] = self.main_sample_token
-                    update_operation['$set']['timestamp'] = self.timestamp
-
-                    items_to_update.append((existing_item['_id'], update_operation))
-                    # checking lines
-                    # print(f"Updating item with ID: {existing_item['_id']}, Update operation: {json_serialize(update_operation)}")
+                    if existing_item['sample_token'] != self.main_sample_token:
+                        # Create a new copy for the merged set
+                        new_item = self._process_item(item)
+                        items_to_insert.append(new_item)
+                    else:
+                        # Update existing item in the main set
+                        update_operation = self._prepare_update_operation(item, existing_item)
+                        items_to_update.append((existing_item['_id'], update_operation))
                 else:
                     # New item to insert
                     new_item = self._process_item(item)
-                    # Ensure categories and tags are lists
-                    for key in ['categories', 'tags']:
-                        if key in new_item and not isinstance(new_item[key], list):
-                            new_item[key] = [new_item[key]]
-                    result = db.samples_list.insert_one(new_item)
-                    print(f"Inserted new item with ID: {result.inserted_id}, Item: {json_serialize(new_item)}")
+                    items_to_insert.append(new_item)
+                
+                processed_reference_nos.add(item.get('reference_no'))
 
             # Perform bulk update
-            updated_ids = []
-            if items_to_update:
-                bulk_operations = [
-                    UpdateOne({'_id': item_id}, update_operation)
-                    for item_id, update_operation in items_to_update
-                ]
-                
-                if bulk_operations:
-                    update_result = db.samples_list.bulk_write(bulk_operations)
-                    updated_ids = [str(item_id) for item_id, _ in items_to_update]
-                    print(f"Updated {update_result.modified_count} existing items. Updated IDs: {json_serialize(updated_ids)}")
+            updated_ids = self._perform_bulk_update(items_to_update)
 
-            class Result:
-                def __init__(self, inserted_ids, modified_ids):
-                    self.inserted_ids = inserted_ids or []
-                    self.modified_ids = modified_ids
+            # Insert new items
+            inserted_ids = self._insert_new_items(items_to_insert)
 
-            return Result([], updated_ids)
+            # Remove items from main set that are no longer present
+            self._remove_obsolete_items(processed_reference_nos)
+
+            return self._create_result(inserted_ids, updated_ids)
+
         except Exception as e:
             print(f"Error in save_items: {str(e)}")
             raise
 
+    def _prepare_update_operation(self, new_item, existing_item):
+        update_operation = {'$set': {}, '$unset': {}}
+        
+        for key, value in new_item.items():
+            if key not in ['_id', 'sample_token', 'timestamp']:
+                if value is not None:
+                    if key in ['categories', 'tags']:
+                        update_operation['$set'][key] = value if isinstance(value, list) else [value]
+                    else:
+                        update_operation['$set'][key] = value
+                else:
+                    update_operation['$unset'][key] = ""
+        
+        # Always update the timestamp
+        update_operation['$set']['timestamp'] = self.timestamp
 
+        return update_operation
 
+    def _perform_bulk_update(self, items_to_update):
+        updated_ids = []
+        if items_to_update:
+            bulk_operations = [
+                UpdateOne({'_id': item_id}, update_operation)
+                for item_id, update_operation in items_to_update
+            ]
+            
+            if bulk_operations:
+                update_result = db.samples_list.bulk_write(bulk_operations)
+                updated_ids = [str(item_id) for item_id, _ in items_to_update]
+                print(f"Updated {update_result.modified_count} existing items. Updated IDs: {json_serialize(updated_ids)}")
+        return updated_ids
 
+    def _insert_new_items(self, items_to_insert):
+        inserted_ids = []
+        if items_to_insert:
+            insert_result = db.samples_list.insert_many(items_to_insert)
+            inserted_ids = [str(id) for id in insert_result.inserted_ids]
+            print(f"Inserted {len(inserted_ids)} new items. Inserted IDs: {json_serialize(inserted_ids)}")
+        return inserted_ids
+
+    def _remove_obsolete_items(self, processed_reference_nos):
+        result = db.samples_list.delete_many({
+            'sample_token': self.main_sample_token,
+            'reference_no': {'$nin': list(processed_reference_nos)}
+        })
+        print(f"Removed {result.deleted_count} obsolete items from the main set.")
 
     def _process_item(self, item):
         processed_item = {
@@ -221,18 +223,28 @@ class ItemBatch:
             "timestamp": self.timestamp
         }
         for key, value in item.items():
-            if key not in ['sample_token', 'timestamp']:
+            if key not in ['_id', 'sample_token', 'timestamp']:
                 processed_item[key] = value
         return processed_item
 
     def _find_existing_item(self, item):
-        # Check for existing item with same reference_no
         if 'reference_no' in item:
-            existing = db.samples_list.find_one({'reference_no': item['reference_no']})
+            existing = db.samples_list.find_one({
+                'reference_no': item['reference_no'],
+                'sample_token': self.main_sample_token
+            })
             if existing:
-                logger.debug(f"Found existing item with reference_no: {item['reference_no']}")
+                print(f"Found existing item with reference_no: {item['reference_no']} in main set")
                 return existing
         return None
+
+    def _create_result(self, inserted_ids, updated_ids):
+        class Result:
+            def __init__(self, inserted_ids, modified_ids):
+                self.inserted_ids = inserted_ids or []
+                self.modified_ids = modified_ids
+
+        return Result(inserted_ids, updated_ids)
 
 
 

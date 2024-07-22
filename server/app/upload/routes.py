@@ -53,13 +53,10 @@ def upload_data():
 
 
  
-
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:
         data = request.json
-        # checking lines
-        # print(f"Received data in upload_sample: {json_serialize(data)}")
         
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
@@ -69,16 +66,16 @@ def upload_sample():
         
         response = {
             "message": "Samples processed successfully", 
-            "inserted_ids": [str(id) for id in result.inserted_ids],
-            "updated_ids": [str(id) for id in result.modified_ids],
+            "inserted_ids": result.inserted_ids,
+            "updated_ids": result.modified_ids,
             "sample_token": sample_batch.main_sample_token
         }
-        # checking lines
-        # print(f"Response from upload_sample: {json_serialize(response)}")
         return jsonify(response), 201
     except Exception as e:
         print(f"Error in upload_sample: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
 
 
 
