@@ -25,6 +25,7 @@
       To 至
   `;
 
+
   const displayedForms = writable({});
   let selectedKeys = {};
   let selectedDates = writable({});
@@ -33,14 +34,15 @@
   let unsavedChangesByIndex = writable({});
   let formActionClicked = writable({});
 
+
   $: isEditingEnabled = searchOption === 'sampling';
 
-  function filterDisplayedKeys(result) {
+
+  function filterDisplayedKeys(results) {
     return Object.fromEntries(
-      Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
+      Object.entries(results).filter(([key]) => !keysToExclude.includes(key))
     );
   }
-
 
 
 
@@ -56,8 +58,6 @@
     }
     return value;
   }
-
-
 
 
 

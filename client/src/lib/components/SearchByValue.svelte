@@ -170,6 +170,9 @@
         isAddOperation = add;
         search();
     }
+
+
+
 </script>
 
 <div class="search-container">

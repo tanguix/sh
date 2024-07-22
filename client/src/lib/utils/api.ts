@@ -48,7 +48,7 @@ export function constructUrl(endpoint: string, params: Record<string, string>): 
     const url = new URL(endpoint);
     Object.entries(params).forEach(([key, value]) => {
         // Use encodeURIComponent for both key and value
-        url.searchParams.append(encodeURIComponent(key), encodeURIComponent(value));
+        url.searchParams.append(key, value);
     });
     // console.log("URL as string:", url.toString());
     return url.toString();

@@ -49,59 +49,59 @@ class Collection:
         return None
 
 
+
     @staticmethod
-    # Pass in collection name, based key you want to make the search on, your search value
     def search_by_key_value(collection_name, key, value):
-        # Check
         if collection_name not in db.list_collection_names():
             return None
 
-        # Return all keys from selected collections, later use scheme to do this as well
         sample_document = db[collection_name].find_one()
         if not sample_document:
             return None
 
-        # Check if keys is in the scheme key list, if not check nested keys
-        # Create query based those keys and searched value, e.g. {"tag": "white"} or {"additional_fields.weight": "light"}
-        query = {key: value} if key in sample_document else {f"additional_fields.{key}": value}
+        # Split the value into an array if it contains commas
+        search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
 
-        # Find all matched document with constructed query structure {key: value}
+        # Determine if the key is in the main document or in additional_fields
+        if key in sample_document:
+            field_path = key
+        else:
+            field_path = f"additional_fields.{key}"
+
+        # Create a query based on whether the field is an array or not
+        if isinstance(sample_document.get(key, sample_document.get('additional_fields', {}).get(key)), list):
+            # If the field is an array, use $all for multiple values or $in for a single value
+            query = {field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}}
+        else:
+            # If the field is not an array, use exact match
+            query = {field_path: value}
+
         results = list(db[collection_name].find(query))
-        # Result list
         processed_results = []
 
-        # Construct new document to send back, because some keys you don't want to send back
         for result in results:
             processed_result = {}
             for k, v in result.items():
-                # Exclude keys in the black list
                 if k in exclude_keys and k != "image_path":
                     continue
                 if k == "additional_fields":
-                    processed_result.update(v)  # Include additional fields directly
-
-                # Construct the path url for frontend <img> to open
+                    processed_result.update(v)
                 elif k == 'image_path':
-
-                    # Remove the extra 'images/' from the beginning of the path
                     image_path = v[7:] if v.startswith('images/') else v
-                    # image_url = f"http://localhost:5000/search/api/images/{image_path}"
-                    #TODO: unify this routes, fuck, it tortures me to death
                     image_url = f"{backend_local_url}/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
                     logger.info(f"Image URL constructed: {image_url}")
-
-                # Normal handling {key: value}
                 else:
                     processed_result[k] = v
 
-            # Append result
             processed_results.append(processed_result)
-
-
 
         logger.info(f"Processed results: {processed_results}")
         return processed_results
+
+
+
+
 
 
     @staticmethod

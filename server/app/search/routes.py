@@ -47,7 +47,10 @@ def find_key():
         return jsonify({"error": "Internal server error"}), 500
 
 
-# search document based on key-value pair
+
+
+
+
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
@@ -58,16 +61,20 @@ def searched_result():
         return jsonify({"error": "Collection, key, and value must be provided"}), 400
 
     try:
-        # method is handled in the class
+        # Use the consolidated search method
         results = Collection.search_by_key_value(collection_name, key, value)
         if results:
-            # print(results)
             return jsonify(results), 200
         else:
             return jsonify({"error": "No matching documents found"}), 404
     except Exception as e:
         logger.error(f"Error searching collection {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+
+
+
 
 
 # because image path is constructed during search_by_key_value() method in the models.py 
