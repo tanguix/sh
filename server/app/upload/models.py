@@ -130,6 +130,9 @@ class ItemBatch:
                 return item['sample_token']
         return str(uuid.uuid4())
 
+
+
+
     def save_items(self):
         try:
             items_to_update = []
@@ -147,7 +150,8 @@ class ItemBatch:
                     else:
                         # Update existing item in the main set
                         update_operation = self._prepare_update_operation(item, existing_item)
-                        items_to_update.append((existing_item['_id'], update_operation))
+                        if update_operation:  # Only add if there are changes
+                            items_to_update.append((existing_item['_id'], update_operation))
                 else:
                     # New item to insert
                     new_item = self._process_item(item)
@@ -170,23 +174,43 @@ class ItemBatch:
             print(f"Error in save_items: {str(e)}")
             raise
 
+
+
+
+
     def _prepare_update_operation(self, new_item, existing_item):
         update_operation = {'$set': {}, '$unset': {}}
         
+        # Handle removals (fields set to undefined in new_item)
+        for key in existing_item:
+            if key not in new_item and key not in ['_id', 'sample_token', 'timestamp']:
+                update_operation['$unset'][key] = ""
+
+        # Handle updates and additions
         for key, value in new_item.items():
             if key not in ['_id', 'sample_token', 'timestamp']:
-                if value is not None:
+                if value is None:  # This handles the case where a field is explicitly set to null/None for removal
+                    update_operation['$unset'][key] = ""
+                else:
                     if key in ['categories', 'tags']:
                         update_operation['$set'][key] = value if isinstance(value, list) else [value]
                     else:
                         update_operation['$set'][key] = value
-                else:
-                    update_operation['$unset'][key] = ""
         
         # Always update the timestamp
         update_operation['$set']['timestamp'] = self.timestamp
 
+        # Remove empty operations
+        if not update_operation['$set']:
+            del update_operation['$set']
+        if not update_operation['$unset']:
+            del update_operation['$unset']
+
         return update_operation
+
+
+
+
 
     def _perform_bulk_update(self, items_to_update):
         updated_ids = []

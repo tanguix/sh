@@ -1,6 +1,5 @@
 
 
-
 <script lang="ts">
   import { BASE_URL, API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
@@ -13,10 +12,8 @@
   export let deepCopiedResults: any[] = [];
   export let searchOption: string = '';
 
-  // track the length of the results variable
   export let resultsChanged = false;
 
-  // for property
   export let keysToExclude: string[] = ['image_url', 'file'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
@@ -28,7 +25,6 @@
       To 至
   `;
 
-
   const displayedForms = writable({});
   let selectedKeys = {};
   let selectedDates = writable({});
@@ -37,18 +33,13 @@
   let unsavedChangesByIndex = writable({});
   let formActionClicked = writable({});
 
-
   $: isEditingEnabled = searchOption === 'sampling';
-
 
   function filterDisplayedKeys(results) {
     return Object.fromEntries(
       Object.entries(results).filter(([key]) => !keysToExclude.includes(key))
     );
   }
-
-
-
 
   function formatPropertyValue(key: string, value: any) {
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
@@ -62,10 +53,6 @@
     return value;
   }
 
-
-
-  
-
   async function generatePDFWrapper() {
     await generatePDF(results, content);
   }
@@ -75,7 +62,7 @@
       if (!forms[index]) {
         forms[index] = [];
       }
-      forms[index].push({ key: '', value: '', isRemove: false });
+      forms[index].push({ key: '', value: '', isRemove: false, rawValue: '' });
       return forms;
     });
     setUnsavedChanges(index, true);
@@ -143,30 +130,28 @@
     return $displayedForms[index] && $displayedForms[index].length > 0;
   }
 
-
-
   function updateForm(index: number, entryIndex: number, field: string, value: string) {
     displayedForms.update(forms => {
       if (forms[index] && forms[index][entryIndex]) {
-        if (field === 'value' && forms[index][entryIndex].isDate) {
-          const dateValue = new Date(value).toISOString().split('T')[0];
-          forms[index][entryIndex][field] = dateValue;
-        } else if (field === 'value' && (forms[index][entryIndex].key === 'categories' || forms[index][entryIndex].key === 'tags')) {
-          // Split the input by commas and trim whitespace
-          const arrayValue = value.split(',').map(item => item.trim()).filter(item => item !== '');
-          forms[index][entryIndex][field] = arrayValue;
-        } else {
+        if (field === 'key') {
           forms[index][entryIndex][field] = value;
+          forms[index][entryIndex].value = '';
+          forms[index][entryIndex].rawValue = '';
+        } else if (field === 'value') {
+          forms[index][entryIndex].rawValue = value;
+          if (forms[index][entryIndex].isDate) {
+            forms[index][entryIndex].value = new Date(value).toISOString().split('T')[0];
+          } else if (forms[index][entryIndex].key === 'tags' || forms[index][entryIndex].key === 'categories') {
+            forms[index][entryIndex].value = value.split(',').map(item => item.trim()).filter(item => item !== '');
+          } else {
+            forms[index][entryIndex].value = value;
+          }
         }
       }
       return forms;
     });
     setUnsavedChanges(index, true);
   }
-
-
-
-
 
   function toggleDateInput(index: number, entryIndex: number) {
     displayedForms.update(forms => {
@@ -175,18 +160,17 @@
         if (forms[index][entryIndex].isDate) {
           forms[index][entryIndex].key = 'delivery_date';
           forms[index][entryIndex].value = '';
+          forms[index][entryIndex].rawValue = '';
         } else {
           forms[index][entryIndex].key = '';
           forms[index][entryIndex].value = '';
+          forms[index][entryIndex].rawValue = '';
         }
       }
       return forms;
     });
     setUnsavedChanges(index, true);
   }
-
-
-
 
   function updateResults(index: number) {
     const user = get(page).data.user;
@@ -198,31 +182,24 @@
     const formData = $displayedForms[index] || [];
     const updates = formData.reduce((acc, curr) => {
       if (curr.key && !curr.isRemove) {
-        if (curr.key === 'categories' || curr.key === 'tags') {
-          // Ensure the value is an array
-          acc[curr.key] = Array.isArray(curr.value) ? curr.value : [curr.value];
+        if (curr.key === 'tags' || curr.key === 'categories') {
+          acc[curr.key] = curr.value; // value is already an array for tags and categories
         } else {
           acc[curr.key] = curr.value;
         }
       } else if (curr.key && curr.isRemove) {
-        acc[curr.key] = undefined;  // Use undefined to indicate removal
+        acc[curr.key] = undefined;  // Set to undefined for removal
       }
       return acc;
     }, {});
 
-
     results[index] = { ...results[index], ...updates };
-
-
     
-    // Explicitly remove keys set to null
     Object.keys(results[index]).forEach(key => {
       if (results[index][key] === null) {
         delete results[index][key];
       }
     });
-
-
 
     if (results[index].modifiedBy) {
       results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
@@ -245,15 +222,11 @@
     console.log(`Updated result at index ${index}:`, results[index]);
   }
 
-
-
-
   async function pushChangesToBackend() {
     try {
       if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || resultsChanged) {
         console.log("Changes detected, pushing to backend...");
         
-        // Add a timestamp to each result
         const resultsWithTimestamp = results.map(result => ({
           ...result,
           timestamp: Date.now()
@@ -272,14 +245,12 @@
         const sampling_response = await response.json();
         console.log("Backend response:", sampling_response);
 
-        // Update the results with the new sample_token from the backend
         if (sampling_response.sample_token) {
           results = results.map(result => ({
             ...result,
             sample_token: sampling_response.sample_token
           }));
 
-          // Handle kept IDs if necessary
           if (sampling_response.kept_ids && sampling_response.kept_ids.length > 0) {
             console.log("Some original items were kept:", sampling_response.kept_ids);
           }
@@ -298,36 +269,23 @@
     }
   }
 
-
-
-
-
-
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
       changes[index] = value;
       return changes;
     });
-    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean) || hasLengthChanged);
+    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
   }
-
-
-
-
 
   $: canRemove = results.map((result, index) =>
     Object.keys(filterDisplayedKeys(result)).length >
     ($removeClickCounts[index] || 0)
   );
 
-
-
-
-
   function handleImageError(e: Event) {
     const target = e.target as HTMLImageElement;
     console.error(`Error loading image: ${target.src}`);
-    target.src = '/path/to/fallback-image.jpg'; // Replace with your fallback image path
+    target.src = '/path/to/fallback-image.jpg';
     target.alt = 'Image not available';
   }
 </script>
@@ -335,7 +293,6 @@
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
-      <!-- <p>{result.image_url}</p> -->
       <div class="result-card">
         <h3>{result.sample_token || 'No Sample Token'}</h3>
         <div class="result-content-wrapper">
@@ -389,8 +346,11 @@
                     {:else}
                       <div class="input-group">
                         <input id={`key-${index}-${entryIndex}`} type="text" placeholder="Key" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
-                        <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.value} />
+                        <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.rawValue} />
                       </div>
+                      {#if form.key === 'tags' || form.key === 'categories'}
+                        <small class="helper-text">Separate multiple {form.key} with commas</small>
+                      {/if}
                       <label class="custom-checkbox">
                         <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
                         <span class="checkbox-text">Date Type</span>
@@ -413,14 +373,12 @@
       </div>
     {/each}
 
-
     <div class="global-actions">
       {#if isEditingEnabled && (Object.values($unsavedChangesByIndex).some(Boolean) || resultsChanged)}
         <button on:click={pushChangesToBackend}>Push Changes</button>
       {/if}
       <button on:click={generatePDFWrapper}>Download PDF</button>
     </div>
-
 
   {:else}
     <p class="no-results">No results found</p>
@@ -608,6 +566,14 @@
     font-style: italic;
   }
 
+  .helper-text {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
   @media (max-width: 768px) {
     .result-content {
       flex-direction: column;
@@ -627,3 +593,6 @@
     }
   }
 </style>
+
+
+
