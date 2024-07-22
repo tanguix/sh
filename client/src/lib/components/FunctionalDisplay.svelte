@@ -290,27 +290,31 @@
   }
 </script>
 
+
+
+
+
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
       <div class="result-card">
         <h3>{result.sample_token || 'No Sample Token'}</h3>
-        <div class="result-content-wrapper">
-          <div class="result-content">
-            <div class="image-container">
-              {#if result.image_url}
-                <div class="image-frame">
-                  <img 
-                    src={result.image_url} 
-                    alt="sample_image" 
-                    on:error={handleImageError}
-                  >
-                </div>
-              {:else}
-                <div class="no-image">No image available</div>
-              {/if}
-            </div>
+        <div class="result-content">
+          <div class="image-container">
+            {#if result.image_url}
+              <div class="image-frame">
+                <img 
+                  src={result.image_url} 
+                  alt="sample_image" 
+                  on:error={handleImageError}
+                >
+              </div>
+            {:else}
+              <div class="no-image">No image available</div>
+            {/if}
+          </div>
 
+          <div class="properties-wrapper">
             <div class="properties-container">
               {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                 <div class="property-item">
@@ -321,6 +325,7 @@
             </div>
           </div>
         </div>
+        
         {#if isEditingEnabled}
           <div class="form-controls">
             <button on:click={() => addForm(index)}>Add Field</button>
@@ -344,9 +349,23 @@
                         {/each}
                       </select>
                     {:else}
+                    
                       <div class="input-group">
-                        <input id={`key-${index}-${entryIndex}`} type="text" placeholder="Key" on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} value={form.key} readonly={form.isDate} />
-                        <input id={`value-${index}-${entryIndex}`} type={form.isDate ? 'date' : 'text'} placeholder="Value" on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} value={form.rawValue} />
+                        <input 
+                          id={`key-${index}-${entryIndex}`} 
+                          type="text" 
+                          placeholder="Key" 
+                          on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} 
+                          value={form.key} 
+                          readonly={form.isDate}
+                        />
+                        <input 
+                          id={`value-${index}-${entryIndex}`} 
+                          type={form.isDate ? 'date' : 'text'} 
+                          placeholder="Value" 
+                          on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} 
+                          value={form.rawValue}
+                        />
                       </div>
                       {#if form.key === 'tags' || form.key === 'categories'}
                         <small class="helper-text">Separate multiple {form.key} with commas</small>
@@ -358,6 +377,7 @@
                     {/if}
                   </form>
                 </div>
+
               {/each}
             </div>
           {/if}
@@ -385,8 +405,6 @@
   {/if}
 </div>
 
-
-
 <style>
   .results-container {
     font-family: 'Ubuntu', sans-serif;
@@ -408,14 +426,11 @@
     margin-bottom: 15px;
   }
 
-  .result-content-wrapper {
-    overflow: hidden;
-  }
-
   .result-content {
     display: flex;
     gap: 20px;
     margin-bottom: 15px;
+    height: 400px; /* Fixed height for consistency */
   }
 
   .image-container {
@@ -449,20 +464,40 @@
     font-style: italic;
   }
 
-  .properties-container {
+  .properties-wrapper {
     flex: 0 0 33.33%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .properties-container {
     background-color: #f9f9f9;
     border-radius: 4px;
     padding: 15px;
     overflow-y: auto;
-    max-height: 400px;
+    flex-grow: 1;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: #007bff #f0f0f0; /* For Firefox */
+  }
+
+  /* Webkit browsers (Chrome, Safari) custom scrollbar */
+  .properties-container::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .properties-container::-webkit-scrollbar-track {
+    background: #f0f0f0;
+  }
+
+  .properties-container::-webkit-scrollbar-thumb {
+    background-color: #007bff;
+    border-radius: 4px;
+    border: 2px solid #f0f0f0;
   }
 
   .property-item {
-    width: 100%;
     margin-bottom: 10px;
     padding-bottom: 10px;
-    line-height: 1.4;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   }
 
@@ -530,13 +565,21 @@
     margin-bottom: 10px;
   }
 
+
+  .input-group input {
+    flex: 1 1 0;
+    min-width: 0; /* This ensures the inputs can shrink below their default size */
+  }
+
   input[type="text"], input[type="date"], select {
-    flex-grow: 1;
     padding: 8px;
     font-size: 14px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    width: 100%; /* Ensure inputs take full width of their flex container */
   }
+
+
 
   .custom-checkbox {
     display: flex;
@@ -577,9 +620,10 @@
   @media (max-width: 768px) {
     .result-content {
       flex-direction: column;
+      height: auto;
     }
 
-    .image-container, .properties-container {
+    .image-container, .properties-wrapper {
       flex: 0 0 auto;
       width: 100%;
     }
@@ -589,10 +633,13 @@
     }
 
     .properties-container {
-      max-height: none;
+      max-height: 300px; /* Set a max height for mobile */
     }
   }
 </style>
+
+
+
 
 
 

@@ -1,6 +1,5 @@
 
 
-
 <script lang="ts">
   import { page } from '$app/stores';
   import { writable, derived, get } from 'svelte/store';
@@ -294,4 +293,3 @@
     background-color: #f9f9f9;
   }
 </style>
-

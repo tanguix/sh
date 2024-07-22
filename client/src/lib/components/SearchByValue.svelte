@@ -33,7 +33,7 @@
     let valueToSearch: string = '';
 
     let selectedSamplingKey: string = 'reference_no';
-    let defaultSamplingCollection: string = 'samples';
+    let defaultSamplingCollection: string = 'samples_list';
     let selectedSamplingCollection: string = defaultSamplingCollection;
 
     let isAddOperation: boolean = true;

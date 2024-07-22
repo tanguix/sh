@@ -110,16 +110,14 @@ def get_sample_tokens():
         user_role = data.get('role')
         if not user_name or not user_role:
             return jsonify({"error": "Invalid user data"}), 400
-        
+
         sorted_sample_tokens = Collection.search_sample_tokens_by_user(user_name, user_role)
         print(sorted_sample_tokens)
-        
+
         return jsonify({"sample_tokens": sorted_sample_tokens, "username": user_name}), 200
     except Exception as e:
         logger.error(f"Error fetching sample tokens: {e}")
         return jsonify({"error": str(e)}), 500
-
-
 
 
 

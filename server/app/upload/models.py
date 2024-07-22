@@ -12,6 +12,11 @@ import json
 import time
 from pymongo import UpdateOne
 
+
+# TODO: is ok that you keep copies of merged samples set using their original token 
+# because this is just for sampling process, so later during invoice section, or finished product section 
+# you will need to update the complete information, and after that, remove all redunent sets using sample tokens
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
 
