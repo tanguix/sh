@@ -18,7 +18,7 @@
     export let searchKey: string[] = [];
 
     // Define the list of allowed keys and collections
-    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp'];
     const allowedCollections = ['samples', 'samples_list'];
 
     let collections: string[] = [];

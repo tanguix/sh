@@ -13,6 +13,8 @@
   export let deepCopiedResults: any[] = [];
   export let searchOption: string = '';
 
+
+
   // for property
   export let keysToExclude: string[] = ['image_url', 'file'];
   let content: string = `
@@ -140,12 +142,18 @@
     return $displayedForms[index] && $displayedForms[index].length > 0;
   }
 
+
+
   function updateForm(index: number, entryIndex: number, field: string, value: string) {
     displayedForms.update(forms => {
       if (forms[index] && forms[index][entryIndex]) {
         if (field === 'value' && forms[index][entryIndex].isDate) {
           const dateValue = new Date(value).toISOString().split('T')[0];
           forms[index][entryIndex][field] = dateValue;
+        } else if (field === 'value' && (forms[index][entryIndex].key === 'categories' || forms[index][entryIndex].key === 'tags')) {
+          // Split the input by commas and trim whitespace
+          const arrayValue = value.split(',').map(item => item.trim()).filter(item => item !== '');
+          forms[index][entryIndex][field] = arrayValue;
         } else {
           forms[index][entryIndex][field] = value;
         }
@@ -154,6 +162,10 @@
     });
     setUnsavedChanges(index, true);
   }
+
+
+
+
 
   function toggleDateInput(index: number, entryIndex: number) {
     displayedForms.update(forms => {
@@ -172,6 +184,9 @@
     setUnsavedChanges(index, true);
   }
 
+
+
+
   function updateResults(index: number) {
     const user = get(page).data.user;
     if (!user) {
@@ -181,15 +196,32 @@
 
     const formData = $displayedForms[index] || [];
     const updates = formData.reduce((acc, curr) => {
-      if (curr.key && curr.value && !curr.isRemove) {
-        acc[curr.key] = curr.value;
+      if (curr.key && !curr.isRemove) {
+        if (curr.key === 'categories' || curr.key === 'tags') {
+          // Ensure the value is an array
+          acc[curr.key] = Array.isArray(curr.value) ? curr.value : [curr.value];
+        } else {
+          acc[curr.key] = curr.value;
+        }
       } else if (curr.key && curr.isRemove) {
-        delete results[index][curr.key];
+        acc[curr.key] = undefined;  // Use undefined to indicate removal
       }
       return acc;
     }, {});
 
+
     results[index] = { ...results[index], ...updates };
+
+
+    
+    // Explicitly remove keys set to null
+    Object.keys(results[index]).forEach(key => {
+      if (results[index][key] === null) {
+        delete results[index][key];
+      }
+    });
+
+
 
     if (results[index].modifiedBy) {
       results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
@@ -211,6 +243,8 @@
 
     console.log(`Updated result at index ${index}:`, results[index]);
   }
+
+
 
 
 
@@ -274,19 +308,27 @@
 
 
 
-
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
       changes[index] = value;
       return changes;
     });
-    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
+    const hasLengthChanged = results.length !== originalResultsLength;
+    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean) || hasLengthChanged);
   }
+
+
+
+
 
   $: canRemove = results.map((result, index) =>
     Object.keys(filterDisplayedKeys(result)).length >
     ($removeClickCounts[index] || 0)
   );
+
+
+
+
 
   function handleImageError(e: Event) {
     const target = e.target as HTMLImageElement;

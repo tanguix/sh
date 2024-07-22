@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, send_file
 import os
 import json
 from app.logger import logger
-from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow
+from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow, json_serialize
 
 # create Blueprint object, which is this file
 upload_bp = Blueprint('upload', __name__)
@@ -22,51 +22,62 @@ if not os.path.exists(FILE_FOLDER):
 
 
 
+
 @upload_bp.route('/api/upload_data', methods=['POST'])
 def upload_data():
     if not os.path.exists(IMAGE_FOLDER):
         os.makedirs(IMAGE_FOLDER)
+    
+    try:
+        sample = Item.from_request(request, SERVER_DIR)
+        sample.process_files()
+        result = sample.save_item()
+        return jsonify({
+            "message": "Sample uploaded successfully",
+            "id": str(result.inserted_id),
+            "timestamp": sample.timestamp
+        }), 200
+    except ValueError as e:
+        return jsonify({
+            "error": str(e)
+        }), 400
+    except Exception as e:
+        logger.error(f"Error uploading sample: {str(e)}")
+        return jsonify({
+            "error": "An unexpected error occurred while uploading the sample."
+        }), 500
 
-    sample = Item.from_request(request, SERVER_DIR)
-    sample.process_files()
-    result = sample.save_item()
-
-    return jsonify({
-        "message": "Sample uploaded successfully",
-        "id": str(result.inserted_id)
-    }), 200
 
 
 
 
+
+ 
 
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:
         data = request.json
-        logger.debug(f"Received data: {data}")
+        print(f"Received data in upload_sample: {json_serialize(data)}")
         
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
         
-        # Sort the data by timestamp before creating the ItemBatch
-        sorted_data = sorted(data, key=lambda x: x.get('timestamp', 0))
-        
-        sample_batch = ItemBatch(sorted_data)
+        sample_batch = ItemBatch(data)
         result = sample_batch.save_items()
         
         response = {
-            "message": "Samples uploaded successfully", 
-            "inserted_ids": [str(id) for id in result.inserted_ids], 
+            "message": "Samples processed successfully", 
+            "inserted_ids": [str(id) for id in result.inserted_ids],
             "updated_ids": [str(id) for id in result.modified_ids],
-            "kept_ids": [str(id) for id in result.kept_ids],
             "sample_token": sample_batch.main_sample_token
         }
-        logger.debug(f"Response: {response}")
+        print(f"Response from upload_sample: {json_serialize(response)}")
         return jsonify(response), 201
     except Exception as e:
-        logger.exception("An error occurred while uploading samples")
+        print(f"Error in upload_sample: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 
 # --------------------------------------------- collective operation ----------------------------------------------

@@ -10,9 +10,24 @@ from app.logger import logger
 from typing import List
 import json
 import time
+from pymongo import UpdateOne
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
+
+
+
+
+
+def json_serialize(obj):
+    def convert(o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return o.__dict__ if hasattr(o, '__dict__') else str(o)
+    
+    return json.dumps(obj, default=convert, indent=2)
+
+
 
 
 # create item (sample) that need to be stored in the database
@@ -28,6 +43,9 @@ class Item:
         self.server_dir = server_dir
         self.image_path = None
         self.additional_image_paths = []
+        self.timestamp = int(time.time())  # Current Unix timestamp (seconds since epoch)
+
+
 
     def process_files(self):
         if self.image_file:
@@ -62,14 +80,25 @@ class Item:
             additional_file.save(additional_absolute_path)
             self.additional_image_paths.append(additional_relative_path)
 
+
+    @staticmethod
+    def is_reference_no_unique(reference_no: str) -> bool:
+        """Check if the reference number is unique in the database."""
+        existing_item = db.samples.find_one({"reference_no": reference_no})
+        return existing_item is None
+
     def save_item(self):
+        if not self.is_reference_no_unique(self.reference_no):
+            raise ValueError(f"Reference number '{self.reference_no}' already exists.")
+
         data = {
             "reference_no": self.reference_no,
             "categories": self.categories,
             "tags": self.tags,
             "additional_fields": self.additional_fields,
             "image_path": self.image_path,
-            "additional_image_paths": self.additional_image_paths
+            "additional_image_paths": self.additional_image_paths,
+            "timestamp": self.timestamp
         }
         result = db.samples.insert_one(data)
         return result
@@ -81,23 +110,20 @@ class Item:
         categories = json.loads(request.form.get('categories', '[]'))
         tags = json.loads(request.form.get('tags', '[]'))
         additional_fields = json.loads(request.form.get('additional_fields', '{}'))
-
         additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
-
         return Item(reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir)
 
 
 
 
 
-class ItemBatch:
 
+
+class ItemBatch:
     def __init__(self, items):
         self.items = items
         self.main_sample_token = self._determine_main_sample_token()
         self.timestamp = int(time.time() * 1000)  # Current time in milliseconds
-
-
 
     def _determine_main_sample_token(self):
         # Use the first sample_token found in the items, or generate a new one if none exists
@@ -109,55 +135,83 @@ class ItemBatch:
         logger.debug(f"Generated new main sample_token: {new_token}")
         return new_token
 
+    def _item_has_changes(self, existing_item, new_item):
+        # Compare all fields except '_id', 'sample_token', and 'timestamp'
+        keys_to_compare = set(existing_item.keys()) & set(new_item.keys()) - {'_id', 'sample_token', 'timestamp'}
+        return any(existing_item[key] != new_item[key] for key in keys_to_compare)
+
 
 
     def save_items(self):
         try:
-            data_to_insert = []
-            ids_to_update = []
-            original_items_to_keep = []
+            items_to_update = []
 
             for item in self.items:
+                print(f"Processing item in save_items: {json_serialize(item)}")
                 existing_item = self._find_existing_item(item)
                 
                 if existing_item:
-                    if existing_item['sample_token'] != self.main_sample_token:
-                        # Keep the original item and create a new one with the main sample_token
-                        original_items_to_keep.append(existing_item['_id'])
-                        new_item = self._process_item(item)
-                        data_to_insert.append(new_item)
-                        logger.debug(f"Keeping original item and creating new: {new_item}")
-                    else:
-                        # Update existing item
-                        update_id = existing_item['_id']
-                        ids_to_update.append(update_id)
-                        db.samples_list.update_one({'_id': update_id}, {'$set': self._process_item(item)})
-                        logger.debug(f"Updated item with ID: {update_id}")
+                    # Prepare update operation
+                    update_operation = {'$set': {}, '$unset': {}}
+                    
+                    # Find keys to remove (keys in existing_item but not in item)
+                    keys_to_remove = set(existing_item.keys()) - set(item.keys())
+                    for key in keys_to_remove:
+                        if key not in ['_id', 'sample_token', 'timestamp']:
+                            update_operation['$unset'][key] = ""
+
+                    for key, value in item.items():
+                        if key not in ['_id', 'sample_token', 'timestamp']:
+                            if value is not None:
+                                if key in ['categories', 'tags']:
+                                    # Ensure the value is a list
+                                    update_operation['$set'][key] = value if isinstance(value, list) else [value]
+                                else:
+                                    update_operation['$set'][key] = value
+                            else:
+                                update_operation['$unset'][key] = ""
+                    
+                    # Always set the sample_token and timestamp
+                    update_operation['$set']['sample_token'] = self.main_sample_token
+                    update_operation['$set']['timestamp'] = self.timestamp
+
+                    items_to_update.append((existing_item['_id'], update_operation))
+                    print(f"Updating item with ID: {existing_item['_id']}, Update operation: {json_serialize(update_operation)}")
                 else:
                     # New item to insert
                     new_item = self._process_item(item)
-                    data_to_insert.append(new_item)
-                    logger.debug(f"New item to insert: {new_item}")
+                    # Ensure categories and tags are lists
+                    for key in ['categories', 'tags']:
+                        if key in new_item and not isinstance(new_item[key], list):
+                            new_item[key] = [new_item[key]]
+                    result = db.samples_list.insert_one(new_item)
+                    print(f"Inserted new item with ID: {result.inserted_id}, Item: {json_serialize(new_item)}")
 
-            insert_result = db.samples_list.insert_many(data_to_insert) if data_to_insert else None
-            logger.info(f"Inserted {len(data_to_insert)} new items")
-            logger.info(f"Updated {len(ids_to_update)} existing items")
-            logger.info(f"Kept {len(original_items_to_keep)} original items")
+            # Perform bulk update
+            updated_ids = []
+            if items_to_update:
+                bulk_operations = [
+                    UpdateOne({'_id': item_id}, update_operation)
+                    for item_id, update_operation in items_to_update
+                ]
+                
+                if bulk_operations:
+                    update_result = db.samples_list.bulk_write(bulk_operations)
+                    updated_ids = [str(item_id) for item_id, _ in items_to_update]
+                    print(f"Updated {update_result.modified_count} existing items. Updated IDs: {json_serialize(updated_ids)}")
 
             class Result:
-                def __init__(self, inserted_ids, modified_ids, kept_ids):
+                def __init__(self, inserted_ids, modified_ids):
                     self.inserted_ids = inserted_ids or []
                     self.modified_ids = modified_ids
-                    self.kept_ids = kept_ids
 
-            return Result(
-                insert_result.inserted_ids if insert_result else [],
-                ids_to_update,
-                original_items_to_keep
-            )
+            return Result([], updated_ids)
         except Exception as e:
-            logger.exception("An error occurred in save_items method")
+            print(f"Error in save_items: {str(e)}")
             raise
+
+
+
 
 
     def _process_item(self, item):
@@ -170,8 +224,6 @@ class ItemBatch:
                 processed_item[key] = value
         return processed_item
 
-
-
     def _find_existing_item(self, item):
         # Check for existing item with same reference_no
         if 'reference_no' in item:
@@ -181,10 +233,7 @@ class ItemBatch:
                 return existing
         return None
 
-    def _compare_items(self, item1, item2):
-        # Compare all fields except '_id', 'sample_token', and 'modifiedBy'
-        keys_to_compare = set(item1.keys()) & set(item2.keys()) - {'_id', 'sample_token', 'modifiedBy'}
-        return all(item1[key] == item2[key] for key in keys_to_compare)
+
 
 
 

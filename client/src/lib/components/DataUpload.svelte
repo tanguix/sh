@@ -204,6 +204,8 @@
         formData.append('categories', JSON.stringify(allCategories));
         formData.append('additional_fields', JSON.stringify(additionalFields));
 
+        // TODO: later implement a hints, use customized modals to tell users that they are why their upload is not 
+        // successful, such as because the duplicated reference number, etc
         sendSampleData(formData)
             .then(response => {
                 console.log('Upload successful:', response);
