@@ -17,6 +17,8 @@
     export let searchCollection: string[] = [];
     export let searchKey: string[] = [];
 
+    let resultsChanged = false;
+
     // Define the list of allowed keys and collections
     const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp'];
     const allowedCollections = ['samples', 'samples_list'];
@@ -136,6 +138,8 @@
                 let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
                 
                 if (isSamplingMode) {
+                    // original length 
+                    const oldLength = results.length;
                     if (isAddOperation) {
                         // Filter out duplicates based on reference_no
                         newResults = newResults.filter(newResult => 
@@ -152,6 +156,9 @@
                     }
                     deepCopiedResults = JSON.parse(JSON.stringify(results));
                     valueToSearch = '';
+                    
+                    // Set the flag if the length has changed
+                    resultsChanged = oldLength !== results.length;
                 } else {
                     results = newResults;
                     deepCopiedResults = JSON.parse(JSON.stringify(results));
@@ -229,7 +236,7 @@
     </div>
 </div>
 
-<FunctionalDisplay {results} {deepCopiedResults} {searchOption} />
+<FunctionalDisplay {results} {deepCopiedResults} {searchOption} {resultsChanged} />
 
 <style>
     .search-container {

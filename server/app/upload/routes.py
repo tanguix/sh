@@ -58,7 +58,8 @@ def upload_data():
 def upload_sample():
     try:
         data = request.json
-        print(f"Received data in upload_sample: {json_serialize(data)}")
+        # checking lines
+        # print(f"Received data in upload_sample: {json_serialize(data)}")
         
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
@@ -72,7 +73,8 @@ def upload_sample():
             "updated_ids": [str(id) for id in result.modified_ids],
             "sample_token": sample_batch.main_sample_token
         }
-        print(f"Response from upload_sample: {json_serialize(response)}")
+        # checking lines
+        # print(f"Response from upload_sample: {json_serialize(response)}")
         return jsonify(response), 201
     except Exception as e:
         print(f"Error in upload_sample: {str(e)}")

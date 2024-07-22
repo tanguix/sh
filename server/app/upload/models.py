@@ -176,7 +176,8 @@ class ItemBatch:
                     update_operation['$set']['timestamp'] = self.timestamp
 
                     items_to_update.append((existing_item['_id'], update_operation))
-                    print(f"Updating item with ID: {existing_item['_id']}, Update operation: {json_serialize(update_operation)}")
+                    # checking lines
+                    # print(f"Updating item with ID: {existing_item['_id']}, Update operation: {json_serialize(update_operation)}")
                 else:
                     # New item to insert
                     new_item = self._process_item(item)

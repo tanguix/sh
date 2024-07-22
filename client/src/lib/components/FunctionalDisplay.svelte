@@ -13,7 +13,8 @@
   export let deepCopiedResults: any[] = [];
   export let searchOption: string = '';
 
-
+  // track the length of the results variable
+  export let resultsChanged = false;
 
   // for property
   export let keysToExclude: string[] = ['image_url', 'file'];
@@ -247,27 +248,18 @@
 
 
 
-
-
   async function pushChangesToBackend() {
     try {
-      if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results)) {
-        console.log("All results before pushing to backend:");
-        results.forEach((result, index) => {
-          console.log(`Result ${index}:`, {
-            sample_token: result.sample_token,
-            reference_no: result.reference_no,
-            // Add any other important fields you want to log
-          });
-        });
-
+      if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || resultsChanged) {
+        console.log("Changes detected, pushing to backend...");
+        
         // Add a timestamp to each result
         const resultsWithTimestamp = results.map(result => ({
           ...result,
           timestamp: Date.now()
         }));
 
-        console.log("final: ", resultsWithTimestamp);
+        console.log("Pushing results to backend:", resultsWithTimestamp);
 
         const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
           method: 'POST',
@@ -295,6 +287,7 @@
           deepCopiedResults = JSON.parse(JSON.stringify(results));
         }
 
+        resultsChanged = false;
         unsavedChanges.set(false);
         unsavedChangesByIndex.set({});
       } else {
@@ -308,12 +301,13 @@
 
 
 
+
+
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
       changes[index] = value;
       return changes;
     });
-    const hasLengthChanged = results.length !== originalResultsLength;
     unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean) || hasLengthChanged);
   }
 
@@ -418,12 +412,16 @@
         {/if}
       </div>
     {/each}
+
+
     <div class="global-actions">
-      {#if isEditingEnabled}
+      {#if isEditingEnabled && (Object.values($unsavedChangesByIndex).some(Boolean) || resultsChanged)}
         <button on:click={pushChangesToBackend}>Push Changes</button>
       {/if}
       <button on:click={generatePDFWrapper}>Download PDF</button>
     </div>
+
+
   {:else}
     <p class="no-results">No results found</p>
   {/if}
