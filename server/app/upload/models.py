@@ -123,11 +123,13 @@ class Item:
 
 
 
+
 class ItemBatch:
     def __init__(self, items):
         self.items = items
         self.main_sample_token = self._determine_main_sample_token()
         self.timestamp = int(time.time() * 1000)  # Current time in milliseconds
+        logger.info(f"ItemBatch initialized with {len(items)} items and main_sample_token: {self.main_sample_token}")
 
     def _determine_main_sample_token(self):
         for item in self.items:
@@ -135,10 +137,27 @@ class ItemBatch:
                 return item['sample_token']
         return str(uuid.uuid4())
 
-
-
+    def remove_sample(self, sample_token):
+        logger.info(f"Attempting to remove sample with token: {sample_token}")
+        
+        items_to_remove = list(db.samples_list.find({'sample_token': sample_token}))
+        
+        if not items_to_remove:
+            logger.warning(f"No items found with sample token: {sample_token}")
+            return []
+        
+        if len(items_to_remove) == 1:
+            logger.warning(f"Attempting to remove the last item with sample token: {sample_token}")
+        
+        result = db.samples_list.delete_many({'sample_token': sample_token})
+        
+        removed_ids = [str(item['_id']) for item in items_to_remove]
+        logger.info(f"Removed {result.deleted_count} items with sample token {sample_token}. IDs: {removed_ids}")
+        
+        return removed_ids
 
     def save_items(self):
+        logger.info("Starting save_items method")
         try:
             items_to_update = []
             items_to_insert = []
@@ -149,52 +168,43 @@ class ItemBatch:
                 
                 if existing_item:
                     if existing_item['sample_token'] != self.main_sample_token:
-                        # Create a new copy for the merged set
                         new_item = self._process_item(item)
                         items_to_insert.append(new_item)
                     else:
-                        # Update existing item in the main set
                         update_operation = self._prepare_update_operation(item, existing_item)
-                        if update_operation:  # Only add if there are changes
+                        if update_operation:
                             items_to_update.append((existing_item['_id'], update_operation))
                 else:
-                    # New item to insert
                     new_item = self._process_item(item)
                     items_to_insert.append(new_item)
                 
                 processed_reference_nos.add(item.get('reference_no'))
 
-            # Perform bulk update
+            logger.info(f"Processed {len(self.items)} items")
+            logger.info(f"Items to update: {len(items_to_update)}")
+            logger.info(f"Items to insert: {len(items_to_insert)}")
+            logger.info(f"Processed reference numbers: {processed_reference_nos}")
+
             updated_ids = self._perform_bulk_update(items_to_update)
-
-            # Insert new items
             inserted_ids = self._insert_new_items(items_to_insert)
-
-            # Remove items from main set that are no longer present
             self._remove_obsolete_items(processed_reference_nos)
 
             return self._create_result(inserted_ids, updated_ids)
 
         except Exception as e:
-            print(f"Error in save_items: {str(e)}")
+            logger.exception(f"Error in save_items: {str(e)}")
             raise
-
-
-
-
 
     def _prepare_update_operation(self, new_item, existing_item):
         update_operation = {'$set': {}, '$unset': {}}
         
-        # Handle removals (fields set to undefined in new_item)
         for key in existing_item:
             if key not in new_item and key not in ['_id', 'sample_token', 'timestamp']:
                 update_operation['$unset'][key] = ""
 
-        # Handle updates and additions
         for key, value in new_item.items():
             if key not in ['_id', 'sample_token', 'timestamp']:
-                if value is None:  # This handles the case where a field is explicitly set to null/None for removal
+                if value is None:
                     update_operation['$unset'][key] = ""
                 else:
                     if key in ['categories', 'tags']:
@@ -202,20 +212,14 @@ class ItemBatch:
                     else:
                         update_operation['$set'][key] = value
         
-        # Always update the timestamp
         update_operation['$set']['timestamp'] = self.timestamp
 
-        # Remove empty operations
         if not update_operation['$set']:
             del update_operation['$set']
         if not update_operation['$unset']:
             del update_operation['$unset']
 
         return update_operation
-
-
-
-
 
     def _perform_bulk_update(self, items_to_update):
         updated_ids = []
@@ -228,7 +232,7 @@ class ItemBatch:
             if bulk_operations:
                 update_result = db.samples_list.bulk_write(bulk_operations)
                 updated_ids = [str(item_id) for item_id, _ in items_to_update]
-                print(f"Updated {update_result.modified_count} existing items. Updated IDs: {json_serialize(updated_ids)}")
+                logger.info(f"Updated {update_result.modified_count} existing items. Updated IDs: {updated_ids}")
         return updated_ids
 
     def _insert_new_items(self, items_to_insert):
@@ -236,7 +240,7 @@ class ItemBatch:
         if items_to_insert:
             insert_result = db.samples_list.insert_many(items_to_insert)
             inserted_ids = [str(id) for id in insert_result.inserted_ids]
-            print(f"Inserted {len(inserted_ids)} new items. Inserted IDs: {json_serialize(inserted_ids)}")
+            logger.info(f"Inserted {len(inserted_ids)} new items. Inserted IDs: {inserted_ids}")
         return inserted_ids
 
     def _remove_obsolete_items(self, processed_reference_nos):
@@ -244,7 +248,7 @@ class ItemBatch:
             'sample_token': self.main_sample_token,
             'reference_no': {'$nin': list(processed_reference_nos)}
         })
-        print(f"Removed {result.deleted_count} obsolete items from the main set.")
+        logger.info(f"Removed {result.deleted_count} obsolete items from the main set.")
 
     def _process_item(self, item):
         processed_item = {
@@ -263,7 +267,7 @@ class ItemBatch:
                 'sample_token': self.main_sample_token
             })
             if existing:
-                print(f"Found existing item with reference_no: {item['reference_no']} in main set")
+                logger.info(f"Found existing item with reference_no: {item['reference_no']} in main set")
                 return existing
         return None
 
@@ -274,9 +278,6 @@ class ItemBatch:
                 self.modified_ids = modified_ids
 
         return Result(inserted_ids, updated_ids)
-
-
-
 
 
 
