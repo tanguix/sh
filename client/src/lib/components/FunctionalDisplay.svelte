@@ -1,5 +1,7 @@
 
 
+
+
 <script lang="ts">
   import { BASE_URL, API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
@@ -32,6 +34,8 @@
   let selectedForRemoval = writable({});
   let unsavedChangesByIndex = writable({});
   let formActionClicked = writable({});
+  let samplesMarkedForRemoval = writable<number[]>([]);
+  let dropSampleClicked = writable<{[key: number]: boolean}>({});
 
   $: isEditingEnabled = searchOption === 'sampling';
 
@@ -70,6 +74,10 @@
       clicked[index] = true;
       return clicked;
     });
+    dropSampleClicked.update(clicked => {
+      clicked[index] = false;
+      return clicked;
+    });
   }
 
   function removeKey(index: number) {
@@ -87,6 +95,29 @@
     });
     setUnsavedChanges(index, true);
     formActionClicked.update(clicked => {
+      clicked[index] = true;
+      return clicked;
+    });
+    dropSampleClicked.update(clicked => {
+      clicked[index] = false;
+      return clicked;
+    });
+  }
+
+  function dropSample(index: number) {
+    displayedForms.update(forms => {
+      if (!forms[index]) {
+        forms[index] = [];
+      }
+      forms[index].push({ key: '_remove', isRemove: true });
+      return forms;
+    });
+    setUnsavedChanges(index, true);
+    formActionClicked.update(clicked => {
+      clicked[index] = true;
+      return clicked;
+    });
+    dropSampleClicked.update(clicked => {
       clicked[index] = true;
       return clicked;
     });
@@ -121,6 +152,10 @@
       setUnsavedChanges(index, false);
       formActionClicked.update(clicked => {
         clicked[index] = false;
+        return clicked;
+      });
+      dropSampleClicked.update(clicked => {
+        delete clicked[index];
         return clicked;
       });
     }
@@ -181,32 +216,36 @@
 
     const formData = $displayedForms[index] || [];
     const updates = formData.reduce((acc, curr) => {
-      if (curr.key && !curr.isRemove) {
+      if (curr.key === '_remove' && curr.isRemove) {
+        samplesMarkedForRemoval.update(samples => [...samples, index]);
+      } else if (curr.key && !curr.isRemove) {
         if (curr.key === 'tags' || curr.key === 'categories') {
           acc[curr.key] = curr.value; // value is already an array for tags and categories
         } else {
           acc[curr.key] = curr.value;
         }
       } else if (curr.key && curr.isRemove) {
-        acc[curr.key] = undefined;  // Set to undefined for removal
+        acc[curr.key] = null;  // Set to null for removal
       }
       return acc;
     }, {});
 
-    results[index] = { ...results[index], ...updates };
-    
-    Object.keys(results[index]).forEach(key => {
-      if (results[index][key] === null) {
-        delete results[index][key];
-      }
-    });
+    if (!$samplesMarkedForRemoval.includes(index)) {
+      results[index] = { ...results[index], ...updates };
+      
+      Object.keys(results[index]).forEach(key => {
+        if (results[index][key] === null) {
+          delete results[index][key];
+        }
+      });
 
-    if (results[index].modifiedBy) {
-      results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
-        ? [...results[index].modifiedBy, user]
-        : [results[index].modifiedBy, user];
-    } else {
-      results[index].modifiedBy = [user];
+      if (results[index].modifiedBy) {
+        results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
+          ? [...results[index].modifiedBy, user]
+          : [results[index].modifiedBy, user];
+      } else {
+        results[index].modifiedBy = [user];
+      }
     }
 
     displayedForms.update(forms => {
@@ -218,18 +257,19 @@
       clicked[index] = false;
       return clicked;
     });
+    dropSampleClicked.update(clicked => {
+      delete clicked[index];
+      return clicked;
+    });
 
     console.log(`Updated result at index ${index}:`, results[index]);
+    resultsChanged = true;
   }
-
-
-
 
   async function pushChangesToBackend() {
     try {
       if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || resultsChanged) {
         console.log("Changes detected, pushing to backend...");
-
 
         const user = get(page).data.user;
         if (!user) {
@@ -237,20 +277,17 @@
           return;
         }
 
-        const resultsWithTimestamp = results.map(result => {
-          // Append user information to each result
-          const updatedResult = {
-            ...result,
-            timestamp: Date.now(),
-            modifiedBy: Array.isArray(result.modifiedBy) 
-              ? [...result.modifiedBy, user]
-              : result.modifiedBy 
-                ? [result.modifiedBy, user]
-                : [user]
-          };
-          return updatedResult;
-        });
+        const updatedResults = results.filter((_, index) => !$samplesMarkedForRemoval.includes(index));
 
+        const resultsWithTimestamp = updatedResults.map(result => ({
+          ...result,
+          timestamp: Date.now(),
+          modifiedBy: Array.isArray(result.modifiedBy) 
+            ? [...result.modifiedBy, user]
+            : result.modifiedBy 
+              ? [result.modifiedBy, user]
+              : [user]
+        }));
 
         console.log("Pushing results to backend:", resultsWithTimestamp);
 
@@ -266,14 +303,10 @@
         console.log("Backend response:", sampling_response);
 
         if (sampling_response.sample_token) {
-          results = results.map(result => ({
+          results = updatedResults.map(result => ({
             ...result,
             sample_token: sampling_response.sample_token
           }));
-
-          if (sampling_response.kept_ids && sampling_response.kept_ids.length > 0) {
-            console.log("Some original items were kept:", sampling_response.kept_ids);
-          }
 
           deepCopiedResults = JSON.parse(JSON.stringify(results));
         }
@@ -281,6 +314,7 @@
         resultsChanged = false;
         unsavedChanges.set(false);
         unsavedChangesByIndex.set({});
+        samplesMarkedForRemoval.set([]);
       } else {
         console.log("No changes to push");
       }
@@ -288,9 +322,6 @@
       console.error("Error pushing changes to backend:", error.message);
     }
   }
-
-
-
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
@@ -313,107 +344,114 @@
   }
 </script>
 
-
-
-
-
 <div class="results-container">
   {#if results.length > 0}
     {#each results as result, index}
-      <div class="result-card">
-        <h3>{result.sample_token || 'No Sample Token'}</h3>
-        <div class="result-content">
-          <div class="image-container">
-            {#if result.image_url}
-              <div class="image-frame">
-                <img 
-                  src={result.image_url} 
-                  alt="sample_image" 
-                  on:error={handleImageError}
-                >
-              </div>
-            {:else}
-              <div class="no-image">No image available</div>
-            {/if}
-          </div>
-
-          <div class="properties-wrapper">
-            <div class="properties-container">
-              {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
-                <div class="property-item">
-                  <span class="property-key">{key}:</span>
-                  <span class="property-value">{formatPropertyValue(key, value)}</span>
+      {#if !$samplesMarkedForRemoval.includes(index)}
+        <div class="result-card">
+          <h3>{result.sample_token || 'No Sample Token'}</h3>
+          <div class="result-content">
+            <div class="image-container">
+              {#if result.image_url}
+                <div class="image-frame">
+                  <img 
+                    src={result.image_url} 
+                    alt="sample_image" 
+                    on:error={handleImageError}
+                  >
                 </div>
-              {/each}
+              {:else}
+                <div class="no-image">No image available</div>
+              {/if}
+            </div>
+
+            <div class="properties-wrapper">
+              <div class="properties-container">
+                {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
+                  <div class="property-item">
+                    <span class="property-key">{key}:</span>
+                    <span class="property-value">{formatPropertyValue(key, value)}</span>
+                  </div>
+                {/each}
+              </div>
             </div>
           </div>
-        </div>
-        
-        {#if isEditingEnabled}
-          <div class="form-controls">
-            <button on:click={() => addForm(index)}>Add Field</button>
-            {#if canRemove[index]}
-              <button on:click={() => removeKey(index)}>Remove Field</button>
-            {/if}
-          </div>
-          {#if $displayedForms[index]}
-            <div class="additional-forms">
-              {#each $displayedForms[index] as form, entryIndex}
-                <div class="form-entry">
-                  <form on:submit|preventDefault>
-                    {#if form.isRemove}
-                      <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
-                      <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
-                        <option value="">Select key</option>
-                        {#each Object.keys(results[index]) as key}
-                          {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
-                            <option value={key}>{key}</option>
-                          {/if}
-                        {/each}
-                      </select>
-                    {:else}
-                    
-                      <div class="input-group">
-                        <input 
-                          id={`key-${index}-${entryIndex}`} 
-                          type="text" 
-                          placeholder="Key" 
-                          on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} 
-                          value={form.key} 
-                          readonly={form.isDate}
-                        />
-                        <input 
-                          id={`value-${index}-${entryIndex}`} 
-                          type={form.isDate ? 'date' : 'text'} 
-                          placeholder="Value" 
-                          on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} 
-                          value={form.rawValue}
-                        />
-                      </div>
-                      {#if form.key === 'tags' || form.key === 'categories'}
-                        <small class="helper-text">Separate multiple {form.key} with commas</small>
+          
+          {#if isEditingEnabled}
+            <div class="form-controls">
+              <button on:click={() => addForm(index)}>Add Field</button>
+              {#if canRemove[index]}
+                <button on:click={() => removeKey(index)}>Remove Field</button>
+              {/if}
+              <button on:click={() => dropSample(index)} class="drop-sample">Drop Sample</button>
+            </div>
+            {#if $displayedForms[index]}
+              <div class="additional-forms">
+                {#each $displayedForms[index] as form, entryIndex}
+                  <div class="form-entry">
+                    <form on:submit|preventDefault>
+                      {#if form.isRemove && form.key !== '_remove'}
+                        <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
+                        <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
+                          <option value="">Select key</option>
+                          {#each Object.keys(results[index]) as key}
+                            {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
+                              <option value={key}>{key}</option>
+                            {/if}
+                          {/each}
+                        </select>
+                      {:else if !form.isRemove}
+                        <div class="input-group">
+                          <input 
+                            id={`key-${index}-${entryIndex}`} 
+                            type="text"
+                            placeholder="Key" 
+                            on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} 
+                            value={form.key} 
+                            readonly={form.isDate}
+                          />
+                          <input 
+                            id={`value-${index}-${entryIndex}`} 
+                            type={form.isDate ? 'date' : 'text'} 
+                            placeholder="Value" 
+                            on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} 
+                            value={form.rawValue}
+                          />
+                        </div>
+                        {#if form.key === 'tags' || form.key === 'categories'}
+                          <small class="helper-text">Separate multiple {form.key} with commas</small>
+                        {/if}
+                        <label class="custom-checkbox">
+                          <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
+                          <span class="checkbox-text">Date Type</span>
+                        </label>
                       {/if}
-                      <label class="custom-checkbox">
-                        <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
-                        <span class="checkbox-text">Date Type</span>
-                      </label>
-                    {/if}
-                  </form>
-                </div>
-
-              {/each}
+                    </form>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            <div class="action-buttons">
+              {#if $unsavedChangesByIndex[index]}
+                <button 
+                  on:click={() => updateResults(index)} 
+                  class={$dropSampleClicked[index] ? 'update-drop' : 'update-normal'}
+                >
+                  Update
+                </button>
+              {/if}
+              {#if $formActionClicked[index]}
+                <button 
+                  on:click={() => lessForm(index)} 
+                  class={$dropSampleClicked[index] ? 'cancel-drop' : 'cancel-normal'}
+                >
+                  Cancel
+                </button>
+              {/if}
             </div>
           {/if}
-          <div class="action-buttons">
-            {#if $unsavedChangesByIndex[index]}
-              <button on:click={() => updateResults(index)}>Update</button>
-            {/if}
-            {#if $formActionClicked[index]}
-              <button on:click={() => lessForm(index)} class="secondary">Cancel</button>
-            {/if}
-          </div>
-        {/if}
-      </div>
+        </div>
+      {/if}
     {/each}
 
     <div class="global-actions">
@@ -499,11 +537,10 @@
     padding: 15px;
     overflow-y: auto;
     flex-grow: 1;
-    scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: #007bff #f0f0f0; /* For Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #007bff #f0f0f0;
   }
 
-  /* Webkit browsers (Chrome, Safari) custom scrollbar */
   .properties-container::-webkit-scrollbar {
     width: 8px;
   }
@@ -559,16 +596,29 @@
     background-color: #ccc;
   }
 
-  button:hover {
+  .update-normal:hover, .cancel-normal:hover {
     background-color: #FFE6B3;
   }
 
-  button.secondary {
-    background-color: #ccc;
+
+  .update-drop, .cancel-drop {
+    color: white;
+    background-color: #ff4136;
   }
 
-  button.secondary:hover {
-    background-color: #FFE6B3;
+
+  .update-drop:hover, .cancel-drop:hover {
+    background-color: #ff7a6e;
+  }
+
+
+  .drop-sample {
+    background-color: #ff4136;
+    color: white;
+  }
+
+  .drop-sample:hover {
+    background-color: #ff7a6e;
   }
 
   .additional-forms {
@@ -588,10 +638,9 @@
     margin-bottom: 10px;
   }
 
-
   .input-group input {
     flex: 1 1 0;
-    min-width: 0; /* This ensures the inputs can shrink below their default size */
+    min-width: 0;
   }
 
   input[type="text"], input[type="date"], select {
@@ -599,10 +648,8 @@
     font-size: 14px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    width: 100%; /* Ensure inputs take full width of their flex container */
+    width: 100%;
   }
-
-
 
   .custom-checkbox {
     display: flex;
@@ -656,13 +703,7 @@
     }
 
     .properties-container {
-      max-height: 300px; /* Set a max height for mobile */
+      max-height: 300px;
     }
   }
 </style>
-
-
-
-
-
-
