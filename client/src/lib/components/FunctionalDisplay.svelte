@@ -222,15 +222,35 @@
     console.log(`Updated result at index ${index}:`, results[index]);
   }
 
+
+
+
   async function pushChangesToBackend() {
     try {
       if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || resultsChanged) {
         console.log("Changes detected, pushing to backend...");
-        
-        const resultsWithTimestamp = results.map(result => ({
-          ...result,
-          timestamp: Date.now()
-        }));
+
+
+        const user = get(page).data.user;
+        if (!user) {
+          console.error("User is undefined");
+          return;
+        }
+
+        const resultsWithTimestamp = results.map(result => {
+          // Append user information to each result
+          const updatedResult = {
+            ...result,
+            timestamp: Date.now(),
+            modifiedBy: Array.isArray(result.modifiedBy) 
+              ? [...result.modifiedBy, user]
+              : result.modifiedBy 
+                ? [result.modifiedBy, user]
+                : [user]
+          };
+          return updatedResult;
+        });
+
 
         console.log("Pushing results to backend:", resultsWithTimestamp);
 
@@ -268,6 +288,9 @@
       console.error("Error pushing changes to backend:", error.message);
     }
   }
+
+
+
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {

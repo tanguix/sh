@@ -4,6 +4,8 @@ from app.logger import logger
 import time
 from collections import defaultdict
 from bson.int64 import Int64
+from bson import json_util
+import json
 
 from flask import current_app   # this line is for importing the config.py 
 
@@ -103,25 +105,60 @@ class Collection:
 
 
 
-
     @staticmethod
     def search_sample_tokens_by_user(user_name, user_role):
-        query = {"modifiedBy": {"$elemMatch": {"name": user_name, "role": user_role}}}
-        documents = db.samples_list.find(query, {"sample_token": 1, "timestamp": 1, "_id": 0})
+        # First, let's check how many documents match our criteria
+        match_count = db.samples_list.count_documents({
+            "modifiedBy": {
+                "$elemMatch": {
+                    "name": user_name,
+                    "role": user_role
+                }
+            }
+        })
+        print(f"Documents matching user criteria: {match_count}")
 
-        # Create a list of dictionaries containing sample_token and timestamp
-        sample_token_data = [
-            {"sample_token": doc["sample_token"], "timestamp": doc.get("timestamp", 0)}
-            for doc in documents
+        pipeline = [
+            # Match documents modified by the specific user
+            {
+                "$match": {
+                    "modifiedBy": {
+                        "$elemMatch": {
+                            "name": user_name,
+                            "role": user_role
+                        }
+                    }
+                }
+            },
+            # Sort all documents by timestamp in descending order
+            {
+                "$sort": {"timestamp": 1}
+            },
+            # Group by sample_token, keeping the first (most recent) document for each
+            {
+                "$group": {
+                    "_id": "$sample_token",
+                    "doc": {"$first": "$$ROOT"}
+                }
+            },
+            # Project only the sample_token and timestamp
+            {
+                "$project": {
+                    "_id": 0,
+                    "sample_token": "$_id",
+                    "timestamp": "$doc.timestamp"
+                }
+            },
+            # Final sort to ensure the most recent tokens are first
+            {
+                "$sort": {"timestamp": 1}
+            }
         ]
+        
+        result = list(db.samples_list.aggregate(pipeline))
+        print(f"Aggregation result: {json.dumps(result, default=json_util.default)}")
+        return [doc['sample_token'] for doc in result]
 
-        # Sort the list based on timestamp in descending order (newest first)
-        sorted_sample_token_data = sorted(sample_token_data, key=lambda x: x["timestamp"], reverse=False)
-
-        # Extract only the sample_tokens from the sorted list
-        sorted_sample_tokens = [item["sample_token"] for item in sorted_sample_token_data]
-
-        return sorted_sample_tokens
 
 
 
