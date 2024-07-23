@@ -49,42 +49,48 @@ def upload_data():
 
 
 
+
+
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:
         data = request.json
-        
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
-        
+
         sample_batch = ItemBatch(data)
-        
+
         # Check if we're removing a sample
         if data and '_remove' in data[0] and data[0]['_remove']:
             sample_token = data[0].get('sample_token')
-            if not sample_token:
-                return jsonify({"error": "Sample token is required for removal"}), 400
+            reference_no = data[0].get('reference_no')
             
-            removed_ids = sample_batch.remove_sample(sample_token)
+            if not sample_token or not reference_no:
+                return jsonify({"error": "Sample token and reference number are required for removal"}), 400
+            
+            removed_ids = sample_batch.remove_sample(data[0])
+            
             response = {
                 "message": "Sample removed successfully",
                 "removed_ids": removed_ids,
-                "sample_token": sample_token
+                "sample_token": sample_token,
+                "reference_no": reference_no
             }
         else:
             # Regular save operation
             result = sample_batch.save_items()
             response = {
-                "message": "Samples processed successfully", 
+                "message": "Samples processed successfully",
                 "inserted_ids": result.inserted_ids,
                 "updated_ids": result.modified_ids,
                 "sample_token": sample_batch.main_sample_token
             }
-        
+
         return jsonify(response), 201
     except Exception as e:
         logger.exception(f"Error in upload_sample: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 
 

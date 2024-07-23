@@ -115,11 +115,19 @@
     });
   }
 
+
+
+
+
+
   async function dropSample(index: number) {
-    const sampleToken = results[index].sample_token;
-    if (!sampleToken) {
-      console.error("No sample token found for this item");
-      errorMessage.set("No sample token found for this item");
+    const sampleToDelete = results[index];
+    const sampleToken = sampleToDelete.sample_token;
+    const referenceNo = sampleToDelete.reference_no;
+
+    if (!sampleToken || !referenceNo) {
+      console.error("Sample token or reference number is missing");
+      errorMessage.set("Unable to drop sample: Missing sample token or reference number");
       return;
     }
 
@@ -130,7 +138,13 @@
       const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ _remove: true, sample_token: sampleToken }]),
+        body: JSON.stringify([{ 
+          _remove: true, 
+          sample_token: sampleToken,
+          reference_no: referenceNo,
+          // Include other relevant fields for precise matching
+          ...sampleToDelete
+        }]),
       });
 
       if (!response.ok) {
@@ -167,6 +181,8 @@
         return pending;
       });
 
+      console.log(`Sample with reference number ${referenceNo} dropped successfully`);
+
     } catch (error) {
       console.error("Error dropping sample:", error.message);
       errorMessage.set(error.message);
@@ -174,6 +190,14 @@
       isLoading.set(false);
     }
   }
+
+
+
+
+
+
+
+
 
   function cancelDropSample(index: number) {
     pendingRemoval.update(pending => {
@@ -441,18 +465,19 @@
         </div>
         
         {#if isEditingEnabled}
-          <div class="form-controls">
-            <button on:click={() => addForm(index)}>Add Field</button>
-            {#if canRemove[index]}
-              <button on:click={() => removeKey(index)}>Remove Field</button>
-            {/if}
-            {#if $pendingRemoval[index]}
-              <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
-              <button on:click={() => cancelDropSample(index)} class="cancel-drop">Cancel Drop</button>
-            {:else}
-              <button on:click={() => confirmDropSample(index)} class="drop-sample">Drop Sample</button>
-            {/if}
-          </div>
+        <div class="form-controls">
+          <button on:click={() => addForm(index)}>Add Field</button>
+          {#if canRemove[index]}
+            <button on:click={() => removeKey(index)}>Remove Field</button>
+          {/if}
+          {#if $pendingRemoval[index]}
+            <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
+            <button on:click={() => cancelDropSample(index)} class="cancel-drop">Cancel Drop</button>
+          {:else}
+            <button on:click={() => confirmDropSample(index)} class="drop-sample">Drop Sample</button>
+          {/if}
+        </div>
+
           {#if $displayedForms[index]}
             <div class="additional-forms">
               {#each $displayedForms[index] as form, entryIndex}

@@ -137,24 +137,28 @@ class ItemBatch:
                 return item['sample_token']
         return str(uuid.uuid4())
 
-    def remove_sample(self, sample_token):
-        logger.info(f"Attempting to remove sample with token: {sample_token}")
+    def remove_sample(self, sample_data):
+        logger.info(f"Attempting to remove sample: {sample_data}")
         
-        items_to_remove = list(db.samples_list.find({'sample_token': sample_token}))
+        query = {key: value for key, value in sample_data.items() if key not in ['_remove']}
+        
+        items_to_remove = list(db.samples_list.find(query))
         
         if not items_to_remove:
-            logger.warning(f"No items found with sample token: {sample_token}")
+            logger.warning(f"No items found matching the criteria: {query}")
             return []
         
-        if len(items_to_remove) == 1:
-            logger.warning(f"Attempting to remove the last item with sample token: {sample_token}")
-        
-        result = db.samples_list.delete_many({'sample_token': sample_token})
+        result = db.samples_list.delete_many(query)
         
         removed_ids = [str(item['_id']) for item in items_to_remove]
-        logger.info(f"Removed {result.deleted_count} items with sample token {sample_token}. IDs: {removed_ids}")
+        logger.info(f"Removed {result.deleted_count} items matching the criteria. IDs: {removed_ids}")
         
         return removed_ids
+
+
+
+
+
 
     def save_items(self):
         logger.info("Starting save_items method")
