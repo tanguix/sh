@@ -254,7 +254,7 @@
         <span class="toggle-text" class:hide={$categoryTagSearch} class:show={!$categoryTagSearch}>
           {$categoryTagSearch ? 'Hide' : 'Show'}
         </span>
-        Category and Tag Search
+        Available Keywords
       </button>
       <div class="section-content" class:open={$categoryTagSearch}>
         <div class="search-options">
@@ -280,6 +280,10 @@
               {/if}
             </ul>
           </div>
+        </div>
+        <div class="tips">
+          <hr>
+          <p>Tips: ask <a href="www.google.com">Xirong Cao</a> for more.</p>
         </div>
       </div>
     </div>
@@ -323,6 +327,11 @@
     border-top: none;
     border-radius: 0 0 4px 4px;
     box-sizing: border-box;
+  }
+
+  .tips {
+    padding: 1rem 0 0 0;
+    font-size: 14px;
   }
 
   .section-content.open {
