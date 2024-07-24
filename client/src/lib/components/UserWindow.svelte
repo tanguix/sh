@@ -13,15 +13,6 @@
   let exchange_rate = writable(null);
   let error = writable('');
 
-  // Sample token related stores
-  const fetchedSampleTokens = writable([]);
-  let who = writable('');
-  let fetched = writable(false);
-
-  // Workflow token related stores
-  const fetchedWorkflowTokens = writable([]);
-  let workflowWho = writable('');
-  let workflowFetched = writable(false);
 
   const toggleExchangeRate = async () => {
     exchangeRate.update(n => !n);
@@ -30,6 +21,34 @@
     }
   };
 
+  
+  function formatTimestamp(timestamp: number): string {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
+  }
+
+  
+
+  async function fetchExchangeRate() {
+    try {
+      const response = await fetch(API_ENDPOINTS.EXCHANGE_RATE);
+      if (!response.ok) {
+        throw new Error('Failed to fetch exchange rates');
+      }
+      const data = await response.json();
+      exchange_rate.set(data);
+    } catch (err) {
+      error.set(err.message);
+    }
+  }
+
+
+  // Workflow token related stores
+  const fetchedWorkflowTokens = writable([]);
+  let workflowWho = writable('');
+  let workflowFetched = writable(false);
+
+
   const toggleWorkflowToken = () => {
     workflowToken.update(n => !n);
     if (get(workflowToken) && !get(workflowFetched)) {
@@ -37,37 +56,6 @@
     }
   };
 
-  const toggleSampleToken = () => {
-    sampleToken.update(n => !n);
-    if (get(sampleToken) && !get(fetched)) {
-      fetchSampleTokens();
-    }
-  };
-
-  async function fetchSampleTokens() {
-    const user = get(page).data.user;
-    if (!user) {
-      console.log("User not defined");
-      return;
-    }
-
-    try {
-      const response = await fetch(API_ENDPOINTS.FETCH_SAMPLE_TOKEN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: user.name, role: user.role })
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch sample tokens');
-
-      const result = await response.json();
-      fetchedSampleTokens.set(result.sample_tokens);
-      fetched.set(true);
-      who.set(result.username === user.name ? 'you' : result.username);
-    } catch (error) {
-      console.error("Error fetching sample tokens:", error);
-    }
-  }
 
   async function fetchWorkflowTokens() {
     const user = get(page).data.user;
@@ -95,31 +83,98 @@
   }
 
 
-  // here you set the number of display tokens limit
-  const latestTokens = derived(fetchedSampleTokens, $tokens => $tokens.slice(0, 9));
-  const hasMoreTokens = derived(fetchedSampleTokens, $tokens => $tokens.length > 9);
+
+
 
   const latestWorkflowTokens = derived(fetchedWorkflowTokens, $tokens => $tokens.slice(0, 9));
   const hasMoreWorkflowTokens = derived(fetchedWorkflowTokens, $tokens => $tokens.length > 9);
 
-  async function fetchExchangeRate() {
+
+
+  // Sample token related stores
+  const fetchedSampleTokens = writable([]);
+  let who = writable('');
+  let fetched = writable(false);
+
+
+
+  const toggleSampleToken = () => {
+    sampleToken.update(n => !n);
+    if (get(sampleToken) && !get(fetched)) {
+      fetchSampleTokens();
+    }
+  };
+
+
+  async function fetchSampleTokens() {
+    const user = get(page).data.user;
+    if (!user) {
+      console.log("User not defined");
+      return;
+    }
+
     try {
-      const response = await fetch(API_ENDPOINTS.EXCHANGE_RATE);
-      if (!response.ok) {
-        throw new Error('Failed to fetch exchange rates');
-      }
-      const data = await response.json();
-      exchange_rate.set(data);
-    } catch (err) {
-      error.set(err.message);
+      const response = await fetch(API_ENDPOINTS.FETCH_SAMPLE_TOKEN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: user.name, role: user.role })
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch sample tokens');
+
+      const result = await response.json();
+      fetchedSampleTokens.set(result.sample_tokens);
+      fetched.set(true);
+      who.set(result.username === user.name ? 'you' : result.username);
+    } catch (error) {
+      console.error("Error fetching sample tokens:", error);
     }
   }
 
-  function formatTimestamp(timestamp: number): string {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleString();
+
+  // here you set the number of display tokens limit
+  const latestTokens = derived(fetchedSampleTokens, $tokens => $tokens.slice(0, 9));
+  const hasMoreTokens = derived(fetchedSampleTokens, $tokens => $tokens.length > 9);
+
+
+
+  // New stores for category and tag search
+  let categoryTagSearch = writable(false);
+  let categories = writable([]);
+  let tags = writable([]);
+  let categoriesTagsFetched = writable(false);
+
+
+  const toggleCategoryTagSearch = () => {
+    categoryTagSearch.update(n => !n);
+    if (get(categoryTagSearch) && !get(categoriesTagsFetched)) {
+      fetchCategoriesAndTags();
+    }
+  };
+
+  async function fetchCategoriesAndTags() {
+    try {
+      const response = await fetch(API_ENDPOINTS.FETCH_CATEGORIES_AND_TAGS);
+      if (!response.ok) throw new Error('Failed to fetch categories and tags');
+
+      const result = await response.json();
+      categories.set(result.categories);
+      tags.set(result.tags);
+      categoriesTagsFetched.set(true);
+    } catch (error) {
+      console.error("Error fetching categories and tags:", error);
+    }
   }
+
+  // Limit display to 3 items for each
+  const displayedCategories = derived(categories, $cats => $cats.slice(0, 3));
+  const displayedTags = derived(tags, $t => $t.slice(0, 3));
+
+
 </script>
+
+
+
 
 {#if $page.data.user}
   <div class="user-window">
@@ -193,6 +248,41 @@
         </ul>
       </div>
     </div>
+
+    <div class="section">
+      <button on:click={toggleCategoryTagSearch}>
+        <span class="toggle-text" class:hide={$categoryTagSearch} class:show={!$categoryTagSearch}>
+          {$categoryTagSearch ? 'Hide' : 'Show'}
+        </span>
+        Category and Tag Search
+      </button>
+      <div class="section-content" class:open={$categoryTagSearch}>
+        <div class="search-options">
+          <div class="option-group">
+            <h4>Categories:</h4>
+            <ul>
+              {#each $displayedCategories as category}
+                <li>{category}</li>
+              {/each}
+              {#if $categories.length > 5}
+                <li>...</li>
+              {/if}
+            </ul>
+          </div>
+          <div class="option-group">
+            <h4>Tags:</h4>
+            <ul>
+              {#each $displayedTags as tag}
+                <li>{tag}</li>
+              {/each}
+              {#if $tags.length > 5}
+                <li>...</li>
+              {/if}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 {:else}
   <div class="user-window">
@@ -250,7 +340,7 @@
     width: 100%;
     text-align: left;
     padding: 10px;
-    background-color: #ffffff; /* Dimmed background */
+    background-color: #ffffff;
     border: 1px solid #d0d0d0;
     border-radius: 4px;
     cursor: pointer;
@@ -269,11 +359,11 @@
   }
 
   .toggle-text.show {
-    color: #7aa2f7; /* Green color for 'Show' */
+    color: #7aa2f7;
   }
 
   .toggle-text.hide {
-    color: #ff757f; /* Red color for 'Hide' */
+    color: #ff757f;
   }
 
   ul {
@@ -292,4 +382,31 @@
     margin: 16px 0;
     background-color: #f9f9f9;
   }
+
+  .search-options {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .option-group {
+    width: 48%;
+  }
+
+  .option-group h4 {
+    margin-bottom: 5px;
+  }
+
+  .option-group ul {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .option-group li {
+    margin-bottom: 3px;
+    font-size: 0.9em;
+  }
 </style>
+
+
+

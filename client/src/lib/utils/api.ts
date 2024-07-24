@@ -33,6 +33,7 @@ export const API_ENDPOINTS = {
     FETCH_SAMPLE_TOKEN: `${BASE_URL}/search/api/get_sample_tokens`,
     FETCH_WORKFLOW_TOKEN: `${BASE_URL}/search/api/get_workflow_tokens`,
     SEARCH_RESULTS: `${BASE_URL}/search/api/searched_result`,
+    FETCH_CATEGORIES_AND_TAGS: `${BASE_URL}/search/api/categories_and_tags`,
 
 
     EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,

@@ -1,10 +1,8 @@
 
 
-
-
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from app.logger import logger
-from app.search.models import Collection
+from app.search.models import Collection, ExchangeRate
 import os
 import json
 
@@ -18,9 +16,6 @@ FILE_FOLDER = os.path.join(SERVER_DIR, 'files')
 if not os.path.exists(FILE_FOLDER):
     os.makedirs(FILE_FOLDER)
 
-
-
-
 @search_bp.route('/api/collections', methods=['GET'])
 def find_collection():
     try:
@@ -30,9 +25,6 @@ def find_collection():
     except Exception as e:
         logger.error(f"Error fetching collections: {e}")
         return jsonify({"error": "Internal server error"}), 500
-
-
-
 
 @search_bp.route('/api/keys', methods=['GET'])
 def find_key():
@@ -50,10 +42,6 @@ def find_key():
         logger.error(f"Error fetching keys for {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-
-
-
-
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
@@ -61,7 +49,8 @@ def searched_result():
     if not collection_name or not criteria:
         return jsonify({"error": "Collection and search criteria must be provided"}), 400
     try:
-        results = Collection.search_by_multiple_criteria(collection_name, criteria)
+        backend_local_url = current_app.config['BACKEND_LOCAL_URL']
+        results = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
         if results:
             return jsonify(results), 200
         else:
@@ -74,17 +63,10 @@ def searched_result():
 
 
 
-
-
 @search_bp.route('/api/images/<path:filename>', methods=['GET'])
 def get_image(filename):
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    IMAGE_FOLDER = os.path.join(BASE_DIR, '../../images')
-    
     image_path = os.path.join(IMAGE_FOLDER, filename)
-    
     logger.info(f"Attempting to serve image: {image_path}")
-
     try:
         return send_file(image_path, mimetype='image/jpeg')
     except FileNotFoundError:
@@ -106,15 +88,11 @@ def get_sample_tokens():
         if not user_name or not user_role:
             return jsonify({"error": "Invalid user data"}), 400
         
-        print(f"Searching for tokens modified by user: {user_name}, role: {user_role}")
         sorted_sample_tokens = Collection.search_sample_tokens_by_user(user_name, user_role)
-        print(f"Number of unique sample tokens: {len(sorted_sample_tokens)}")
-        print(f"Sample tokens: {sorted_sample_tokens}")
         return jsonify({"sample_tokens": sorted_sample_tokens, "username": user_name}), 200
     except Exception as e:
-        print(f"Error in get_sample_tokens: {str(e)}")
+        logger.error(f"Error in get_sample_tokens: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 
 
@@ -125,13 +103,41 @@ def get_workflow_tokens():
         data = request.json
         user_name = data.get('name')
         user_role = data.get('role')
-
         if not user_name or not user_role:
             return jsonify({"error": "Invalid user data"}), 400
-
         workflow_tokens = Collection.search_workflow_tokens_by_user(user_name, user_role)
-
         return jsonify({"workflow_tokens": workflow_tokens, "username": user_name}), 200
     except Exception as e:
         logger.error(f"Error fetching workflow tokens: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+
+
+@search_bp.route('/api/exchange_rate', methods=['GET'])
+def get_exchange_rate():
+    try:
+        exchange_rate = ExchangeRate.get_latest_rate()
+        return jsonify(exchange_rate), 200
+    except Exception as e:
+        logger.error(f"Error fetching exchange rate: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+
+
+
+
+@search_bp.route('/api/categories_and_tags', methods=['GET'])
+def get_categories_and_tags():
+    logger.info("Received request for categories and tags")
+    try:
+        logger.debug("Attempting to fetch categories and tags from the database")
+        categories, tags = Collection.get_categories_and_tags()
+        logger.info(f"Successfully fetched {len(categories)} categories and {len(tags)} tags")
+        logger.debug(f"Categories: {categories}")
+        logger.debug(f"Tags: {tags}")
+        return jsonify({"categories": categories, "tags": tags}), 200
+    except Exception as e:
+        logger.error(f"Error fetching categories and tags: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
