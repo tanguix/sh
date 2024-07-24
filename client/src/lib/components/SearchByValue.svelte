@@ -159,7 +159,6 @@
     }
 
 
-
     async function search() {
         let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
 
@@ -169,15 +168,12 @@
         }
 
         try {
-
-
             const processedCriteria = searchCriteria.map(criteria => {
                 if (criteria.key === 'timestamp') {
                     return processTimestampCriteria(criteria);
                 }
                 return criteria;
             });
-
 
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,
@@ -191,6 +187,7 @@
                 let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
                 
                 if (isSamplingMode) {
+                    // Sampling mode logic remains the same
                     const oldLength = results.length;
                     if (isAddOperation) {
                         newResults = newResults.filter(newResult => 
@@ -211,8 +208,16 @@
                     
                     resultsChanged = oldLength !== results.length;
                 } else {
-                    results = newResults;
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                    // Normal mode logic
+                    if (newResults.length === 0) {
+                        // Clear previous results if no new results are found
+                        results = [];
+                        deepCopiedResults = [];
+                        console.log("No results found. Cleared previous results.");
+                    } else {
+                        results = newResults;
+                        deepCopiedResults = JSON.parse(JSON.stringify(results));
+                    }
                 }
             } else {
                 const errorData = await response.json();
@@ -220,8 +225,17 @@
             }
         } catch (error) {
             console.error('Error searching collection:', error);
+            // Optionally, clear results on error as well
+            if (!isSamplingMode) {
+                results = [];
+                deepCopiedResults = [];
+                console.log("Error occurred. Cleared previous results.");
+            }
         }
     }
+
+
+
 
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;

@@ -7,6 +7,7 @@ from bson import json_util
 import json
 from flask import current_app
 from datetime import datetime
+from datetime import datetime, timedelta
 
 # define the keys you want to exclude when frontend requests all keys
 exclude_keys = {"_id", "quantity", "password", "role", "authToken", "image_path"}
@@ -35,6 +36,28 @@ class Collection:
 
 
 
+    @staticmethod
+    def process_timestamp_query(key, value, operator):
+        if operator == 'exact':
+            date = datetime.strptime(value, "%Y-%m-%d")
+            start_of_day = int(date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            end_of_day = int((date.replace(hour=23, minute=59, second=59, microsecond=999999) + timedelta(seconds=1)).timestamp())
+            return {key: {"$gte": start_of_day, "$lt": end_of_day}}
+        elif operator == '>':
+            timestamp = int(datetime.strptime(value, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            return {key: {"$lt": timestamp}}
+        elif operator == '<':
+            timestamp = int(datetime.strptime(value, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999).timestamp())
+            return {key: {"$gt": timestamp}}
+        elif operator == 'range':
+            start_timestamp = int(datetime.strptime(value[0], "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            end_timestamp = int((datetime.strptime(value[1], "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999) + timedelta(seconds=1)).timestamp())
+            return {key: {"$gte": start_timestamp, "$lt": end_timestamp}}
+        else:
+            raise ValueError(f"Invalid timestamp operator: {operator}")
+
+
+
 
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria):
@@ -47,7 +70,9 @@ class Collection:
             value = criterion['value']
 
             if key == 'timestamp':
-                query["$and"].append(Collection.process_timestamp_query(key, value, criterion.get('operator')))
+                timestamp_query = Collection.process_timestamp_query(key, value, criterion.get('operator'))
+                query["$and"].append(timestamp_query)
+                logger.info(f"Timestamp query: {timestamp_query}")
             else:
                 search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
 
@@ -57,6 +82,8 @@ class Collection:
                     query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
                 else:
                     query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
+
+
 
         results = list(db[collection_name].find(query))
 
@@ -79,29 +106,14 @@ class Collection:
 
             processed_results.append(processed_result)
 
+
+        logger.info(f"Full query: {query}")
+        results = list(db[collection_name].find(query))
+        logger.info(f"Number of results: {len(results)}")
+
+
         logger.info(f"Processed results: {processed_results}")
         return processed_results
-
-
-
-
-    @staticmethod
-    def process_timestamp_query(key, value, operator):
-        if operator == 'exact':
-            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
-            return {key: timestamp}
-        elif operator == '<':
-            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
-            return {key: {"$lt": timestamp}}
-        elif operator == '>':
-            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
-            return {key: {"$gt": timestamp}}
-        elif operator == 'range':
-            start_timestamp = datetime.strptime(value[0], "%Y-%m-%d").timestamp() * 1000
-            end_timestamp = datetime.strptime(value[1], "%Y-%m-%d").timestamp() * 1000
-            return {key: {"$gte": start_timestamp, "$lte": end_timestamp}}
-        else:
-            raise ValueError(f"Invalid timestamp operator: {operator}")
 
 
 

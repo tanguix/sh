@@ -52,23 +52,26 @@ def find_key():
 
 
 
+
+
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
     criteria = json.loads(request.args.get('criteria', '[]'))
-
     if not collection_name or not criteria:
         return jsonify({"error": "Collection and search criteria must be provided"}), 400
-
     try:
         results = Collection.search_by_multiple_criteria(collection_name, criteria)
         if results:
             return jsonify(results), 200
         else:
+            logger.info(f"No matching documents found for query in collection {collection_name}")
             return jsonify({"error": "No matching documents found"}), 404
     except Exception as e:
-        logger.error(f"Error searching collection {collection_name}: {e}")
+        logger.error(f"Error searching collection {collection_name}: {str(e)}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+
 
 
 
