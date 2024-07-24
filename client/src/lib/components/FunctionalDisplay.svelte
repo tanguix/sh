@@ -43,6 +43,11 @@
 
   $: isEditingEnabled = searchOption === 'sampling';
 
+
+  // New state for grid view toggle
+  let isGridView = false;
+
+
   function filterDisplayedKeys(results) {
     return Object.fromEntries(
       Object.entries(results).filter(([key]) => !keysToExclude.includes(key))
@@ -422,149 +427,255 @@
     target.src = '/path/to/fallback-image.jpg';
     target.alt = 'Image not available';
   }
+
+
+
+  // New function to toggle grid view
+  function toggleGridView() {
+    isGridView = !isGridView;
+  }
+
+
 </script>
 
-<div class="results-container">
-  {#if $isLoading}
-    <div class="loading-spinner">Loading...</div>
-  {/if}
 
-  {#if $errorMessage}
-    <div class="error-message">{$errorMessage}</div>
-  {/if}
 
-  {#if results.length > 0}
-    {#each results as result, index}
-      <div class="result-card">
-        <h3>{result.sample_token || 'No Sample Token'}</h3>
-        <div class="result-content">
-          <div class="image-container">
-            {#if result.image_url}
-              <div class="image-frame">
-                <img 
-                  src={result.image_url} 
-                  alt="sample_image" 
-                  on:error={handleImageError}
-                >
+<div class="functional-display">
+  <div class="view-toggle">
+    <label>
+      <input type="checkbox" bind:checked={isGridView}>
+      Grid View
+    </label>
+  </div>
+
+
+  <div class="results-container" class:grid-view={isGridView}>
+
+    {#if $isLoading}
+      <div class="loading-spinner">Loading...</div>
+    {/if}
+
+    {#if $errorMessage}
+      <div class="error-message">{$errorMessage}</div>
+    {/if}
+
+    {#if results.length > 0}
+      {#each results as result, index}
+        <div class="result-card" class:grid-item={isGridView}>
+          {#if !isGridView}
+            <h3>{result.sample_token || 'No Sample Token'}</h3>
+          {/if}
+          <div class="result-content" class:grid-content={isGridView}>
+            <div class="image-container">
+              {#if result.image_url}
+                <div class="image-frame">
+                  <img 
+                    src={result.image_url} 
+                    alt="sample_image" 
+                    on:error={handleImageError}
+                  >
+                </div>
+              {:else}
+                <div class="no-image">No image available</div>
+              {/if}
+            </div>
+            {#if isGridView}
+              <div class="reference-no">{result.reference_no || 'No Reference Number'}</div>
+            {/if}
+
+            {#if !isGridView}
+              <div class="properties-wrapper">
+                <div class="properties-container">
+                  {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
+                    <div class="property-item">
+                      <span class="property-key">{key}:</span>
+                      <span class="property-value">{formatPropertyValue(key, value)}</span>
+                    </div>
+                  {/each}
+                </div>
               </div>
-            {:else}
-              <div class="no-image">No image available</div>
             {/if}
           </div>
-
-          <div class="properties-wrapper">
-            <div class="properties-container">
-              {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
-                <div class="property-item">
-                  <span class="property-key">{key}:</span>
-                  <span class="property-value">{formatPropertyValue(key, value)}</span>
-                </div>
-              {/each}
+          
+          {#if isEditingEnabled && !isGridView}
+            <div class="form-controls">
+              <button on:click={() => addForm(index)}>Add Field</button>
+              {#if canRemove[index]}
+                <button on:click={() => removeKey(index)}>Remove Field</button>
+              {/if}
+              {#if $pendingRemoval[index]}
+                <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
+                <button on:click={() => cancelDropSample(index)} class="cancel-drop">Cancel Drop</button>
+              {:else}
+                <button on:click={() => confirmDropSample(index)} class="drop-sample">Drop Sample</button>
+              {/if}
             </div>
-          </div>
-        </div>
-        
-        {#if isEditingEnabled}
-        <div class="form-controls">
-          <button on:click={() => addForm(index)}>Add Field</button>
-          {#if canRemove[index]}
-            <button on:click={() => removeKey(index)}>Remove Field</button>
-          {/if}
-          {#if $pendingRemoval[index]}
-            <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
-            <button on:click={() => cancelDropSample(index)} class="cancel-drop">Cancel Drop</button>
-          {:else}
-            <button on:click={() => confirmDropSample(index)} class="drop-sample">Drop Sample</button>
-          {/if}
-        </div>
 
-          {#if $displayedForms[index]}
-            <div class="additional-forms">
-              {#each $displayedForms[index] as form, entryIndex}
-                <div class="form-entry">
-                  <form on:submit|preventDefault>
-                    {#if form.isRemove && form.key !== '_remove'}
-                      <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
-                      <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
-                        <option value="">Select key</option>
-                        {#each Object.keys(results[index]) as key}
-                          {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
-                            <option value={key}>{key}</option>
-                          {/if}
-                        {/each}
-                      </select>
-                    {:else if !form.isRemove}
-                      <div class="input-group">
-                        <input 
-                          id={`key-${index}-${entryIndex}`} 
-                          type="text"
-                          placeholder="Key" 
-                          on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} 
-                          value={form.key} 
-                          readonly={form.isDate}
-                        />
-                        <input 
-                          id={`value-${index}-${entryIndex}`} 
-                          type={form.isDate ? 'date' : 'text'} 
-                          placeholder="Value" 
-                          on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} 
-                          value={form.rawValue}
-                        />
-                      </div>
-                      {#if form.key === 'tags' || form.key === 'categories'}
-                        <small class="helper-text">Separate multiple {form.key} with commas</small>
+            {#if $displayedForms[index]}
+              <div class="additional-forms">
+                {#each $displayedForms[index] as form, entryIndex}
+                  <div class="form-entry">
+                    <form on:submit|preventDefault>
+                      {#if form.isRemove && form.key !== '_remove'}
+                        <label for={`key-${index}-${entryIndex}`}>Select Key to Remove:</label>
+                        <select id={`key-${index}-${entryIndex}`} on:change={e => updateForm(index, entryIndex, 'key', e.target.value)}>
+                          <option value="">Select key</option>
+                          {#each Object.keys(results[index]) as key}
+                            {#if !keysToExclude.includes(key) && !($selectedForRemoval[index] || []).includes(key)}
+                              <option value={key}>{key}</option>
+                            {/if}
+                          {/each}
+                        </select>
+                      {:else if !form.isRemove}
+                        <div class="input-group">
+                          <input 
+                            id={`key-${index}-${entryIndex}`} 
+                            type="text"
+                            placeholder="Key" 
+                            on:input={e => updateForm(index, entryIndex, 'key', e.target.value)} 
+                            value={form.key} 
+                            readonly={form.isDate}
+                          />
+                          <input 
+                            id={`value-${index}-${entryIndex}`} 
+                            type={form.isDate ? 'date' : 'text'} 
+                            placeholder="Value" 
+                            on:input={e => updateForm(index, entryIndex, 'value', e.target.value)} 
+                            value={form.rawValue}
+                          />
+                        </div>
+                        {#if form.key === 'tags' || form.key === 'categories'}
+                          <small class="helper-text">Separate multiple {form.key} with commas</small>
+                        {/if}
+                        <label class="custom-checkbox">
+                          <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
+                          <span class="checkbox-text">Date Type</span>
+                        </label>
                       {/if}
-                      <label class="custom-checkbox">
-                        <input type="checkbox" on:click={() => toggleDateInput(index, entryIndex)} checked={form.isDate} />
-                        <span class="checkbox-text">Date Type</span>
-                      </label>
-                    {/if}
-                  </form>
-                </div>
-              {/each}
+                    </form>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            <div class="action-buttons">
+              {#if $unsavedChangesByIndex[index]}
+                <button 
+                  on:click={() => updateResults(index)} 
+                  class={$dropSampleClicked[index] ? 'update-drop' : 'update-normal'}
+                >
+                  Update
+                </button>
+              {/if}
+              {#if $formActionClicked[index]}
+                <button 
+                  on:click={() => lessForm(index)} 
+                  class={$dropSampleClicked[index] ? 'cancel-drop' : 'cancel-normal'}
+                >
+                  Cancel
+                </button>
+              {/if}
             </div>
           {/if}
-          <div class="action-buttons">
-            {#if $unsavedChangesByIndex[index]}
-              <button 
-                on:click={() => updateResults(index)} 
-                class={$dropSampleClicked[index] ? 'update-drop' : 'update-normal'}
-              >
-                Update
-              </button>
-            {/if}
-            {#if $formActionClicked[index]}
-              <button 
-                on:click={() => lessForm(index)} 
-                class={$dropSampleClicked[index] ? 'cancel-drop' : 'cancel-normal'}
-              >
-                Cancel
-              </button>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    {/each}
+        </div>
+      {/each}
 
-    <div class="global-actions">
-      {#if isEditingEnabled && (Object.values($unsavedChangesByIndex).some(Boolean) || resultsChanged)}
-        <button on:click={pushChangesToBackend} disabled={$isLoading}>Push Changes</button>
+      {#if !isGridView}
+        <div class="global-actions">
+          {#if isEditingEnabled && (Object.values($unsavedChangesByIndex).some(Boolean) || resultsChanged)}
+            <button on:click={pushChangesToBackend} disabled={$isLoading}>Push Changes</button>
+          {/if}
+          <button on:click={generatePDFWrapper}>Download PDF</button>
+        </div>
       {/if}
-      <button on:click={generatePDFWrapper}>Download PDF</button>
-    </div>
 
-  {:else}
-    <p class="no-results">No results found</p>
-  {/if}
+    {:else}
+      <p class="no-results">No results found</p>
+    {/if}
+  </div>
 </div>
 
+
+
+
 <style>
+
+
+  .functional-display {
+    margin: 2rem auto;
+  }
+
+
+  .view-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .view-toggle label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+  }
+
+  .view-toggle input[type="checkbox"] {
+    margin-right: 8px;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ccc;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .view-toggle input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    height: 60%;
+    background-color: transparent;
+    border-radius: 2px;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .view-toggle input[type="checkbox"]:checked {
+    border-color: #ff7a6e;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+  }
+
+  .view-toggle input[type="checkbox"]:checked::before {
+    background-color: #ff7a6e;
+  }
+
+
+
+
   .results-container {
     font-family: 'Ubuntu', sans-serif;
     max-width: 1000px;
     margin: 0 auto;
     padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
+
+
+  /* create as many as grid view (at least 200px) columns as possible while fitting the width */
+  .results-container.grid-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+  }
+
 
   .result-card {
     background-color: #fff;
@@ -572,6 +683,19 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
     padding: 20px;
+  }
+
+  .result-card.grid-item {
+    margin-bottom: 0;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .result-content.grid-content {
+    height: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   h3 {
@@ -583,7 +707,7 @@
     display: flex;
     gap: 20px;
     margin-bottom: 15px;
-    height: 400px; /* Fixed height for consistency */
+    height: 400px;
   }
 
   .image-container {
@@ -594,6 +718,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .grid-item .image-container {
+    flex: 1;
+    height: 180px;
   }
 
   .image-frame {
@@ -616,6 +745,15 @@
     color: #999;
     font-style: italic;
   }
+
+  .reference-no {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+  }
+
+
 
   .properties-wrapper {
     flex: 0 0 33.33%;
@@ -813,6 +951,14 @@
     .properties-container {
       max-height: 300px;
     }
-  }
-</style>
 
+    .results-container.grid-view {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .grid-item .image-container {
+      height: 150px;
+    }
+  }
+
+</style>
