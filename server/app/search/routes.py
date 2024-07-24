@@ -1,35 +1,33 @@
 
+
+
+
 from flask import Blueprint, request, jsonify, send_file
 from app.logger import logger
 from app.search.models import Collection
 import os
-# from app.database import db  # Make sure to import your database connection
-from bson import ObjectId
+import json
 
-# Blueprint object
 search_bp = Blueprint('search', __name__)
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
+IMAGE_FOLDER = os.path.join(SERVER_DIR, 'images')
+FILE_FOLDER = os.path.join(SERVER_DIR, 'files')
 
-# return all collections 
+if not os.path.exists(FILE_FOLDER):
+    os.makedirs(FILE_FOLDER)
+
 @search_bp.route('/api/collections', methods=['GET'])
 def find_collection():
     try:
-        # Get all collections from the database as a list of names (strings)
         collections = Collection.get_all_collections()
-
-        # Filter out the 'users' collection if it exists
         filtered_collections = [collection for collection in collections if collection != 'users']
-
-        # Return the filtered list of collections
         return jsonify({"collections": filtered_collections}), 200
-
     except Exception as e:
         logger.error(f"Error fetching collections: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-
-
-# catch the collections, return all keys
 @search_bp.route('/api/keys', methods=['GET'])
 def find_key():
     collection_name = request.args.get('collection')
@@ -46,23 +44,16 @@ def find_key():
         logger.error(f"Error fetching keys for {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-
-
-
-
-
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
-    key = request.args.get('key')
-    value = request.args.get('value')
+    criteria = json.loads(request.args.get('criteria', '[]'))
 
-    if not collection_name or not key or not value:
-        return jsonify({"error": "Collection, key, and value must be provided"}), 400
+    if not collection_name or not criteria:
+        return jsonify({"error": "Collection and search criteria must be provided"}), 400
 
     try:
-        # Use the consolidated search method
-        results = Collection.search_by_key_value(collection_name, key, value)
+        results = Collection.search_by_multiple_criteria(collection_name, criteria)
         if results:
             return jsonify(results), 200
         else:
@@ -71,27 +62,17 @@ def searched_result():
         logger.error(f"Error searching collection {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-
-
-
-
-
-
-# because image path is constructed during search_by_key_value() method in the models.py 
-# so the url is already sent back to frontend <img> tag, and whenever <img> is needed to be display 
-# this trigger the default url GET method, and send to here
 @search_bp.route('/api/images/<path:filename>', methods=['GET'])
 def get_image(filename):
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     IMAGE_FOLDER = os.path.join(BASE_DIR, '../../images')
     
-    # Construct the full path to the image
     image_path = os.path.join(IMAGE_FOLDER, filename)
     
     logger.info(f"Attempting to serve image: {image_path}")
 
     try:
-        return send_file(image_path, mimetype='image/jpeg')  # or 'image/png' if it's a PNG
+        return send_file(image_path, mimetype='image/jpeg')
     except FileNotFoundError:
         logger.error(f"Image not found: {image_path}")
         return jsonify({"error": "Image not found"}), 404

@@ -1,4 +1,3 @@
-
 from app.database import db
 from app.logger import logger
 import time
@@ -6,79 +5,49 @@ from collections import defaultdict
 from bson.int64 import Int64
 from bson import json_util
 import json
+from flask import current_app
 
-from flask import current_app   # this line is for importing the config.py 
-
-# define the keys you want to exclude when frontend request all keys
+# define the keys you want to exclude when frontend requests all keys
 exclude_keys = {"_id", "quantity", "password", "role", "authToken", "image_path"}
-backend_local_url = current_app.config['BACKEND_LOCAL_URL']     # correct way of using predefined variable in config.py
+backend_local_url = current_app.config['BACKEND_LOCAL_URL']
 
-
-# most likely, this class is all method, right now it doesn't have data to initialize
 class Collection:
-
-
     @staticmethod
     def get_all_collections():
-        '''
-        you can test the url, by printing out "backend_local_url" variable
-        '''
-        # print("your local host", backend_local_url)
-        return db.list_collection_names()       # return all collections name in a database
-
+        return db.list_collection_names()
 
     @staticmethod
     def get_keys(collection_name):
-        # Check if collection_name passed in is valid
         if collection_name in db.list_collection_names():
-            # later add checks, whenever a collection is created, make sure asking for scheme 
-            # so at here you can display key options by querying scheme 
-            # also add check if no scheme found, then use the below find random document and extract keys
             sample_document = db[collection_name].find_one()
-
             if sample_document:
-                # Initialize a set to store the keys for efficient handling
                 keys = set()
-
-                # Iterate over the document's items
                 for key, value in sample_document.items():
                     if key == "additional_fields" and isinstance(value, dict):
-                        # Add keys from additional_fields
                         keys.update(value.keys())
                     elif key not in exclude_keys:
-                        # Add keys from the main document, excluding sensitive ones and additional_fields itself
                         keys.add(key)
-
                 return list(keys)
         return None
 
-
-
     @staticmethod
-    def search_by_key_value(collection_name, key, value):
+    def search_by_multiple_criteria(collection_name, criteria):
         if collection_name not in db.list_collection_names():
             return None
 
-        sample_document = db[collection_name].find_one()
-        if not sample_document:
-            return None
+        query = {"$and": []}
+        for criterion in criteria:
+            key = criterion['key']
+            value = criterion['value']
 
-        # Split the value into an array if it contains commas
-        search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
+            search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
 
-        # Determine if the key is in the main document or in additional_fields
-        if key in sample_document:
-            field_path = key
-        else:
-            field_path = f"additional_fields.{key}"
+            field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
 
-        # Create a query based on whether the field is an array or not
-        if isinstance(sample_document.get(key, sample_document.get('additional_fields', {}).get(key)), list):
-            # If the field is an array, use $all for multiple values or $in for a single value
-            query = {field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}}
-        else:
-            # If the field is not an array, use exact match
-            query = {field_path: value}
+            if isinstance(db[collection_name].find_one().get(key, db[collection_name].find_one().get('additional_fields', {}).get(key)), list):
+                query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
+            else:
+                query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
 
         results = list(db[collection_name].find(query))
         processed_results = []
@@ -183,6 +152,3 @@ class Collection:
         sorted_workflow_tokens = [item["workflow_id"] for item in sorted_workflow_token_data]
         
         return sorted_workflow_tokens
-
-
-
