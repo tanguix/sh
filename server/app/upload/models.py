@@ -35,10 +35,10 @@ def json_serialize(obj):
 
 
 
-# create item (sample) that need to be stored in the database
-# [!] later you can defined other basic type here when needed
 class Item:
-    def __init__(self, reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir):
+    def __init__(self, reference_no, categories, tags, additional_fields, 
+                 image_file, additional_image_files, server_dir, unit_price, 
+                 unit_weight, source, address, phone):
         self.reference_no = reference_no
         self.categories = categories
         self.tags = tags
@@ -48,9 +48,27 @@ class Item:
         self.server_dir = server_dir
         self.image_path = None
         self.additional_image_paths = []
-        self.timestamp = int(time.time())  # Current Unix timestamp (seconds since epoch)
+        self.timestamp = int(time.time())
+        self.unit_price = self._parse_unit_input(unit_price)
+        self.unit_weight = self._parse_unit_input(unit_weight)
+        self.source = source
+        self.address = address
+        self.phone = phone
 
-
+    def _parse_unit_input(self, input_str):
+        if not input_str:
+            return None
+        parts = input_str.split(',')
+        if len(parts) != 2:
+            return input_str  # Return as-is if not in expected format
+        value, unit = parts
+        value = value.strip()
+        unit = unit.strip()
+        try:
+            float(value)  # Validate that value is a number
+            return f"{value} ({unit})"
+        except ValueError:
+            return input_str  # Return as-is if value is not a valid number
 
     def process_files(self):
         if self.image_file:
@@ -85,13 +103,6 @@ class Item:
             additional_file.save(additional_absolute_path)
             self.additional_image_paths.append(additional_relative_path)
 
-
-    @staticmethod
-    def is_reference_no_unique(reference_no: str) -> bool:
-        """Check if the reference number is unique in the database."""
-        existing_item = db.samples.find_one({"reference_no": reference_no})
-        return existing_item is None
-
     def save_item(self):
         if not self.is_reference_no_unique(self.reference_no):
             raise ValueError(f"Reference number '{self.reference_no}' already exists.")
@@ -103,10 +114,21 @@ class Item:
             "additional_fields": self.additional_fields,
             "image_path": self.image_path,
             "additional_image_paths": self.additional_image_paths,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "unit_price": self.unit_price,
+            "unit_weight": self.unit_weight,
+            "source": self.source,
+            "address": self.address,
+            "phone": self.phone
         }
         result = db.samples.insert_one(data)
         return result
+
+    @staticmethod
+    def is_reference_no_unique(reference_no: str) -> bool:
+        """Check if the reference number is unique in the database."""
+        existing_item = db.samples.find_one({"reference_no": reference_no})
+        return existing_item is None
 
     @staticmethod
     def from_request(request, server_dir):
@@ -116,7 +138,13 @@ class Item:
         tags = json.loads(request.form.get('tags', '[]'))
         additional_fields = json.loads(request.form.get('additional_fields', '{}'))
         additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
-        return Item(reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir)
+        unit_price = request.form.get('unit_price')
+        unit_weight = request.form.get('unit_weight')
+        source = request.form.get('source')
+        address = request.form.get('address')
+        phone = request.form.get('phone')
+        return Item(reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir,
+                    unit_price, unit_weight, source, address, phone)
 
 
 

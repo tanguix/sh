@@ -23,6 +23,16 @@
     let imagePath: string = '';
     let imagePreviewUrl: string = '';
 
+
+    // new variables for production needed
+    let unitPrice = '';
+    let unitWeight = '';
+    let source = '';
+    let address = '';
+    let phone = '';
+
+
+
     let additionalImages: File[] = [];
     let additionalImagePreviews: string[] = [];
 
@@ -204,6 +214,17 @@
         formData.append('categories', JSON.stringify(allCategories));
         formData.append('additional_fields', JSON.stringify(additionalFields));
 
+
+        // production append
+        formData.append('unit_price', unitPrice);
+        formData.append('unit_weight', unitWeight);
+        formData.append('source', source);
+        formData.append('address', address);
+        formData.append('phone', phone);
+
+
+
+
         // TODO: later implement a hints, use customized modals to tell users that they are why their upload is not 
         // successful, such as because the duplicated reference number, etc
         sendSampleData(formData)
@@ -340,6 +361,25 @@
             <div class="input-group">
                 <input type="text" id="reference_no" name="reference_no" placeholder="Reference Number" required>
             </div>
+
+
+            <div class="input-group">
+                <input type="text" id="unit_price" name="unit_price" bind:value={unitPrice} placeholder="Unit Price (e.g., 5.99, USD)" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="unit_weight" name="unit_weight" bind:value={unitWeight} placeholder="Unit Weight (e.g., 500, g)" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="source" name="source" bind:value={source} placeholder="Source" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="address" name="address" bind:value={address} placeholder="Address" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone" required>
+            </div>
+
+
 
             <!-- Separator -->
             <hr class="separator">
@@ -501,7 +541,7 @@
     }
 
     .additional-images {
-        margin-top: 2rem;
+        margin-top: 1.75rem;
     }
 
     .additional-images-area {
