@@ -596,12 +596,12 @@
 
 
 
-
 <style>
 
 
   .functional-display {
     margin: 2rem auto;
+    font-family: 'Ubuntu';
   }
 
 

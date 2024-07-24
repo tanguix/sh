@@ -126,6 +126,40 @@
         }
     }
 
+
+
+
+    function processTimestampCriteria(criteria: { key: string, value: string }) {
+        const value = criteria.value.trim();
+        if (value.includes(',')) {
+            // Range or operator search
+            const [date, operator] = value.split(',').map(s => s.trim());
+            if (operator === '<' || operator === '>') {
+                return {
+                    key: criteria.key,
+                    value: date,
+                    operator: operator
+                };
+            } else {
+                // Assume it's a range search
+                return {
+                    key: criteria.key,
+                    value: value.split(',').map(s => s.trim()),
+                    operator: 'range'
+                };
+            }
+        } else {
+            // Exact date search
+            return {
+                key: criteria.key,
+                value: value,
+                operator: 'exact'
+            };
+        }
+    }
+
+
+
     async function search() {
         let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
 
@@ -135,9 +169,19 @@
         }
 
         try {
+
+
+            const processedCriteria = searchCriteria.map(criteria => {
+                if (criteria.key === 'timestamp') {
+                    return processTimestampCriteria(criteria);
+                }
+                return criteria;
+            });
+
+
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,
-                criteria: JSON.stringify(searchCriteria)
+                criteria: JSON.stringify(processedCriteria)
             });
 
             const response = await fetch(url);

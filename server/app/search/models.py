@@ -6,6 +6,7 @@ from bson.int64 import Int64
 from bson import json_util
 import json
 from flask import current_app
+from datetime import datetime
 
 # define the keys you want to exclude when frontend requests all keys
 exclude_keys = {"_id", "quantity", "password", "role", "authToken", "image_path"}
@@ -15,6 +16,8 @@ class Collection:
     @staticmethod
     def get_all_collections():
         return db.list_collection_names()
+
+
 
     @staticmethod
     def get_keys(collection_name):
@@ -30,6 +33,9 @@ class Collection:
                 return list(keys)
         return None
 
+
+
+
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria):
         if collection_name not in db.list_collection_names():
@@ -40,16 +46,20 @@ class Collection:
             key = criterion['key']
             value = criterion['value']
 
-            search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
-
-            field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
-
-            if isinstance(db[collection_name].find_one().get(key, db[collection_name].find_one().get('additional_fields', {}).get(key)), list):
-                query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
+            if key == 'timestamp':
+                query["$and"].append(Collection.process_timestamp_query(key, value, criterion.get('operator')))
             else:
-                query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
+                search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
+
+                field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
+
+                if isinstance(db[collection_name].find_one().get(key, db[collection_name].find_one().get('additional_fields', {}).get(key)), list):
+                    query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
+                else:
+                    query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
 
         results = list(db[collection_name].find(query))
+
         processed_results = []
 
         for result in results:
@@ -71,6 +81,31 @@ class Collection:
 
         logger.info(f"Processed results: {processed_results}")
         return processed_results
+
+
+
+
+    @staticmethod
+    def process_timestamp_query(key, value, operator):
+        if operator == 'exact':
+            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
+            return {key: timestamp}
+        elif operator == '<':
+            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
+            return {key: {"$lt": timestamp}}
+        elif operator == '>':
+            timestamp = datetime.strptime(value, "%Y-%m-%d").timestamp() * 1000
+            return {key: {"$gt": timestamp}}
+        elif operator == 'range':
+            start_timestamp = datetime.strptime(value[0], "%Y-%m-%d").timestamp() * 1000
+            end_timestamp = datetime.strptime(value[1], "%Y-%m-%d").timestamp() * 1000
+            return {key: {"$gte": start_timestamp, "$lte": end_timestamp}}
+        else:
+            raise ValueError(f"Invalid timestamp operator: {operator}")
+
+
+
+
 
 
 

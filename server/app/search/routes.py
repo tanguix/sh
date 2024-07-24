@@ -18,6 +18,9 @@ FILE_FOLDER = os.path.join(SERVER_DIR, 'files')
 if not os.path.exists(FILE_FOLDER):
     os.makedirs(FILE_FOLDER)
 
+
+
+
 @search_bp.route('/api/collections', methods=['GET'])
 def find_collection():
     try:
@@ -27,6 +30,9 @@ def find_collection():
     except Exception as e:
         logger.error(f"Error fetching collections: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+
 
 @search_bp.route('/api/keys', methods=['GET'])
 def find_key():
@@ -43,6 +49,8 @@ def find_key():
     except Exception as e:
         logger.error(f"Error fetching keys for {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
 
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
@@ -61,6 +69,9 @@ def searched_result():
     except Exception as e:
         logger.error(f"Error searching collection {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+
 
 @search_bp.route('/api/images/<path:filename>', methods=['GET'])
 def get_image(filename):
