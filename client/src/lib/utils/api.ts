@@ -36,6 +36,12 @@ export const API_ENDPOINTS = {
     FETCH_CATEGORIES_AND_TAGS: `${BASE_URL}/search/api/categories_and_tags`,
 
 
+    UPLOAD_EXCEL: `${BASE_URL}/excel/api/upload_excel`,
+    PROCESS_EXCEL: `${BASE_URL}/excel/api/process_excel`,
+    DS_OPERATION: `${BASE_URL}/excel/api/operations`,
+
+
+
     EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,
 
 };

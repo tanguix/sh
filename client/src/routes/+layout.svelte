@@ -25,6 +25,10 @@
   // WorkFlow
   import WorkFlow from '$lib/components/WorkFlow.svelte';
 
+  // excel 
+  import SimpleExcel from '$lib/components/SimpleExcel.svelte';
+
+
   // for type safety, define the Navlink object for loop the routes
   interface NavLink {
     href: string;
@@ -136,6 +140,13 @@
 
               <hr>
               <br>
+
+
+              <SimpleExcel />
+
+              <hr>
+              <br>
+
 
               <button on:click={toggleWorkflow}>
                 {showWorkflow ? 'Hide Workflow' : 'Show Workflow'}

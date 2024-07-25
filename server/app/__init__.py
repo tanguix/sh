@@ -42,6 +42,7 @@ def register_all_blueprints(app):
     from app.auth.routes import auth_bp
     from app.upload.routes import upload_bp
     from app.search.routes import search_bp
+    from app.excel.routes import excel_bp
     from app.extra.routes import extra_bp
 
     # "register_blueprint()" is a built-in function in flask, 
@@ -49,6 +50,7 @@ def register_all_blueprints(app):
     app.register_blueprint(auth_bp, url_prefix='/auth')           # url_prefix is for avoiding route conflict
     app.register_blueprint(upload_bp, url_prefix='/upload')       # with prefix, route will be localhost:5000/auth/login
     app.register_blueprint(search_bp, url_prefix='/search')       # without prefix, localhost:5000/login
+    app.register_blueprint(excel_bp, url_prefix='/excel')
     app.register_blueprint(extra_bp, url_prefix='/extra')
 
 
