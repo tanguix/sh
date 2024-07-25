@@ -2,6 +2,7 @@
 
 
 
+
 <script lang="ts">
   import { BASE_URL, API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
@@ -660,7 +661,7 @@
 
   .results-container {
     font-family: 'Ubuntu', sans-serif;
-    max-width: 1000px;
+    max-width: 100%;
     margin: 0 auto;
     padding: 20px;
     border: 1px solid #e0e0e0;

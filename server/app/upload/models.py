@@ -36,10 +36,11 @@ def json_serialize(obj):
 
 
 class Item:
-    def __init__(self, reference_no, categories, tags, additional_fields, 
-                 image_file, additional_image_files, server_dir, unit_price, 
-                 unit_weight, source, address, phone):
+    def __init__(self, reference_no: str, side_reference_nos: List[str], categories: List[str], tags: List[str], 
+                 additional_fields: dict, image_file, additional_image_files, server_dir, 
+                 unit_price, unit_weight, source, address, phone):
         self.reference_no = reference_no
+        self.side_reference_nos = side_reference_nos
         self.categories = categories
         self.tags = tags
         self.additional_fields = additional_fields
@@ -52,8 +53,12 @@ class Item:
         self.unit_price = self._parse_unit_input(unit_price)
         self.unit_weight = self._parse_unit_input(unit_weight)
         self.source = source
-        self.address = address
+        self.address = address if address else None  # Set to None if address is empty
         self.phone = phone
+
+
+
+
 
     def _parse_unit_input(self, input_str):
         if not input_str:
@@ -103,12 +108,36 @@ class Item:
             additional_file.save(additional_absolute_path)
             self.additional_image_paths.append(additional_relative_path)
 
+
+
+
+    @staticmethod
+    def from_request(request, server_dir):
+        image_file = request.files.get('image')
+        reference_no = request.form.get('reference_no')
+        side_reference_nos = [ref.strip() for ref in request.form.get('side_reference_no', '').split(',') if ref.strip()]
+        categories = json.loads(request.form.get('categories', '[]'))
+        tags = json.loads(request.form.get('tags', '[]'))
+        additional_fields = json.loads(request.form.get('additional_fields', '{}'))
+        additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
+        unit_price = request.form.get('unit_price')
+        unit_weight = request.form.get('unit_weight')
+        source = request.form.get('source')
+        address = request.form.get('address', '')  # Default to empty string if not provided
+        phone = request.form.get('phone')
+        
+        return Item(reference_no, side_reference_nos, categories, tags, additional_fields, image_file, 
+                    additional_image_files, server_dir, unit_price, unit_weight, source, address, phone)
+
+
+
     def save_item(self):
-        if not self.is_reference_no_unique(self.reference_no):
-            raise ValueError(f"Reference number '{self.reference_no}' already exists.")
+        if not self.is_reference_no_unique(self.reference_no, self.side_reference_nos):
+            raise ValueError(f"Reference numbers must be unique. Duplicate found.")
 
         data = {
             "reference_no": self.reference_no,
+            "side_reference_nos": self.side_reference_nos,
             "categories": self.categories,
             "tags": self.tags,
             "additional_fields": self.additional_fields,
@@ -118,34 +147,25 @@ class Item:
             "unit_price": self.unit_price,
             "unit_weight": self.unit_weight,
             "source": self.source,
-            "address": self.address,
+            "address": self.address,  # This will be None if address was not provided
             "phone": self.phone
         }
         result = db.samples.insert_one(data)
         return result
 
-    @staticmethod
-    def is_reference_no_unique(reference_no: str) -> bool:
-        """Check if the reference number is unique in the database."""
-        existing_item = db.samples.find_one({"reference_no": reference_no})
-        return existing_item is None
+
 
     @staticmethod
-    def from_request(request, server_dir):
-        image_file = request.files.get('image')
-        reference_no = request.form.get('reference_no')
-        categories = json.loads(request.form.get('categories', '[]'))
-        tags = json.loads(request.form.get('tags', '[]'))
-        additional_fields = json.loads(request.form.get('additional_fields', '{}'))
-        additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
-        unit_price = request.form.get('unit_price')
-        unit_weight = request.form.get('unit_weight')
-        source = request.form.get('source')
-        address = request.form.get('address')
-        phone = request.form.get('phone')
-        return Item(reference_no, categories, tags, additional_fields, image_file, additional_image_files, server_dir,
-                    unit_price, unit_weight, source, address, phone)
-
+    def is_reference_no_unique(reference_no: str, side_reference_nos: List[str]) -> bool:
+        """Check if all reference numbers (main and side) are unique in the database."""
+        all_refs = [reference_no] + side_reference_nos
+        existing_items = db.samples.find({
+            "$or": [
+                {"reference_no": {"$in": all_refs}},
+                {"side_reference_nos": {"$in": all_refs}}
+            ]
+        })
+        return len(list(existing_items)) == 0
 
 
 

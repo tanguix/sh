@@ -189,7 +189,7 @@
 
     display: flex;
     width: calc(100% - (var(--main-padding) * 2));
-    max-width: 1600px;
+    max-width: 1800px;
     margin: 0 auto;
     padding: var(--main-padding);
     gap: var(--gap);

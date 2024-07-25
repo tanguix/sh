@@ -1,9 +1,10 @@
 
 
 
+
 <script lang="ts">
     import { writable } from 'svelte/store';
-    import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
+    import { API_ENDPOINTS } from '$lib/utils/api';
 
     type Field = {
         id: number;
@@ -23,15 +24,13 @@
     let imagePath: string = '';
     let imagePreviewUrl: string = '';
 
-
-    // new variables for production needed
+    let sideReferenceNumber = '';
+    let referenceNumber = '';
     let unitPrice = '';
     let unitWeight = '';
     let source = '';
     let address = '';
     let phone = '';
-
-
 
     let additionalImages: File[] = [];
     let additionalImagePreviews: string[] = [];
@@ -162,8 +161,22 @@
         return await response.json();
     }
 
+    function validateReferenceNumbers(): boolean {
+        const sideRefs = sideReferenceNumber.split(',').map(ref => ref.trim());
+        const allRefs = [...sideRefs, referenceNumber];
+        const uniqueRefs = new Set(allRefs);
+        return uniqueRefs.size === allRefs.length;
+    }
+
+
+
     function handleSubmit(event: Event) {
         event.preventDefault();
+        if (!validateReferenceNumbers()) {
+            alert("Reference numbers must be unique across all entries.");
+            return;
+        }
+
         const form = event.target as HTMLFormElement;
         const formData = new FormData(form);
 
@@ -184,72 +197,81 @@
             });
         })();
 
-        const additionalTags: string[] = [];
+        const allTags: string[] = [];
+        const defaultTag = (document.getElementById('tag') as HTMLInputElement).value;
+        if (defaultTag) {
+            allTags.push(defaultTag);
+        }
         tags.subscribe(currentTags => {
             currentTags.forEach(tag => {
                 if (tag.value) {
-                    additionalTags.push(tag.value);
+                    allTags.push(tag.value);
                 }
             });
         })();
 
-        const additionalCategories: string[] = [];
+        const allCategories: string[] = [];
+        const defaultCategory = (document.getElementById('category') as HTMLInputElement).value;
+        if (defaultCategory) {
+            allCategories.push(defaultCategory);
+        }
         categories.subscribe(currentCategories => {
             currentCategories.forEach(category => {
                 if (category.value) {
-                    additionalCategories.push(category.value);
+                    allCategories.push(category.value);
                 }
             });
         })();
 
-        const originalTags = formData.get('tag') ? 
-            formData.get('tag').toString().split(',').map(tag => tag.trim()) : [];
-        const originalCategories = formData.get('category') ? 
-            formData.get('category').toString().split(',').map(category => category.trim()) : [];
-
-        const allTags = originalTags.concat(additionalTags);
-        const allCategories = originalCategories.concat(additionalCategories);
-
+        formData.append('side_reference_no', sideReferenceNumber);
+        formData.append('reference_no', referenceNumber);
         formData.append('tags', JSON.stringify(allTags));
         formData.append('categories', JSON.stringify(allCategories));
         formData.append('additional_fields', JSON.stringify(additionalFields));
 
-
-        // production append
         formData.append('unit_price', unitPrice);
         formData.append('unit_weight', unitWeight);
         formData.append('source', source);
         formData.append('address', address);
         formData.append('phone', phone);
 
-
-
-
-        // TODO: later implement a hints, use customized modals to tell users that they are why their upload is not 
-        // successful, such as because the duplicated reference number, etc
         sendSampleData(formData)
             .then(response => {
                 console.log('Upload successful:', response);
+                // Reset form fields here
+                sideReferenceNumber = '';
+                referenceNumber = '';
+                unitPrice = '';
+                unitWeight = '';
+                source = '';
+                address = '';
+                phone = '';
+                fields.set([]);
+                tags.set([]);
+                categories.set([]);
+                imageFile = null;
+                imagePath = '';
+                imagePreviewUrl = '';
+                additionalImages = [];
+                additionalImagePreviews = [];
+                (document.getElementById('tag') as HTMLInputElement).value = '';
+                (document.getElementById('category') as HTMLInputElement).value = '';
             })
             .catch(error => {
                 console.error('Upload failed:', error);
             });
-
-        form.reset();
-        fields.set([]);
-        tags.set([]);
-        categories.set([]);
-        imageFile = null;
-        imagePath = '';
-        imagePreviewUrl = '';
-        additionalImages = [];
-        additionalImagePreviews = [];
     }
+
+
 </script>
+
+
+
 
 <form action="?/upload" method="POST" on:submit={handleSubmit} enctype="multipart/form-data">
     <div class="upload-container">
         <div class="upload-left">
+            <!-- Main image upload area -->
             <h3>Main Image:</h3>
             <div 
                 class="drag-drop-area image-preview-main {imagePreviewUrl ? 'highlight' : ''} {isDragOverMain ? 'drag-over' : ''}"
@@ -283,6 +305,7 @@
                 </div>
             </div>
 
+            <!-- Additional images upload area -->
             <div class="additional-images">
                 <h3>Additional Images:</h3>
                 <div 
@@ -323,8 +346,8 @@
         </div>
 
         <div class="upload-right">
-            <!-- Categories -->
-            <div class="input-group">
+
+            <div class="input-group full-width">
                 <div class="input-button-group">
                     <input type="text" id="category" name="category" placeholder="Categories" required>
                     <button type="button" on:click={() => addItem(categories)}>add</button>
@@ -332,7 +355,7 @@
             </div>
 
             {#each $categories as category (category.id)}
-                <div class="input-group indent">
+                <div class="input-group full-width indent">
                     <div class="input-button-group">
                         <input type="text" id="category-{category.id}" bind:value={category.value} placeholder="New category">
                         <button class="remove-items" type="button" on:click={() => removeItem(categories, category.id)}>Remove</button>
@@ -340,8 +363,7 @@
                 </div>
             {/each}
 
-            <!-- Tags -->
-            <div class="input-group">
+            <div class="input-group full-width">
                 <div class="input-button-group">
                     <input type="text" id="tag" name="tag" placeholder="Tags" required>
                     <button type="button" on:click={() => addItem(tags)}>add</button>
@@ -349,7 +371,7 @@
             </div>
 
             {#each $tags as tag (tag.id)}
-                <div class="input-group indent">
+                <div class="input-group full-width indent">
                     <div class="input-button-group">
                         <input type="text" id="tag-{tag.id}" bind:value={tag.value} placeholder="New tag">
                         <button class="remove-items" type="button" on:click={() => removeItem(tags, tag.id)}>Remove</button>
@@ -357,34 +379,53 @@
                 </div>
             {/each}
 
-            <!-- Reference Number -->
-            <div class="input-group">
-                <input type="text" id="reference_no" name="reference_no" placeholder="Reference Number" required>
-            </div>
 
 
-            <div class="input-group">
-                <input type="text" id="unit_price" name="unit_price" bind:value={unitPrice} placeholder="Unit Price (e.g., 5.99, USD)" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="unit_weight" name="unit_weight" bind:value={unitWeight} placeholder="Unit Weight (e.g., 500, g)" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="source" name="source" bind:value={source} placeholder="Source" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="address" name="address" bind:value={address} placeholder="Address" required>
-            </div>
-            <div class="input-group">
-                <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone" required>
+            <div class="reference-numbers">
+                <div class="input-group full-width">
+                    <input 
+                      type="text" 
+                      id="side_reference_no" 
+                      name="side_reference_no" 
+                      bind:value={sideReferenceNumber} 
+                      placeholder="Side Reference Numbers (comma-separated)" 
+                      required>
+                    <label for="side_reference_no">side ref</label>
+                </div>
+                <div class="input-group full-width">
+                    <input type="text" id="reference_no" name="reference_no" bind:value={referenceNumber} placeholder="Reference Number" required>
+                    <label for="reference_no">main ref</label>
+                </div>
             </div>
 
 
 
-            <!-- Separator -->
             <hr class="separator">
+            <div class="additional-info">
+                <div class="input-group unit-price">
+                    <input type="text" id="unit_price" name="unit_price" bind:value={unitPrice} placeholder="e.g. 5.99, USD" required>
+                    <label for="unit_price">u price</label>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="unit_weight" name="unit_weight" bind:value={unitWeight} placeholder="e.g. 500, g" required>
+                    <label for="unit_weight">u weight</label>
+                </div>
+                <div class="input-group full-width">
+                    <input type="text" id="source" name="source" bind:value={source} placeholder="Source" required>
+                    <label for="source">source</label>
+                </div>
+                <div class="input-group full-width">
+                    <input type="text" id="address" name="address" bind:value={address} placeholder="Address">
+                    <label for="address">address</label>
+                </div>
+                <div class="input-group full-width">
+                    <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone" required>
+                    <label for="phone">phone</label>
+                </div>
+            </div>
 
-            <!-- Additional Fields -->
+
+            <hr class="separator">
             {#each $fields as field (field.id)}
                 <div class="input-group additional-field">
                     <div class="feature-value-group">
@@ -405,10 +446,6 @@
         </div>
     </div>
 </form>
-
-
-
-
 
 <style>
     form {
@@ -434,13 +471,35 @@
     }
 
     .input-group {
-        margin-bottom: 1rem;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-group label {
+        flex: 0 0 30px;
+        text-align: center;
+        margin-left: 10px;
+        padding: 0.375rem 0 0 0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+        white-space: nowrap;
+        min-width: 60px;
+        /* border: solid; */
+        transition: background-color 0.3s, opacity 0.3s;
+        /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); */
+    }
+
+    .input-group input {
+        flex: 1;
     }
 
     .input-button-group {
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        width: 100%;
     }
 
     .input-button-group input {
@@ -456,8 +515,6 @@
         flex-direction: column;
         gap: 0.5rem;
     }
-
-
 
     .feature-value-group {
         display: flex;
@@ -600,11 +657,10 @@
         border: 0;
         height: 1px;
         background: #ccc;
-        margin: 2.5rem 0 1rem 0;
+        margin: 0.8rem 0 1rem 0;
     }
 
-    .input-button-group button,
-    .additional-field button {
+    button {
         padding: 0.25rem 0.75rem;
         font-size: 0.875rem;
         line-height: 1.5;
@@ -620,29 +676,23 @@
         justify-content: center;
     }
 
-
     .additional-field button {
       width: 100%;
     }
 
-
-    .input-button-group button:hover,
-    .additional-field button:hover {
+    button:hover {
         opacity: 0.9;
     }
 
     .input-button-group button:last-child {
-        /* background-color: #4CAF50; */
         color: black;
     }
 
     .input-button-group .indent button,
     .additional-field button {
-        /* background-color: #f44336; */
         color: black;
     }
 
-    .input-button-group,
     .additional-field .feature-value-group {
         display: flex;
         align-items: stretch;
@@ -688,16 +738,52 @@
     }
 
     input[type="text"] {
-        height: 2rem;
+        height: 2.5rem;
         padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
         line-height: 1.5;
         border-radius: 0.2rem;
         border: 1px solid #ccc;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .remove-items {
       background: #ccc;
+    }
+
+    .full-width {
+        width: 100%;
+    }
+
+    .reference-numbers {
+        display: flex;
+        flex-direction: column;
+        /* gap: 1rem; */
+        /* margin-bottom: 1rem; */
+    }
+
+    .reference-numbers .input-group {
+        width: 100%;
+    }
+
+    .additional-info {
+        display: flex;
+        flex-wrap: wrap;
+        /* gap: 1rem; */
+    }
+
+    .additional-info .unit-price {
+        margin-right: 1rem;
+    }
+
+    .additional-info .input-group {
+        flex: 1 1 calc(50% - 0.5rem);
+        min-width: 200px;
+    }
+
+    .additional-info .input-group.full-width {
+        flex: 1 1 100%;
     }
 
     /* Ensure responsiveness */
@@ -711,10 +797,52 @@
         }
 
         .image-preview-main {
-            height: 200px; /* Reduce height on smaller screens */
+            height: 200px;
+        }
+
+        .additional-info {
+            flex-direction: column;
+        }
+
+        .additional-info .input-group,
+        .additional-info .input-group.full-width {
+            flex: 1 1 100%;
+        }
+
+        .input-group {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+
+        .input-group {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .input-group label {
+            flex: 0 0 auto;
+            text-align: left;
+            margin-left: 0;
+            margin-bottom: 5px;
+        }
+
+        .input-group input {
+            width: 100%;
+        }
+
+        .input-button-group {
+            flex-direction: column;
+        }
+
+        .input-button-group button {
+            width: 100%;
+            margin-top: 5px;
         }
     }
 </style>
+
+
 
 
 

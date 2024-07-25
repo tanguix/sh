@@ -4,7 +4,6 @@
 from app.database import db
 from app.logger import logger
 import time
-from bson.int64 import Int64
 from datetime import datetime, timedelta
 
 class Collection:
@@ -50,7 +49,7 @@ class Collection:
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria, backend_local_url):
         if collection_name not in db.list_collection_names():
-            return None
+            return None, 0
 
         query = {"$and": []}
         for criterion in criteria:
@@ -69,6 +68,7 @@ class Collection:
                     query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
 
         results = list(db[collection_name].find(query))
+        count = len(results)
         processed_results = []
 
         exclude_keys = {"_id", "quantity", "password", "role", "authToken"}
@@ -87,7 +87,7 @@ class Collection:
                     processed_result[k] = v
             processed_results.append(processed_result)
 
-        return processed_results
+        return processed_results, count
 
     @staticmethod
     def search_sample_tokens_by_user(user_name, user_role):

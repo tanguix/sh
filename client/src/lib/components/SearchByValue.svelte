@@ -2,6 +2,7 @@
 
 
 
+
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -442,7 +443,3 @@
         border-radius: 50%;
     }
 </style>
-
-
-
-
