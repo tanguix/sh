@@ -1018,15 +1018,23 @@ function toggleGridView() {
       text-align: center;
     }
 
+
     .result-card.grid-item.expanded {
       grid-column: 1 / -1;
       display: flex;
       flex-direction: column;
       height: auto;
+      max-width: 100%;
+      padding: 20px;
     }
 
+
+
     .result-card.grid-item.expanded .result-content {
+      display: flex;
       flex-direction: row;
+      gap: 20px;
+      margin-bottom: 15px;
       height: 400px;
     }
 
@@ -1037,7 +1045,21 @@ function toggleGridView() {
 
     .result-card.grid-item.expanded .properties-wrapper {
       flex: 0 0 33.33%;
+      display: flex;
+      flex-direction: column;
     }
+
+
+    .result-card.grid-item.expanded .properties-container {
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      padding: 15px;
+      overflow-y: auto;
+      flex-grow: 1;
+      scrollbar-width: thin;
+      scrollbar-color: #007bff #f0f0f0;
+    }
+
 
     @media (max-width: 768px) {
       .result-content {
