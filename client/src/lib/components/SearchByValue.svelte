@@ -160,6 +160,9 @@
     }
 
 
+
+    let resultCount: number = 0;
+
     async function search() {
         let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
 
@@ -185,10 +188,11 @@
 
             if (response.ok) {
                 const data = await response.json();
-                let newResults = Array.isArray(data) && data.length && Array.isArray(data[0]) ? data[0] : data;
-                
+                let newResults = data.results || [];
+                resultCount = data.count || 0;
+
                 if (isSamplingMode) {
-                    // Sampling mode logic remains the same
+                    // Sampling mode logic
                     const oldLength = results.length;
                     if (isAddOperation) {
                         newResults = newResults.filter(newResult => 
@@ -208,10 +212,10 @@
                     searchCriteria = [{ key: '', value: '' }];
                     
                     resultsChanged = oldLength !== results.length;
+                    resultCount = results.length; // Update count for sampling mode
                 } else {
                     // Normal mode logic
                     if (newResults.length === 0) {
-                        // Clear previous results if no new results are found
                         results = [];
                         deepCopiedResults = [];
                         console.log("No results found. Cleared previous results.");
@@ -226,14 +230,17 @@
             }
         } catch (error) {
             console.error('Error searching collection:', error);
-            // Optionally, clear results on error as well
             if (!isSamplingMode) {
                 results = [];
                 deepCopiedResults = [];
                 console.log("Error occurred. Cleared previous results.");
             }
+            resultCount = 0; // Reset count on error
         }
     }
+
+
+
 
 
 
@@ -289,7 +296,13 @@
     </div>
 </div>
 
-<FunctionalDisplay {results} {deepCopiedResults} {searchOption} {resultsChanged} />
+<FunctionalDisplay 
+  {results} 
+  {deepCopiedResults} 
+  {searchOption} 
+  {resultsChanged}
+  {resultCount}
+/>
 
 <style>
     .search-container {

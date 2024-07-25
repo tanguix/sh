@@ -479,16 +479,17 @@
     .input-group label {
         flex: 0 0 30px;
         text-align: center;
+        justify-content: center;
         margin-left: 10px;
-        padding: 0.375rem 0 0 0;
+        /* padding: 0rem; */
         font-size: 0.875rem;
         line-height: 1.5;
         border-radius: 0.2rem;
         white-space: nowrap;
         min-width: 60px;
-        /* border: solid; */
+        /* border: solid 1px; */
         transition: background-color 0.3s, opacity 0.3s;
-        /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); */
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     .input-group input {

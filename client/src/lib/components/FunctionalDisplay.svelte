@@ -14,8 +14,11 @@
   export let results: any[] = [];
   export let deepCopiedResults: any[] = [];
   export let searchOption: string = '';
-
   export let resultsChanged = false;
+  export let resultCount: number = 0;
+
+  // expanded items limit
+  let expandedItems = new Set<number>();
 
   export let keysToExclude: string[] = ['image_url', 'file'];
   let content: string = `
@@ -44,14 +47,30 @@
 
   $: isEditingEnabled = searchOption === 'sampling';
 
+  let isGridView = true;
+  let expandedItemIndex: number | null = null;
 
-  // New state for grid view toggle
-  let isGridView = false;
+
+  function toggleExpandItem(index: number) {
+    if (isGridView) {
+      if (expandedItems.has(index)) {
+        expandedItems.delete(index);
+      } else {
+        if (expandedItems.size >= 2) {
+          // Remove the first item if we're at the limit
+          expandedItems.delete(expandedItems.values().next().value);
+        }
+        expandedItems.add(index);
+      }
+      expandedItems = expandedItems; // Trigger reactivity
+    }
+  }
 
 
-  function filterDisplayedKeys(results) {
+
+  function filterDisplayedKeys(result: any) {
     return Object.fromEntries(
-      Object.entries(results).filter(([key]) => !keysToExclude.includes(key))
+      Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
     );
   }
 
@@ -59,6 +78,8 @@
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
       const lastModifier = value[value.length - 1];
       return `${lastModifier.name} (${lastModifier.role})`;
+    } else if (key === 'additional_image_path' && Array.isArray(value)) {
+      return value;
     } else if (Array.isArray(value)) {
       return value.join(', ');
     } else if (typeof value === 'object' && value !== null) {
@@ -121,11 +142,6 @@
     });
   }
 
-
-
-
-
-
   async function dropSample(index: number) {
     const sampleToDelete = results[index];
     const sampleToken = sampleToDelete.sample_token;
@@ -148,7 +164,6 @@
           _remove: true, 
           sample_token: sampleToken,
           reference_no: referenceNo,
-          // Include other relevant fields for precise matching
           ...sampleToDelete
         }]),
       });
@@ -161,11 +176,9 @@
       const result = await response.json();
       console.log("Sample dropped:", result);
 
-      // Remove the sample from the local results
       results = results.filter((_, i) => i !== index);
       resultsChanged = true;
 
-      // Update other necessary states
       displayedForms.update(forms => {
         delete forms[index];
         return forms;
@@ -196,14 +209,6 @@
       isLoading.set(false);
     }
   }
-
-
-
-
-
-
-
-
 
   function cancelDropSample(index: number) {
     pendingRemoval.update(pending => {
@@ -307,12 +312,12 @@
     const updates = formData.reduce((acc, curr) => {
       if (curr.key && !curr.isRemove) {
         if (curr.key === 'tags' || curr.key === 'categories') {
-          acc[curr.key] = curr.value; // value is already an array for tags and categories
+          acc[curr.key] = curr.value;
         } else {
           acc[curr.key] = curr.value;
         }
       } else if (curr.key && curr.isRemove) {
-        acc[curr.key] = null;  // Set to null for removal
+        acc[curr.key] = null;
       }
       return acc;
     }, {});
@@ -430,14 +435,16 @@
   }
 
 
-
-  // New function to toggle grid view
-  function toggleGridView() {
-    isGridView = !isGridView;
-  }
+function toggleGridView() {
+  isGridView = !isGridView;
+  expandedItems.clear();
+  expandedItems = expandedItems; // Trigger reactivity
+}
 
 
 </script>
+
+
 
 
 
@@ -447,11 +454,12 @@
       <input type="checkbox" bind:checked={isGridView}>
       Grid View
     </label>
+    {#if resultCount > 0}
+      <span class="result-count">({resultCount} items found)</span>
+    {/if}
   </div>
 
-
   <div class="results-container" class:grid-view={isGridView}>
-
     {#if $isLoading}
       <div class="loading-spinner">Loading...</div>
     {/if}
@@ -462,12 +470,16 @@
 
     {#if results.length > 0}
       {#each results as result, index}
-        <div class="result-card" class:grid-item={isGridView}>
-          {#if !isGridView}
+        <div 
+          class="result-card" 
+          class:grid-item={isGridView} 
+          class:expanded={isGridView && expandedItems.has(index)}
+        >
+          {#if !isGridView || (isGridView && expandedItems.has(index))}
             <h3>{result.sample_token || 'No Sample Token'}</h3>
           {/if}
-          <div class="result-content" class:grid-content={isGridView}>
-            <div class="image-container">
+          <div class="result-content" class:grid-content={isGridView && expandedItemIndex !== index}>
+            <div class="image-container" role="img" aria-label="Sample image">
               {#if result.image_url}
                 <div class="image-frame">
                   <img 
@@ -475,22 +487,43 @@
                     alt="sample_image" 
                     on:error={handleImageError}
                   >
+
+                  {#if isGridView}
+
+                    <button 
+                      class="expand-collapse-btn"
+                      on:click={() => toggleExpandItem(index)}
+                      aria-label={expandedItems.has(index) ? "Collapse" : "Expand"}
+                    >
+                      <p>{expandedItems.has(index) ? '−' : '+'}</p>
+                    </button>
+
+                  {/if}
+
                 </div>
               {:else}
                 <div class="no-image">No image available</div>
               {/if}
             </div>
-            {#if isGridView}
+            {#if isGridView && !expandedItems.has(index)}
               <div class="reference-no">{result.reference_no || 'No Reference Number'}</div>
             {/if}
 
-            {#if !isGridView}
+            {#if !isGridView || (isGridView && expandedItems.has(index))}
               <div class="properties-wrapper">
                 <div class="properties-container">
                   {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                     <div class="property-item">
                       <span class="property-key">{key}:</span>
-                      <span class="property-value">{formatPropertyValue(key, value)}</span>
+                      {#if key === 'additional_image_path' && Array.isArray(value)}
+                        <div class="additional-images">
+                          {#each value as imagePath}
+                            <div class="additional-image">{imagePath}</div>
+                          {/each}
+                        </div>
+                      {:else}
+                        <span class="property-value">{formatPropertyValue(key, value)}</span>
+                      {/if}
                     </div>
                   {/each}
                 </div>
@@ -498,7 +531,7 @@
             {/if}
           </div>
           
-          {#if isEditingEnabled && !isGridView}
+          {#if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
             <div class="form-controls">
               <button on:click={() => addForm(index)}>Add Field</button>
               {#if canRemove[index]}
@@ -595,16 +628,11 @@
   </div>
 </div>
 
-
-
 <style>
-
-
   .functional-display {
     margin: 2rem auto;
     font-family: 'Ubuntu';
   }
-
 
   .view-toggle {
     display: flex;
@@ -656,8 +684,11 @@
     background-color: #ff7a6e;
   }
 
-
-
+  .result-count {
+    margin-left: 15px;
+    font-size: 14px;
+    color: #666;
+  }
 
   .results-container {
     font-family: 'Ubuntu', sans-serif;
@@ -669,14 +700,11 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
-
-  /* create as many as grid view (at least 200px) columns as possible while fitting the width */
   .results-container.grid-view {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 20px;
   }
-
 
   .result-card {
     background-color: #fff;
@@ -727,6 +755,7 @@
   }
 
   .image-frame {
+    position: relative;
     width: 100%;
     height: 100%;
     background-color: white;
@@ -742,6 +771,50 @@
     object-fit: contain;
   }
 
+
+
+  .expand-collapse-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+
+  .grid-view .expand-collapse-btn {
+    opacity: 0;
+  }
+
+
+  .grid-view .image-frame:hover .expand-collapse-btn {
+    opacity: 1;
+  }
+
+
+  .expand-collapse-btn p {
+    margin: 0;
+    line-height: 1;
+  }
+
+
+  .expand-collapse-btn:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+
   .no-image {
     color: #999;
     font-style: italic;
@@ -753,8 +826,6 @@
     color: #666;
     text-align: center;
   }
-
-
 
   .properties-wrapper {
     flex: 0 0 33.33%;
@@ -811,6 +882,19 @@
     color: #007bff;
   }
 
+  .additional-images {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .additional-image {
+    background-color: #f0f0f0;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+
   .form-controls, .action-buttons {
     display: flex;
     gap: 10px;
@@ -840,126 +924,163 @@
   }
 
   .update-drop:hover, .drop-sample:hover {
-    background-color: #ff7a6e;
-  }
+      background-color: #ff7a6e;
+    }
 
-  .cancel-drop {
-    background-color: #4fd6be;
-    color: #333;
-  }
+    .cancel-drop {
+      background-color: #4fd6be;
+      color: #333;
+    }
 
-  .cancel-drop:hover {
-    background-color: #A1EFD3;
-  }
+    .cancel-drop:hover {
+      background-color: #A1EFD3;
+    }
 
-  .additional-forms {
-    margin-top: 15px;
-  }
+    .additional-forms {
+      margin-top: 15px;
+    }
 
-  .form-entry {
-    background-color: #f9f9f9;
-    border-radius: 4px;
-    padding: 15px;
-    margin-bottom: 10px;
-  }
+    .form-entry {
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
 
-  .input-group {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
 
-  .input-group input {
-    flex: 1 1 0;
-    min-width: 0;
-  }
+    .input-group input {
+      flex: 1 1 0;
+      min-width: 0;
+    }
 
-  input[type="text"], input[type="date"], select {
-    padding: 8px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    width: 100%;
-  }
+    input[type="text"], input[type="date"], select {
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 100%;
+    }
 
-  .custom-checkbox {
-    display: flex;
-    align-items: center;
-    margin-top: 10px;
-  }
+    .custom-checkbox {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+    }
 
-  .checkbox-text {
-    margin-left: 5px;
-  }
+    .checkbox-text {
+      margin-left: 5px;
+    }
 
-  .global-actions {
-    margin-top: 20px;
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-  }
+    .global-actions {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
 
-  .global-actions button {
-    color: #fff;
-    background: #007bff;
-  }
+    .global-actions button {
+      color: #fff;
+      background: #007bff;
+    }
 
-  .no-results {
-    text-align: center;
-    color: #666;
-    font-style: italic;
-  }
+    .no-results {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
 
-  .helper-text {
-    display: block;
-    font-size: 12px;
-    color: #666;
-    margin-top: 4px;
-    font-style: italic;
-  }
+    .helper-text {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+      font-style: italic;
+    }
 
-  .loading-spinner {
-    text-align: center;
-    padding: 20px;
-    font-style: italic;
-    color: #007bff;
-  }
+    .loading-spinner {
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+      color: #007bff;
+    }
 
-  .error-message {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    text-align: center;
-  }
+    .error-message {
+      background-color: #ffebee;
+      color: #c62828;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
 
-  @media (max-width: 768px) {
-    .result-content {
+    .result-card.grid-item.expanded {
+      grid-column: 1 / -1;
+      display: flex;
       flex-direction: column;
       height: auto;
     }
 
-    .image-container, .properties-wrapper {
-      flex: 0 0 auto;
-      width: 100%;
+    .result-card.grid-item.expanded .result-content {
+      flex-direction: row;
+      height: 400px;
     }
 
-    .image-container {
-      height: 300px;
+    .result-card.grid-item.expanded .image-container {
+      flex: 0 0 66.67%;
+      height: 100%;
     }
 
-    .properties-container {
-      max-height: 300px;
+    .result-card.grid-item.expanded .properties-wrapper {
+      flex: 0 0 33.33%;
     }
 
-    .results-container.grid-view {
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    }
+    @media (max-width: 768px) {
+      .result-content {
+        flex-direction: column;
+        height: auto;
+      }
 
-    .grid-item .image-container {
-      height: 150px;
-    }
-  }
+      .image-container, .properties-wrapper {
+        flex: 0 0 auto;
+        width: 100%;
+      }
 
+      .image-container {
+        height: 300px;
+      }
+
+      .properties-container {
+        max-height: 300px;
+      }
+
+      .results-container.grid-view {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
+
+      .grid-item .image-container {
+        height: 150px;
+      }
+
+      .result-card.grid-item.expanded .result-content {
+        flex-direction: column;
+        height: auto;
+      }
+
+      .result-card.grid-item.expanded .image-container,
+      .result-card.grid-item.expanded .properties-wrapper {
+        flex: 0 0 auto;
+        width: 100%;
+      }
+
+      .result-card.grid-item.expanded .image-container {
+        height: 300px;
+      }
+    }
 </style>
+
+

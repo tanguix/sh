@@ -42,6 +42,9 @@ def find_key():
         logger.error(f"Error fetching keys for {collection_name}: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+
+
+
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
@@ -50,12 +53,12 @@ def searched_result():
         return jsonify({"error": "Collection and search criteria must be provided"}), 400
     try:
         backend_local_url = current_app.config['BACKEND_LOCAL_URL']
-        results = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
+        results, count = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
         if results:
-            return jsonify(results), 200
+            return jsonify({"results": results, "count": count}), 200
         else:
             logger.info(f"No matching documents found for query in collection {collection_name}")
-            return jsonify({"error": "No matching documents found"}), 404
+            return jsonify({"error": "No matching documents found", "count": 0}), 404
     except Exception as e:
         logger.error(f"Error searching collection {collection_name}: {str(e)}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
