@@ -6,6 +6,9 @@ from app.logger import logger
 import time
 from datetime import datetime, timedelta
 
+
+
+
 class Collection:
     @staticmethod
     def get_all_collections():
@@ -47,6 +50,10 @@ class Collection:
             raise ValueError(f"Invalid timestamp operator: {operator}")
 
 
+    @staticmethod
+    def calculate_final_inventory(inventory_array):
+        final_inventory = sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory_array)
+        return max(final_inventory, 0)  # Ensure non-negative result
 
 
     @staticmethod
@@ -67,12 +74,29 @@ class Collection:
                 query["$and"].append(timestamp_query)
             elif key == 'inventory':
                 try:
-                    inStock_value = int(value)
+                    inventory_value = int(value)
                     inventory_query = {
-                        "inventory": {
-                            "$elemMatch": {
-                                "inStock": inStock_value
-                            }
+                        "$expr": {
+                            "$eq": [
+                                {
+                                    "$max": [
+                                        {
+                                            "$reduce": {
+                                                "input": "$inventory",
+                                                "initialValue": 0,
+                                                "in": {
+                                                    "$add": [
+                                                        "$$value",
+                                                        {"$subtract": ["$$this.putIn", "$$this.takeOut"]}
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        0  # Ensure non-negative result
+                                    ]
+                                },
+                                inventory_value
+                            ]
                         }
                     }
                     query["$and"].append(inventory_query)
@@ -80,6 +104,7 @@ class Collection:
                 except ValueError:
                     logger.error(f"Invalid inventory value: {value}")
                     return None, 0
+
             else:
                 search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
                 field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
@@ -87,6 +112,7 @@ class Collection:
                     query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
                 else:
                     query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
+
 
         pipeline = [
             {"$match": query},
@@ -111,15 +137,26 @@ class Collection:
                         "else": "$unit_weight"
                     }
                 },
-                "inventory": {
-                    "$cond": {
-                        "if": {"$isArray": "$inventory"},
-                        "then": {"$arrayElemAt": ["$inventory", -1]},
-                        "else": "$inventory"
-                    }
+                "calculated_inventory": {
+                    "$max": [
+                        {
+                            "$reduce": {
+                                "input": "$inventory",
+                                "initialValue": 0,
+                                "in": {
+                                    "$add": [
+                                        "$$value",
+                                        {"$subtract": ["$$this.putIn", "$$this.takeOut"]}
+                                    ]
+                                }
+                            }
+                        },
+                        0  # Ensure non-negative result
+                    ]
                 }
             }}
         ]
+
 
         logger.debug(f"Final query: {query}")
         logger.debug(f"Aggregation pipeline: {pipeline}")
@@ -146,13 +183,13 @@ class Collection:
                     image_path = v[7:] if v.startswith('images/') else v
                     image_url = f"{backend_local_url}/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
+                elif k == 'calculated_inventory':
+                    processed_result['inventory'] = v
                 else:
                     processed_result[k] = v
             processed_results.append(processed_result)
 
         return processed_results, count
-
-
 
 
 
@@ -198,8 +235,6 @@ class Collection:
         except Exception as e:
             logger.error(f"Error in get_categories_and_tags: {e}", exc_info=True)
             raise
-
-
 
 
 

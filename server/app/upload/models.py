@@ -56,7 +56,8 @@ class Item:
     def _parse_inventory(self, inventory, username):
         if inventory and inventory.strip():
             return [{
-                "inStock": int(inventory),
+                "putIn": int(inventory),
+                "takeOut": 0,
                 "putBy": username,
                 "timestamp": self.timestamp
             }]
