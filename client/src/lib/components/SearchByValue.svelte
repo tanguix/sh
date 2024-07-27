@@ -2,7 +2,6 @@
 
 
 
-
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -15,8 +14,6 @@
         sample_token?: string;
     }
 
-
-
     export let searchOption = '';
     export let searchCollection: string[] = [];
     export let searchKey: string[] = [];
@@ -24,7 +21,7 @@
     let searchCriteria = [{ key: '', value: '' }];
     let resultsChanged = false;
 
-    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp', 'inventory'];
     const allowedCollections = ['samples', 'samples_list'];
 
     let collections: string[] = [];
@@ -34,21 +31,17 @@
 
     let selectedCollectionName: string = '';
     let selectedSamplingCollection: string = '';
+    let selectedInventoryCollection: string = '';
 
     let isAddOperation: boolean = true;
 
     $: isSamplingMode = searchOption === 'sampling';
-    $: selectedCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
+    $: isInventoryMode = searchOption === 'inventory';
+    $: selectedCollection = isSamplingMode ? selectedSamplingCollection : 
+                            isInventoryMode ? selectedInventoryCollection : 
+                            selectedCollectionName;
 
-    function updateSelectedCollection(event: Event) {
-        const value = (event.target as HTMLSelectElement).value;
-        if (isSamplingMode) {
-            selectedSamplingCollection = value;
-        } else {
-            selectedCollectionName = value;
-        }
-        updateKeys();
-    }
+
 
     onMount(async () => {
         await fetchCollections();
@@ -71,11 +64,27 @@
         }
     }
 
+
+
     function toggleMode() {
         clearResults();
-        searchOption = isSamplingMode ? '' : 'sampling';
+        if (searchOption === '') {
+            searchOption = 'sampling';
+        } else if (searchOption === 'sampling') {
+            searchOption = 'inventory';
+        } else {
+            searchOption = '';
+        }
         resetSearch();
+
+        // Add this part to explicitly reset the key when switching to normal mode
+        if (searchOption === '') {
+            searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
+        }
+
     }
+
+
 
     function clearResults() {
         results = [];
@@ -83,15 +92,41 @@
         console.log("Results cleared due to mode switch");
     }
 
+
     function resetSearch() {
-        searchCriteria = [{ key: '', value: '' }];
+        if (isInventoryMode) {
+            searchCriteria = [{ key: 'inventory', value: '' }];
+        } else {
+            searchCriteria = [{ key: '', value: '' }];
+        }
         selectedSamplingCollection = '';
         selectedCollectionName = '';
+        selectedInventoryCollection = '';
         keys = [];
     }
 
+
+
+
+    function updateSelectedCollection(event: Event) {
+        const value = (event.target as HTMLSelectElement).value;
+        if (isSamplingMode) {
+            selectedSamplingCollection = value;
+        } else if (isInventoryMode) {
+            selectedInventoryCollection = value;
+        } else {
+            selectedCollectionName = value;
+        }
+        updateKeys();
+    }
+
+
+
+
     async function updateKeys() {
-        let collectionToUse = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
+        let collectionToUse = isSamplingMode ? selectedSamplingCollection : 
+                              isInventoryMode ? selectedInventoryCollection :
+                              selectedCollectionName;
         if (collectionToUse) {
             try {
                 const url = constructUrl(API_ENDPOINTS.FETCH_KEYS, { collection: collectionToUse });
@@ -101,6 +136,10 @@
                     keys = data.keys.filter(key => 
                         allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
                     );
+                    // Don't auto-select any key in normal mode
+                    if (!isSamplingMode && !isInventoryMode) {
+                        searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
+                    }
                 } else {
                     throw new Error('Failed to fetch keys');
                 }
@@ -116,7 +155,6 @@
 
 
 
-
     function addSearchCriteria() {
         searchCriteria = [...searchCriteria, { key: '', value: '' }];
     }
@@ -127,13 +165,9 @@
         }
     }
 
-
-
-
     function processTimestampCriteria(criteria: { key: string, value: string }) {
         const value = criteria.value.trim();
         if (value.includes(',')) {
-            // Range or operator search
             const [date, operator] = value.split(',').map(s => s.trim());
             if (operator === '<' || operator === '>') {
                 return {
@@ -142,7 +176,6 @@
                     operator: operator
                 };
             } else {
-                // Assume it's a range search
                 return {
                     key: criteria.key,
                     value: value.split(',').map(s => s.trim()),
@@ -150,7 +183,6 @@
                 };
             }
         } else {
-            // Exact date search
             return {
                 key: criteria.key,
                 value: value,
@@ -159,97 +191,93 @@
         }
     }
 
-
-
     let resultCount: number = 0;
 
     async function search() {
-      let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
+        let searchCollection = isSamplingMode ? selectedSamplingCollection : 
+                               isInventoryMode ? selectedInventoryCollection : 
+                               selectedCollectionName;
 
-      if (!searchCollection || searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
-        console.error('Collection and all search criteria must be provided');
-        return;
-      }
-
-      try {
-        const processedCriteria = searchCriteria.map(criteria => {
-          if (criteria.key === 'timestamp') {
-            return processTimestampCriteria(criteria);
-          }
-          return criteria;
-        });
-
-        const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-          collection: searchCollection,
-          criteria: JSON.stringify(processedCriteria)
-        });
-
-        const response = await fetch(url);
-
-        if (response.ok) {
-          const data = await response.json();
-          let newResults = data.results || [];
-          resultCount = data.count || 0;
-
-          if (isSamplingMode) {
-            // Sampling mode logic
-            const oldLength = results.length;
-            if (isAddOperation) {
-              newResults = newResults.filter(newResult => 
-                !results.some(existingResult => 
-                  existingResult.reference_no === newResult.reference_no
-                )
-              );
-              results = [...results, ...newResults];
-            } else {
-              results = results.filter(result => 
-                !newResults.some(newResult => 
-                  newResult.reference_no === result.reference_no
-              )
-            );
-          }
-          deepCopiedResults = JSON.parse(JSON.stringify(results));
-          searchCriteria = [{ key: '', value: '' }];
-          
-          resultsChanged = oldLength !== results.length;
-          resultCount = results.length; // Update count for sampling mode
-        } else {
-          // Normal mode logic
-          results = newResults;
-          deepCopiedResults = JSON.parse(JSON.stringify(results));
+        if (!searchCollection || searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
+            console.error('Collection and all search criteria must be provided');
+            return;
         }
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error searching collection');
-      }
-    } catch (error) {
-      console.error('Error searching collection:', error);
-      if (!isSamplingMode) {
-        results = [];
-        deepCopiedResults = [];
-        console.log("Error occurred. Cleared previous results.");
-      }
-      resultCount = 0; // Reset count on error
-    }
-  }
 
+        try {
+            const processedCriteria = searchCriteria.map(criteria => {
+                if (criteria.key === 'timestamp') {
+                    return processTimestampCriteria(criteria);
+                }
+                return criteria;
+            });
+
+            const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
+                collection: searchCollection,
+                criteria: JSON.stringify(processedCriteria)
+            });
+
+            const response = await fetch(url);
+
+            if (response.ok) {
+                const data = await response.json();
+                let newResults = data.results || [];
+                resultCount = data.count || 0;
+
+                if (isSamplingMode) {
+                    const oldLength = results.length;
+                    if (isAddOperation) {
+                        newResults = newResults.filter(newResult => 
+                            !results.some(existingResult => 
+                                existingResult.reference_no === newResult.reference_no
+                            )
+                        );
+                        results = [...results, ...newResults];
+                    } else {
+                        results = results.filter(result => 
+                            !newResults.some(newResult => 
+                                newResult.reference_no === result.reference_no
+                            )
+                        );
+                    }
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                    searchCriteria = [{ key: '', value: '' }];
+                    
+                    resultsChanged = oldLength !== results.length;
+                    resultCount = results.length;
+                } else {
+                    results = newResults;
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                }
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error searching collection');
+            }
+        } catch (error) {
+            console.error('Error searching collection:', error);
+            if (!isSamplingMode) {
+                results = [];
+                deepCopiedResults = [];
+                console.log("Error occurred. Cleared previous results.");
+            }
+            resultCount = 0;
+        }
+    }
 
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
         search();
     }
-
-
-
 </script>
+
+
+
 
 <div class="search-container">
     <div class="mode-switch">
-        <label class="switch">
-            <input type="checkbox" checked={isSamplingMode} on:change={toggleMode}>
-            <span class="slider round"></span>
-        </label>
-        <h3><span class="mode-label">&nbsp;{isSamplingMode ? 'Sampling' : 'Normal'} Mode</span></h3>
+        <button class="toggle-button {searchOption}" on:click={toggleMode}>
+            <span class="slider"></span>
+        </button>
+        <h3><span class="mode-label">&nbsp;{searchOption === 'inventory' ? 'Inventory' : searchOption === 'sampling' ? 'Sampling' : 'Normal'} Mode</span></h3>
     </div>
 
     <div class="search-controls">
@@ -260,20 +288,31 @@
             {/each}
         </select>
 
+
+
+
         {#each searchCriteria as criteria, index}
             <div class="search-criteria">
-                <select class="custom-select" bind:value={criteria.key}>
-                    <option value="">Select a key</option>
+
+                <select class="custom-select" bind:value={criteria.key} disabled={isInventoryMode && index === 0}>
+                    <option value="" disabled selected={criteria.key === ''}>
+                        {(isInventoryMode && index === 0) ? 'inventory' : (criteria.key === '' ? 'Select a key' : criteria.key)}
+                    </option>
                     {#each keys as key}
                         <option value={key}>{key}</option>
                     {/each}
                 </select>
+
+
                 <input type="text" bind:value={criteria.value} placeholder="Enter search value">
                 {#if index > 0}
                     <button on:click={() => removeSearchCriteria(index)}>-</button>
                 {/if}
             </div>
         {/each}
+
+
+
 
         <button on:click={addSearchCriteria}>+</button>
 
@@ -288,6 +327,9 @@
     </div>
 </div>
 
+
+
+
 <FunctionalDisplay 
   {results} 
   {deepCopiedResults} 
@@ -295,6 +337,8 @@
   {resultsChanged}
   {resultCount}
 />
+
+
 
 <style>
     .search-container {
@@ -334,7 +378,7 @@
     }
 
     .custom-select option:hover,
-    .custom-select option:focus,
+    .custom-select option:sampling,
     .custom-select option:active {
         background-color: #007bff;
         color: #fff;
@@ -393,18 +437,96 @@
         margin-left: 0.5rem;
     }
 
+
+    .toggle-button {
+        position: relative;
+        width: 90px;
+        height: 34px;
+        background-color: #ccc;
+        border: none;
+        border-radius: 34px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        overflow: hidden;
+        outline: none; /* Remove default focus outline */
+        -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile devices */
+    }
+
+
+
+    .toggle-button .slider {
+        position: absolute;
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        top: 4px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+
+
+    /* Remove focus styles for all browsers */
+    .toggle-button:focus,
+    .toggle-button:focus-visible {
+        outline: none;
+        box-shadow: none;
+    }
+
+
+
+    /* Ensure the button remains accessible for keyboard navigation */
+    .toggle-button:focus-visible .slider {
+        /* You can add a subtle effect here if desired, e.g.: */
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+    }
+
+
+
+    /* For Firefox */
+    .toggle-button::-moz-focus-inner {
+        border: 0;
+    }
+
+
+    .toggle-button.sampling {
+        background-color: #91DDFF;
+    }
+
+    .toggle-button.inventory {
+        background-color: #F9E2Af;
+    }
+
+    .toggle-button.sampling .slider {
+        transform: translateX(28px);
+    }
+
+    .toggle-button.inventory .slider {
+        transform: translateX(56px);
+    }
+
+
+    /* Remove any potential leftover styles */
+    .toggle-button::before,
+    .toggle-button::after,
+    .toggle-button .slider::before,
+    .toggle-button .slider::after {
+        content: none;
+        display: none;
+    }
+
+
+
     .switch {
         position: relative;
         display: inline-block;
-        width: 60px;
+        width: 90px;
         height: 34px;
     }
 
-    .switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
+
 
     .slider {
         position: absolute;
@@ -428,23 +550,50 @@
         transition: .4s;
     }
 
-    input:checked + .slider {
-        background-color: #4fd6be;
-    }
-
-    input:focus + .slider {
-        box-shadow: 0 0 1px #4fd6be;
-    }
-
-    input:checked + .slider:before {
-        transform: translateX(26px);
-    }
-
-    .slider.round {
+    .slider.tri-state {
         border-radius: 34px;
     }
 
-    .slider.round:before {
+
+    .slider.tri-state:before {
         border-radius: 50%;
     }
+
+    .sampling-button {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .sampling-button.active {
+        background-color: #007bff;
+    }
+
+
+
+
+    /* Ensure responsiveness */
+    @media (max-width: 768px) {
+        .search-container {
+            max-width: 100%;
+            padding: 10px;
+        }
+
+        .search-criteria {
+            flex-direction: column;
+        }
+
+        .search-criteria button {
+            align-self: flex-end;
+        }
+
+        .input-group {
+            flex-direction: column;
+        }
+
+        .input-group button {
+            width: 100%;
+        }
+    }
 </style>
+
+

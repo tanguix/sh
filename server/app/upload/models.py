@@ -50,6 +50,18 @@ class Item:
         self.source = kwargs.get('source')
         self.address = kwargs.get('address') or None
         self.phone = kwargs.get('phone') or None
+        self.inventory = self._parse_inventory(kwargs.get('inventory'), kwargs.get('username'))
+
+
+    def _parse_inventory(self, inventory, username):
+        if inventory and inventory.strip():
+            return [{
+                "inStock": int(inventory),
+                "putBy": username,
+                "timestamp": self.timestamp
+            }]
+        return []
+
 
     def _parse_unit_input(self, input_str, username):
         if not input_str:
@@ -61,6 +73,7 @@ class Item:
             "timestamp": self.timestamp,
             "upload": username
         }]
+
 
     def save_item(self):
         if not self.validate_references():

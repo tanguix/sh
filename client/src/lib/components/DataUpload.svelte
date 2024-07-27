@@ -35,6 +35,7 @@
     let source = '';
     let address = '';
     let phone = '';
+    let inventory = ''; // New variable for inventory
 
     let additionalImages: File[] = [];
     let additionalImagePreviews: string[] = [];
@@ -253,6 +254,7 @@
       formData.append('source', source);
       formData.append('address', address);
       formData.append('phone', phone);
+      formData.append('inventory', inventory);
       formData.append('username', user.name || user.role);
 
       if (!errorMessage) {  // Only send data if there are no validation errors
@@ -416,7 +418,7 @@
                       name="side_reference_no" 
                       bind:value={sideReferenceNumber} 
                       placeholder="Side Reference Numbers (comma-separated)" 
-                      required>
+                    >
                     <label for="side_reference_no">side ref</label>
                 </div>
                 <div class="input-group full-width">
@@ -431,8 +433,10 @@
 
 
             <hr class="separator">
+
+
             <div class="additional-info">
-                <div class="input-group unit-price">
+                <div class="input-group not-full-width">
                     <input type="text" id="unit_price" name="unit_price" bind:value={unitPrice} placeholder="e.g. 5.99, USD" required>
                     <label for="unit_price">u price</label>
                 </div>
@@ -447,14 +451,18 @@
                 <div class="input-group full-width">
                     <input type="text" id="address" name="address" bind:value={address} placeholder="Address">
                     <label for="address">address</label>
-
-
-            </div>
-                <div class="input-group full-width">
+                </div>
+                <div class="input-group not-full-width">
                     <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone">
                     <label for="phone">phone</label>
                 </div>
+                <div class="input-group">
+                    <input type="number" id="inventory" name="inventory" bind:value={inventory} placeholder="Inventory">
+                    <label for="inventory">inventory</label>
+                </div>
             </div>
+
+
 
             <hr class="separator">
             {#each $fields as field (field.id)}
@@ -519,6 +527,7 @@
         text-align: center;
         justify-content: center;
         margin-left: 10px;
+        /* margin-right: 10px; */
         font-size: 0.875rem;
         line-height: 1.5;
         border-radius: 0.2rem;
@@ -807,7 +816,7 @@
         flex-wrap: wrap;
     }
 
-    .additional-info .unit-price {
+    .additional-info .not-full-width {
         margin-right: 1rem;
     }
 
