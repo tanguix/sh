@@ -19,6 +19,9 @@ export const API_ENDPOINTS = {
     MATCH: `${BASE_URL}/auth/api/match`,
 
 
+
+    UPLOAD_REFERENCE: `${BASE_URL}/upload/api/upload_reference`,
+    FETCH_REF_KEYS: `${BASE_URL}/upload/api/fetch_reference_keys`,
     UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
     UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
     WORKFLOW_COMMIT: `${BASE_URL}/upload/api/workflow_commit`,

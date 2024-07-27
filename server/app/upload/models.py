@@ -36,136 +36,135 @@ def json_serialize(obj):
 
 
 class Item:
-    def __init__(self, reference_no: str, side_reference_nos: List[str], categories: List[str], tags: List[str], 
-                 additional_fields: dict, image_file, additional_image_files, server_dir, 
-                 unit_price, unit_weight, source, address, phone):
-        self.reference_no = reference_no
-        self.side_reference_nos = side_reference_nos
-        self.categories = categories
-        self.tags = tags
-        self.additional_fields = additional_fields
-        self.image_file = image_file
-        self.additional_image_files = additional_image_files
-        self.server_dir = server_dir
-        self.image_path = None
-        self.additional_image_paths = []
-        self.timestamp = int(time.time())
-        self.unit_price = self._parse_unit_input(unit_price)
-        self.unit_weight = self._parse_unit_input(unit_weight)
-        self.source = source
-        self.address = address if address else None  # Set to None if address is empty
-        self.phone = phone
+    def __init__(self, **kwargs):
+        self.reference_no = kwargs.get('reference_no')
+        self.side_reference_nos = [ref.strip() for ref in kwargs.get('side_reference_no', '').split(',') if ref.strip()]
+        self.categories = kwargs.get('categories', [])
+        self.tags = kwargs.get('tags', [])
+        self.additional_fields = kwargs.get('additional_fields', {})
+        self.image_path = kwargs.get('image_path')
+        self.additional_image_paths = kwargs.get('additional_image_paths', [])
+        self.timestamp = kwargs.get('timestamp', int(time.time()))
+        self.unit_price = self._parse_unit_input(kwargs.get('unit_price'), kwargs.get('username'))
+        self.unit_weight = self._parse_unit_input(kwargs.get('unit_weight'), kwargs.get('username'))
+        self.source = kwargs.get('source')
+        self.address = kwargs.get('address') or None
+        self.phone = kwargs.get('phone') or None
 
-
-
-
-
-    def _parse_unit_input(self, input_str):
+    def _parse_unit_input(self, input_str, username):
         if not input_str:
-            return None
-        parts = input_str.split(',')
-        if len(parts) != 2:
-            return input_str  # Return as-is if not in expected format
-        value, unit = parts
-        value = value.strip()
-        unit = unit.strip()
-        try:
-            float(value)  # Validate that value is a number
-            return f"{value} ({unit})"
-        except ValueError:
-            return input_str  # Return as-is if value is not a valid number
-
-    def process_files(self):
-        if self.image_file:
-            self.image_path = self._save_main_image()
-            self._save_additional_images()
-
-    def _save_main_image(self):
-        file_name = os.path.splitext(self.image_file.filename)[0]
-        subdirectory = os.path.join(self.server_dir, 'images', file_name)
-        
-        if not os.path.exists(subdirectory):
-            os.makedirs(subdirectory)
-        
-        relative_image_path = os.path.join('images', file_name, self.image_file.filename)
-        absolute_image_path = os.path.join(self.server_dir, relative_image_path)
-        
-        self.image_file.save(absolute_image_path)
-        return relative_image_path
-
-    def _save_additional_images(self):
-        if not self.image_path:
-            return
-
-        file_name = os.path.splitext(self.image_file.filename)[0]
-        subdirectory = os.path.join(self.server_dir, 'images', file_name)
-
-        for additional_file in self.additional_image_files:
-            additional_filename = additional_file.filename
-            additional_relative_path = os.path.join('images', file_name, additional_filename)
-            additional_absolute_path = os.path.join(self.server_dir, additional_relative_path)
-            
-            additional_file.save(additional_absolute_path)
-            self.additional_image_paths.append(additional_relative_path)
-
-
-
-
-    @staticmethod
-    def from_request(request, server_dir):
-        image_file = request.files.get('image')
-        reference_no = request.form.get('reference_no')
-        side_reference_nos = [ref.strip() for ref in request.form.get('side_reference_no', '').split(',') if ref.strip()]
-        categories = json.loads(request.form.get('categories', '[]'))
-        tags = json.loads(request.form.get('tags', '[]'))
-        additional_fields = json.loads(request.form.get('additional_fields', '{}'))
-        additional_image_files = [file for key, file in request.files.items() if key.startswith('additional_image_')]
-        unit_price = request.form.get('unit_price')
-        unit_weight = request.form.get('unit_weight')
-        source = request.form.get('source')
-        address = request.form.get('address', '')  # Default to empty string if not provided
-        phone = request.form.get('phone')
-        
-        return Item(reference_no, side_reference_nos, categories, tags, additional_fields, image_file, 
-                    additional_image_files, server_dir, unit_price, unit_weight, source, address, phone)
-
-
+            return []
+        num, unit = map(str.strip, input_str.split(','))
+        return [{
+            "num": float(num),
+            "unit": unit,
+            "timestamp": self.timestamp,
+            "upload": username
+        }]
 
     def save_item(self):
-        if not self.is_reference_no_unique(self.reference_no, self.side_reference_nos):
-            raise ValueError(f"Reference numbers must be unique. Duplicate found.")
-
-        data = {
-            "reference_no": self.reference_no,
-            "side_reference_nos": self.side_reference_nos,
-            "categories": self.categories,
-            "tags": self.tags,
-            "additional_fields": self.additional_fields,
-            "image_path": self.image_path,
-            "additional_image_paths": self.additional_image_paths,
-            "timestamp": self.timestamp,
-            "unit_price": self.unit_price,
-            "unit_weight": self.unit_weight,
-            "source": self.source,
-            "address": self.address,  # This will be None if address was not provided
-            "phone": self.phone
-        }
+        if not self.validate_references():
+            raise ValueError("Reference validation failed")
+        data = self.__dict__
         result = db.samples.insert_one(data)
         return result
 
+    def validate_references(self):
+        if not self.are_side_references_unique(self.side_reference_nos):
+            raise ValueError("Side reference numbers are not unique")
+        self.reference_no = f"{self.reference_no}{self.timestamp}x"
+        if not self.is_reference_no_unique(self.reference_no):
+            raise ValueError("Generated reference number is not unique")
+        return True
 
+    @classmethod
+    def from_form_data(cls, form_data, files):
+        data = {}
+        for key, value in form_data.items():
+            if key in ['tags', 'categories', 'additional_fields']:
+                data[key] = json.loads(value)
+            else:
+                data[key] = value
+
+        if 'image' in files:
+            file = files['image']
+            filename = secure_filename(file.filename)
+            directory = os.path.splitext(filename)[0]
+            os.makedirs(os.path.join(SERVER_DIR, 'images', directory), exist_ok=True)
+            file_path = os.path.join(SERVER_DIR, 'images', directory, filename)
+            file.save(file_path)
+            data['image_path'] = f'/images/{directory}/{filename}'
+
+        additional_images = []
+        for key, file in files.items():
+            if key.startswith('additional_image_'):
+                filename = secure_filename(file.filename)
+                directory = os.path.splitext(data['image_path'].split('/')[-1])[0]
+                file_path = os.path.join(SERVER_DIR, 'images', directory, filename)
+                file.save(file_path)
+                additional_images.append(f'/images/{directory}/{filename}')
+        data['additional_image_paths'] = additional_images
+
+        return cls(**data)
 
     @staticmethod
-    def is_reference_no_unique(reference_no: str, side_reference_nos: List[str]) -> bool:
-        """Check if all reference numbers (main and side) are unique in the database."""
-        all_refs = [reference_no] + side_reference_nos
-        existing_items = db.samples.find({
-            "$or": [
-                {"reference_no": {"$in": all_refs}},
-                {"side_reference_nos": {"$in": all_refs}}
-            ]
+    def is_reference_unique(abbreviation: str, full_name: str):
+        logger.info(f"Checking uniqueness for abbreviation: {abbreviation}, full_name: {full_name}")
+        result = db.reference_table.find_one({
+            'reference_number_table': {
+                '$elemMatch': {abbreviation: {'$exists': True}}
+            }
         })
-        return len(list(existing_items)) == 0
+        if result:
+            return False
+        for doc in db.reference_table.find():
+            for ref in doc.get('reference_number_table', []):
+                if full_name in ref.values():
+                    logger.info(f"Found matching full_name: {full_name}")
+                    return False
+        logger.info("Reference is unique")
+        return True
+
+    @staticmethod
+    def add_reference(full_name: str, abbreviation: str):
+        logger.info(f"Attempting to add reference: {abbreviation} - {full_name}")
+        if not Item.is_reference_unique(abbreviation, full_name):
+            logger.warning(f"Reference abbreviation already exists: {abbreviation} - {full_name}")
+            raise ValueError("Reference abbreviation already exists")
+        new_reference = {abbreviation: full_name}
+        result = db.reference_table.update_one(
+            {},
+            {'$push': {'reference_number_table': new_reference}},
+            upsert=True
+        )
+        success = result.modified_count > 0 or result.upserted_id is not None
+        logger.info(f"Add reference result: {'Success' if success else 'Failure'}")
+        return success
+
+    @staticmethod
+    def get_all_references():
+        result = db.reference_table.find_one({})
+        if result and 'reference_number_table' in result:
+            return [
+                {'abbreviation': list(ref.keys())[0], 'fullName': list(ref.values())[0]}
+                for ref in result['reference_number_table']
+            ]
+        return []
+
+    @staticmethod
+    def are_side_references_unique(side_refs):
+        if len(side_refs) != len(set(side_refs)):
+            return False
+        for ref in side_refs:
+            if db.samples.find_one({"side_reference_nos": ref}):
+                return False
+        return True
+
+    @staticmethod
+    def is_reference_no_unique(ref_no):
+        return db.samples.find_one({"reference_no": ref_no}) is None
+
+
 
 
 

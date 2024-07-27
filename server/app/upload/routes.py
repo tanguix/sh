@@ -3,6 +3,7 @@ import os
 import json
 from app.logger import logger
 from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow, json_serialize
+import traceback
 
 # create Blueprint object, which is this file
 upload_bp = Blueprint('upload', __name__)
@@ -23,30 +24,71 @@ if not os.path.exists(FILE_FOLDER):
 
 
 
+@upload_bp.route('/api/upload_reference', methods=['POST'])
+def upload_reference():
+    try:
+        data = request.json
+        logger.info(f"Received data: {data}")
+        full_name = data.get('fullName')
+        abbreviation = data.get('abbreviation')
+        
+        if not full_name or not abbreviation:
+            return jsonify({"error": "Both full name and abbreviation are required"}), 400
+        
+        success = Item.add_reference(full_name, abbreviation)
+        
+        if success:
+            return jsonify({"message": "Reference added successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to add reference"}), 500
+    
+    except ValueError as e:
+        logger.error(f"ValueError in upload_reference: {str(e)}")
+        return jsonify({"error": str(e)}), 409  # 409 Conflict for duplicate
+    except Exception as e:
+        logger.error(f"Unexpected error in upload_reference: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "An unexpected error occurred while uploading the reference"}), 500
+
+
+
+
+
+@upload_bp.route('/api/fetch_reference_keys', methods=['GET'])
+def fetch_reference_keys():
+    try:
+        references = Item.get_all_references()
+        return jsonify(references), 200
+    except Exception as e:
+        logger.error(f"Error fetching reference keys: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred while fetching reference keys"}), 500
+
+
+
+
 @upload_bp.route('/api/upload_data', methods=['POST'])
 def upload_data():
-    if not os.path.exists(IMAGE_FOLDER):
-        os.makedirs(IMAGE_FOLDER)
-    
     try:
-        sample = Item.from_request(request, SERVER_DIR)
-        sample.process_files()
-        result = sample.save_item()
+        item = Item.from_form_data(request.form, request.files)
+        result = item.save_item()
         return jsonify({
             "message": "Sample uploaded successfully",
-            "id": str(result.inserted_id),
-            "timestamp": sample.timestamp
+            "result": {
+                "id": str(result.inserted_id),
+                "timestamp": item.timestamp
+            }
         }), 200
     except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
         return jsonify({
             "error": str(e)
         }), 400
     except Exception as e:
         logger.error(f"Error uploading sample: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({
             "error": "An unexpected error occurred while uploading the sample."
         }), 500
-
 
 
 

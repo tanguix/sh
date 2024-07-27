@@ -5,6 +5,10 @@
 <script lang="ts">
     import { writable } from 'svelte/store';
     import { API_ENDPOINTS } from '$lib/utils/api';
+    import NewReference from './parts/NewReference.svelte';
+    import { page } from '$app/stores';
+
+    $: user = $page.data.user;
 
     type Field = {
         id: number;
@@ -148,18 +152,8 @@
         additionalImagePreviews = additionalImagePreviews.filter((_, i) => i !== index);
     }
 
-    async function sendSampleData(combinedFormData: FormData) {
-        const response = await fetch(API_ENDPOINTS.UPLOAD_DATA, {
-            method: 'POST',
-            body: combinedFormData, 
-        });
 
-        if (!response.ok) {
-            throw new Error('Failed to upload sample data');
-        }
 
-        return await response.json();
-    }
 
     function validateReferenceNumbers(): boolean {
         const sideRefs = sideReferenceNumber.split(',').map(ref => ref.trim());
@@ -169,16 +163,42 @@
     }
 
 
+    let newReferenceComponent: NewReference;
+    let errorMessage = ''; // New variable to store error messages
+
+    function handleReferenceSelect(value: string) {
+        referenceNumber = value;
+    }
+
+
+
+    async function sendSampleData(combinedFormData: FormData) {
+        const response = await fetch(API_ENDPOINTS.UPLOAD_DATA, {
+            method: 'POST',
+            body: combinedFormData, 
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to upload sample data');
+        }
+
+        return data;
+    }
+
 
     function handleSubmit(event: Event) {
         event.preventDefault();
+        errorMessage = ''; // Clear any previous error messages
+
+        // Check reference number uniqueness
         if (!validateReferenceNumbers()) {
-            alert("Reference numbers must be unique across all entries.");
+            errorMessage = "Reference numbers must be unique across all entries.";
             return;
         }
 
-        const form = event.target as HTMLFormElement;
-        const formData = new FormData(form);
+        const formData = new FormData();
 
         if (imageFile) {
             formData.append('image', imageFile);
@@ -202,71 +222,79 @@
         if (defaultTag) {
             allTags.push(defaultTag);
         }
-        tags.subscribe(currentTags => {
-            currentTags.forEach(tag => {
-                if (tag.value) {
-                    allTags.push(tag.value);
-                }
-            });
-        })();
+      tags.subscribe(currentTags => {
+          currentTags.forEach(tag => {
+              if (tag.value) {
+                  allTags.push(tag.value);
+              }
+          });
+      })();
 
-        const allCategories: string[] = [];
-        const defaultCategory = (document.getElementById('category') as HTMLInputElement).value;
-        if (defaultCategory) {
-            allCategories.push(defaultCategory);
-        }
-        categories.subscribe(currentCategories => {
-            currentCategories.forEach(category => {
-                if (category.value) {
-                    allCategories.push(category.value);
-                }
-            });
-        })();
+      const allCategories: string[] = [];
+      const defaultCategory = (document.getElementById('category') as HTMLInputElement).value;
+      if (defaultCategory) {
+          allCategories.push(defaultCategory);
+      }
+      categories.subscribe(currentCategories => {
+          currentCategories.forEach(category => {
+              if (category.value) {
+                  allCategories.push(category.value);
+              }
+          });
+      })();
 
-        formData.append('side_reference_no', sideReferenceNumber);
-        formData.append('reference_no', referenceNumber);
-        formData.append('tags', JSON.stringify(allTags));
-        formData.append('categories', JSON.stringify(allCategories));
-        formData.append('additional_fields', JSON.stringify(additionalFields));
+      formData.append('side_reference_no', sideReferenceNumber);
+      formData.append('reference_no', referenceNumber);
+      formData.append('tags', JSON.stringify(allTags));
+      formData.append('categories', JSON.stringify(allCategories));
+      formData.append('additional_fields', JSON.stringify(additionalFields));
+      formData.append('unit_price', unitPrice);
+      formData.append('unit_weight', unitWeight);
+      formData.append('source', source);
+      formData.append('address', address);
+      formData.append('phone', phone);
+      formData.append('username', user.name || user.role);
 
-        formData.append('unit_price', unitPrice);
-        formData.append('unit_weight', unitWeight);
-        formData.append('source', source);
-        formData.append('address', address);
-        formData.append('phone', phone);
+      if (!errorMessage) {  // Only send data if there are no validation errors
+          sendSampleData(formData)
+              .then(response => {
+                  console.log('Upload successful:', response);
+                  // Reset form fields here
+                  sideReferenceNumber = '';
+                  referenceNumber = '';
+                  unitPrice = '';
+                  unitWeight = '';
+                  source = '';
+                  address = '';
+                  phone = '';
+                  fields.set([]);
+                  tags.set([]);
+                  categories.set([]);
+                  imageFile = null;
+                  imagePath = '';
+                  imagePreviewUrl = '';
+                  additionalImages = [];
+                  additionalImagePreviews = [];
+                  (document.getElementById('tag') as HTMLInputElement).value = '';
+                  (document.getElementById('category') as HTMLInputElement).value = '';
+                  // Reset the reference selection
+                  if (newReferenceComponent) {
+                      newReferenceComponent.resetSelection();
+                  }
+              })
+              .catch(error => {
+                  console.error('Upload failed:', error);
+                  errorMessage = error.message; // Set the error message
+              });
+      }
+  }
 
-        sendSampleData(formData)
-            .then(response => {
-                console.log('Upload successful:', response);
-                // Reset form fields here
-                sideReferenceNumber = '';
-                referenceNumber = '';
-                unitPrice = '';
-                unitWeight = '';
-                source = '';
-                address = '';
-                phone = '';
-                fields.set([]);
-                tags.set([]);
-                categories.set([]);
-                imageFile = null;
-                imagePath = '';
-                imagePreviewUrl = '';
-                additionalImages = [];
-                additionalImagePreviews = [];
-                (document.getElementById('tag') as HTMLInputElement).value = '';
-                (document.getElementById('category') as HTMLInputElement).value = '';
-            })
-            .catch(error => {
-                console.error('Upload failed:', error);
-            });
-    }
+
+
+
 
 
 </script>
-
-
-
 
 <form action="?/upload" method="POST" on:submit={handleSubmit} enctype="multipart/form-data">
     <div class="upload-container">
@@ -346,7 +374,6 @@
         </div>
 
         <div class="upload-right">
-
             <div class="input-group full-width">
                 <div class="input-button-group">
                     <input type="text" id="category" name="category" placeholder="Categories" required>
@@ -393,7 +420,10 @@
                     <label for="side_reference_no">side ref</label>
                 </div>
                 <div class="input-group full-width">
-                    <input type="text" id="reference_no" name="reference_no" bind:value={referenceNumber} placeholder="Reference Number" required>
+                    <NewReference 
+                        onReferenceSelect={handleReferenceSelect} 
+                        bind:this={newReferenceComponent}
+                    />
                     <label for="reference_no">main ref</label>
                 </div>
             </div>
@@ -417,13 +447,14 @@
                 <div class="input-group full-width">
                     <input type="text" id="address" name="address" bind:value={address} placeholder="Address">
                     <label for="address">address</label>
-                </div>
+
+
+            </div>
                 <div class="input-group full-width">
-                    <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone" required>
+                    <input type="text" id="phone" name="phone" bind:value={phone} placeholder="Phone">
                     <label for="phone">phone</label>
                 </div>
             </div>
-
 
             <hr class="separator">
             {#each $fields as field (field.id)}
@@ -439,6 +470,13 @@
                     <button class="remove-items" type="button" on:click={() => removeItem(fields, field.id)}>Remove</button>
                 </div>
             {/each}
+
+            {#if errorMessage}
+                <div class="error-message">
+                    {errorMessage}
+                </div>
+            {/if}
+
             <div class="addfield-submit-button">
               <button type="button" on:click={() => addItem(fields)}>Add Field</button>
               <button type="submit">Submit</button>
@@ -481,13 +519,11 @@
         text-align: center;
         justify-content: center;
         margin-left: 10px;
-        /* padding: 0rem; */
         font-size: 0.875rem;
         line-height: 1.5;
         border-radius: 0.2rem;
         white-space: nowrap;
         min-width: 60px;
-        /* border: solid 1px; */
         transition: background-color 0.3s, opacity 0.3s;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
@@ -760,8 +796,6 @@
     .reference-numbers {
         display: flex;
         flex-direction: column;
-        /* gap: 1rem; */
-        /* margin-bottom: 1rem; */
     }
 
     .reference-numbers .input-group {
@@ -771,7 +805,6 @@
     .additional-info {
         display: flex;
         flex-wrap: wrap;
-        /* gap: 1rem; */
     }
 
     .additional-info .unit-price {
@@ -786,6 +819,18 @@
     .additional-info .input-group.full-width {
         flex: 1 1 100%;
     }
+
+
+    .error-message {
+        color: red;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background-color: #ffeeee;
+        border: 1px solid #ffcccc;
+        border-radius: 0.25rem;
+    }
+
 
     /* Ensure responsiveness */
     @media (max-width: 768px) {
@@ -815,12 +860,6 @@
             align-items: flex-start;
         }
 
-
-        .input-group {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
         .input-group label {
             flex: 0 0 auto;
             text-align: left;
@@ -842,9 +881,4 @@
         }
     }
 </style>
-
-
-
-
-
 
