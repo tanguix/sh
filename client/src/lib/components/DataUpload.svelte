@@ -424,7 +424,7 @@
                         onReferenceSelect={handleReferenceSelect} 
                         bind:this={newReferenceComponent}
                     />
-                    <label for="reference_no">main ref</label>
+                    <!-- <label for="reference_no">main ref</label> -->
                 </div>
             </div>
 
@@ -694,7 +694,7 @@
         border: 0;
         height: 1px;
         background: #ccc;
-        margin: 0.8rem 0 1rem 0;
+        margin: 0.6rem 0 1rem 0;
     }
 
     button {

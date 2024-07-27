@@ -92,7 +92,6 @@ def upload_data():
 
 
 
-
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:

@@ -69,13 +69,24 @@ class Item:
         result = db.samples.insert_one(data)
         return result
 
+
+
     def validate_references(self):
+
+        # New check for empty reference_no
+        if not self.reference_no:
+            raise ValueError("Reference number cannot be empty")
+
         if not self.are_side_references_unique(self.side_reference_nos):
             raise ValueError("Side reference numbers are not unique")
+        
         self.reference_no = f"{self.reference_no}{self.timestamp}x"
         if not self.is_reference_no_unique(self.reference_no):
             raise ValueError("Generated reference number is not unique")
         return True
+
+
+
 
     @classmethod
     def from_form_data(cls, form_data, files):
