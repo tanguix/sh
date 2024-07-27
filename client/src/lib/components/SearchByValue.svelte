@@ -164,91 +164,83 @@
     let resultCount: number = 0;
 
     async function search() {
-        let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
+      let searchCollection = isSamplingMode ? selectedSamplingCollection : selectedCollectionName;
 
-        if (!searchCollection || searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
-            console.error('Collection and all search criteria must be provided');
-            return;
-        }
+      if (!searchCollection || searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
+        console.error('Collection and all search criteria must be provided');
+        return;
+      }
 
-        try {
-            const processedCriteria = searchCriteria.map(criteria => {
-                if (criteria.key === 'timestamp') {
-                    return processTimestampCriteria(criteria);
-                }
-                return criteria;
-            });
+      try {
+        const processedCriteria = searchCriteria.map(criteria => {
+          if (criteria.key === 'timestamp') {
+            return processTimestampCriteria(criteria);
+          }
+          return criteria;
+        });
 
-            const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-                collection: searchCollection,
-                criteria: JSON.stringify(processedCriteria)
-            });
+        const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
+          collection: searchCollection,
+          criteria: JSON.stringify(processedCriteria)
+        });
 
-            const response = await fetch(url);
+        const response = await fetch(url);
 
-            if (response.ok) {
-                const data = await response.json();
-                let newResults = data.results || [];
-                resultCount = data.count || 0;
+        if (response.ok) {
+          const data = await response.json();
+          let newResults = data.results || [];
+          resultCount = data.count || 0;
 
-                if (isSamplingMode) {
-                    // Sampling mode logic
-                    const oldLength = results.length;
-                    if (isAddOperation) {
-                        newResults = newResults.filter(newResult => 
-                            !results.some(existingResult => 
-                                existingResult.reference_no === newResult.reference_no
-                            )
-                        );
-                        results = [...results, ...newResults];
-                    } else {
-                        results = results.filter(result => 
-                            !newResults.some(newResult => 
-                                newResult.reference_no === result.reference_no
-                            )
-                        );
-                    }
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                    searchCriteria = [{ key: '', value: '' }];
-                    
-                    resultsChanged = oldLength !== results.length;
-                    resultCount = results.length; // Update count for sampling mode
-                } else {
-                    // Normal mode logic
-                    if (newResults.length === 0) {
-                        results = [];
-                        deepCopiedResults = [];
-                        console.log("No results found. Cleared previous results.");
-                    } else {
-                        results = newResults;
-                        deepCopiedResults = JSON.parse(JSON.stringify(results));
-                    }
-                }
+          if (isSamplingMode) {
+            // Sampling mode logic
+            const oldLength = results.length;
+            if (isAddOperation) {
+              newResults = newResults.filter(newResult => 
+                !results.some(existingResult => 
+                  existingResult.reference_no === newResult.reference_no
+                )
+              );
+              results = [...results, ...newResults];
             } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Error searching collection');
-            }
-        } catch (error) {
-            console.error('Error searching collection:', error);
-            if (!isSamplingMode) {
-                results = [];
-                deepCopiedResults = [];
-                console.log("Error occurred. Cleared previous results.");
-            }
-            resultCount = 0; // Reset count on error
+              results = results.filter(result => 
+                !newResults.some(newResult => 
+                  newResult.reference_no === result.reference_no
+              )
+            );
+          }
+          deepCopiedResults = JSON.parse(JSON.stringify(results));
+          searchCriteria = [{ key: '', value: '' }];
+          
+          resultsChanged = oldLength !== results.length;
+          resultCount = results.length; // Update count for sampling mode
+        } else {
+          // Normal mode logic
+          results = newResults;
+          deepCopiedResults = JSON.parse(JSON.stringify(results));
         }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error searching collection');
+      }
+    } catch (error) {
+      console.error('Error searching collection:', error);
+      if (!isSamplingMode) {
+        results = [];
+        deepCopiedResults = [];
+        console.log("Error occurred. Cleared previous results.");
+      }
+      resultCount = 0; // Reset count on error
     }
-
-
-
-
-
+  }
 
 
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
         search();
     }
+
+
+
 </script>
 
 <div class="search-container">

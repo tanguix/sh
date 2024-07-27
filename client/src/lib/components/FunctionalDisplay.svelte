@@ -32,13 +32,10 @@
   `;
 
   const displayedForms = writable({});
-  let selectedKeys = {};
-  let selectedDates = writable({});
   let removeClickCounts = writable({});
   let selectedForRemoval = writable({});
   let unsavedChangesByIndex = writable({});
   let formActionClicked = writable({});
-  let samplesMarkedForRemoval = writable<number[]>([]);
   let dropSampleClicked = writable<{[key: number]: boolean}>({});
   let pendingRemoval = writable<{[key: number]: boolean}>({});
 
@@ -74,12 +71,17 @@
     );
   }
 
+
+
+
   function formatPropertyValue(key: string, value: any) {
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
       const lastModifier = value[value.length - 1];
       return `${lastModifier.name} (${lastModifier.role})`;
     } else if (key === 'additional_image_path' && Array.isArray(value)) {
       return value;
+    } else if (key === 'unit_price' || key === 'unit_weight') {
+      return `${value.num} ${value.unit}`;
     } else if (Array.isArray(value)) {
       return value.join(', ');
     } else if (typeof value === 'object' && value !== null) {
@@ -87,6 +89,10 @@
     }
     return value;
   }
+
+
+
+
 
   async function generatePDFWrapper() {
     await generatePDF(results, content);
@@ -434,12 +440,6 @@
     target.alt = 'Image not available';
   }
 
-
-function toggleGridView() {
-  isGridView = !isGridView;
-  expandedItems.clear();
-  expandedItems = expandedItems; // Trigger reactivity
-}
 
 
 </script>

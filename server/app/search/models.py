@@ -46,6 +46,10 @@ class Collection:
         else:
             raise ValueError(f"Invalid timestamp operator: {operator}")
 
+
+
+
+
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria, backend_local_url):
         if collection_name not in db.list_collection_names():
@@ -67,15 +71,43 @@ class Collection:
                 else:
                     query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
 
-        results = list(db[collection_name].find(query))
+        pipeline = [
+            {"$match": query},
+            {"$project": {
+                "quantity": 0,
+                "password": 0,
+                "role": 0,
+                "authToken": 0,
+            }},
+            {"$addFields": {
+                "unit_price": {
+                    "$cond": {
+                        "if": {"$isArray": "$unit_price"},
+                        "then": {"$arrayElemAt": ["$unit_price", -1]},
+                        "else": "$unit_price"
+                    }
+                },
+                "unit_weight": {
+                    "$cond": {
+                        "if": {"$isArray": "$unit_weight"},
+                        "then": {"$arrayElemAt": ["$unit_weight", -1]},
+                        "else": "$unit_weight"
+                    }
+                }
+            }}
+        ]
+
+        logger.debug(f"Search query: {query}")
+        logger.debug(f"Aggregation pipeline: {pipeline}")
+
+        results = list(db[collection_name].aggregate(pipeline))
         count = len(results)
         processed_results = []
 
-        exclude_keys = {"_id", "quantity", "password", "role", "authToken"}
         for result in results:
             processed_result = {}
             for k, v in result.items():
-                if k in exclude_keys:
+                if k == "_id":
                     continue
                 if k == "additional_fields":
                     processed_result.update(v)
@@ -88,6 +120,12 @@ class Collection:
             processed_results.append(processed_result)
 
         return processed_results, count
+
+
+
+
+
+
 
     @staticmethod
     def search_sample_tokens_by_user(user_name, user_role):

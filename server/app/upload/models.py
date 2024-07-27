@@ -104,7 +104,7 @@ class Item:
             os.makedirs(os.path.join(SERVER_DIR, 'images', directory), exist_ok=True)
             file_path = os.path.join(SERVER_DIR, 'images', directory, filename)
             file.save(file_path)
-            data['image_path'] = f'/images/{directory}/{filename}'
+            data['image_path'] = f'images/{directory}/{filename}'
 
         additional_images = []
         for key, file in files.items():
