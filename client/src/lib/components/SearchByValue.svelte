@@ -21,7 +21,7 @@
     let searchCriteria = [{ key: '', value: '' }];
     let resultsChanged = false;
 
-    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp', 'inventory'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp'];
     const allowedCollections = ['samples', 'samples_list'];
 
     let collections: string[] = [];
@@ -77,12 +77,14 @@
         }
         resetSearch();
 
-        // Add this part to explicitly reset the key when switching to normal mode
-        if (searchOption === '') {
+        if (searchOption === 'inventory') {
+            searchCriteria = [{ key: 'inventory', value: '' }];
+            keys = ['inventory', ...allowedKeys]; // Include both inventory and other keys
+        } else if (searchOption === '') {
             searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
         }
-
     }
+
 
 
 
@@ -93,18 +95,19 @@
     }
 
 
+
     function resetSearch() {
         if (isInventoryMode) {
             searchCriteria = [{ key: 'inventory', value: '' }];
+            keys = ['inventory', ...allowedKeys]; // Include both inventory and other keys
         } else {
             searchCriteria = [{ key: '', value: '' }];
+            keys = [...allowedKeys]; // Only include allowed keys for other modes
         }
         selectedSamplingCollection = '';
         selectedCollectionName = '';
         selectedInventoryCollection = '';
-        keys = [];
     }
-
 
 
 
@@ -122,7 +125,6 @@
 
 
 
-
     async function updateKeys() {
         let collectionToUse = isSamplingMode ? selectedSamplingCollection : 
                               isInventoryMode ? selectedInventoryCollection :
@@ -133,9 +135,15 @@
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
-                    keys = data.keys.filter(key => 
-                        allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
-                    );
+                    if (isInventoryMode) {
+                        keys = ['inventory', ...data.keys.filter(key => 
+                            allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
+                        )];
+                    } else {
+                        keys = data.keys.filter(key => 
+                            allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
+                        );
+                    }
                     // Don't auto-select any key in normal mode
                     if (!isSamplingMode && !isInventoryMode) {
                         searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
@@ -147,9 +155,10 @@
                 console.error('Error fetching keys:', error);
             }
         } else {
-            keys = [];
+            keys = isInventoryMode ? ['inventory', ...allowedKeys] : [];
         }
     }
+
 
 
 
@@ -192,21 +201,41 @@
     }
 
     let resultCount: number = 0;
-
     async function search() {
         let searchCollection = isSamplingMode ? selectedSamplingCollection : 
                                isInventoryMode ? selectedInventoryCollection : 
                                selectedCollectionName;
 
-        if (!searchCollection || searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
-            console.error('Collection and all search criteria must be provided');
+        if (!searchCollection) {
+            console.error('Collection must be selected');
             return;
+        }
+
+        // Special handling for Inventory Mode
+        if (isInventoryMode) {
+            if (searchCriteria[0].key !== 'inventory' || !searchCriteria[0].value) {
+                console.error('In Inventory Mode, "inventory" key must be selected and a value must be provided');
+                return;
+            }
+        } else {
+            // For other modes, check if all criteria are filled
+            if (searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
+                console.error('All search criteria must be provided');
+                return;
+            }
         }
 
         try {
             const processedCriteria = searchCriteria.map(criteria => {
                 if (criteria.key === 'timestamp') {
                     return processTimestampCriteria(criteria);
+                }
+                if (isInventoryMode && criteria.key === 'inventory') {
+                    return {
+                        key: 'inventory',
+                        value: criteria.value,
+                        operator: 'inStock'
+                    };
                 }
                 return criteria;
             });
@@ -216,52 +245,54 @@
                 criteria: JSON.stringify(processedCriteria)
             });
 
-            const response = await fetch(url);
+          const response = await fetch(url);
 
-            if (response.ok) {
-                const data = await response.json();
-                let newResults = data.results || [];
-                resultCount = data.count || 0;
+          if (response.ok) {
+              const data = await response.json();
+              let newResults = data.results || [];
+              resultCount = data.count || 0;
 
-                if (isSamplingMode) {
-                    const oldLength = results.length;
-                    if (isAddOperation) {
-                        newResults = newResults.filter(newResult => 
-                            !results.some(existingResult => 
-                                existingResult.reference_no === newResult.reference_no
-                            )
-                        );
-                        results = [...results, ...newResults];
-                    } else {
-                        results = results.filter(result => 
-                            !newResults.some(newResult => 
-                                newResult.reference_no === result.reference_no
-                            )
-                        );
-                    }
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                    searchCriteria = [{ key: '', value: '' }];
-                    
-                    resultsChanged = oldLength !== results.length;
-                    resultCount = results.length;
-                } else {
-                    results = newResults;
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                }
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Error searching collection');
-            }
-        } catch (error) {
-            console.error('Error searching collection:', error);
-            if (!isSamplingMode) {
-                results = [];
-                deepCopiedResults = [];
-                console.log("Error occurred. Cleared previous results.");
-            }
-            resultCount = 0;
-        }
-    }
+              if (isSamplingMode) {
+                  const oldLength = results.length;
+                  if (isAddOperation) {
+                      newResults = newResults.filter(newResult => 
+                          !results.some(existingResult => 
+                              existingResult.reference_no === newResult.reference_no
+                          )
+                      );
+                      results = [...results, ...newResults];
+                  } else {
+                      results = results.filter(result => 
+                          !newResults.some(newResult => 
+                              newResult.reference_no === result.reference_no
+                          )
+                      );
+                  }
+                  deepCopiedResults = JSON.parse(JSON.stringify(results));
+                  searchCriteria = [{ key: '', value: '' }];
+                  
+                  resultsChanged = oldLength !== results.length;
+                  resultCount = results.length;
+              } else {
+                  results = newResults;
+                  deepCopiedResults = JSON.parse(JSON.stringify(results));
+              }
+          } else {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Error searching collection');
+          }
+      } catch (error) {
+          console.error('Error searching collection:', error);
+          if (!isSamplingMode) {
+              results = [];
+              deepCopiedResults = [];
+              console.log("Error occurred. Cleared previous results.");
+          }
+          resultCount = 0;
+      }
+  }
+
+
 
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
@@ -294,7 +325,14 @@
         {#each searchCriteria as criteria, index}
             <div class="search-criteria">
 
-                <select class="custom-select" bind:value={criteria.key} disabled={isInventoryMode && index === 0}>
+                <select class="custom-select" 
+                        bind:value={criteria.key} 
+                        disabled={isInventoryMode && index === 0}
+                        on:change={() => {
+                            if (isInventoryMode && index === 0) {
+                                criteria.key = 'inventory';
+                            }
+                        }}>
                     <option value="" disabled selected={criteria.key === ''}>
                         {(isInventoryMode && index === 0) ? 'inventory' : (criteria.key === '' ? 'Select a key' : criteria.key)}
                     </option>
@@ -302,7 +340,6 @@
                         <option value={key}>{key}</option>
                     {/each}
                 </select>
-
 
                 <input type="text" bind:value={criteria.value} placeholder="Enter search value">
                 {#if index > 0}

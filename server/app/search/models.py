@@ -49,10 +49,10 @@ class Collection:
 
 
 
-
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria, backend_local_url):
         if collection_name not in db.list_collection_names():
+            logger.error(f"Collection {collection_name} not found")
             return None, 0
 
         query = {"$and": []}
@@ -60,9 +60,26 @@ class Collection:
             key = criterion['key']
             value = criterion['value']
 
+            logger.debug(f"Processing criterion: key={key}, value={value}")
+
             if key == 'timestamp':
                 timestamp_query = Collection.process_timestamp_query(key, value, criterion.get('operator'))
                 query["$and"].append(timestamp_query)
+            elif key == 'inventory':
+                try:
+                    inStock_value = int(value)
+                    inventory_query = {
+                        "inventory": {
+                            "$elemMatch": {
+                                "inStock": inStock_value
+                            }
+                        }
+                    }
+                    query["$and"].append(inventory_query)
+                    logger.debug(f"Inventory query: {inventory_query}")
+                except ValueError:
+                    logger.error(f"Invalid inventory value: {value}")
+                    return None, 0
             else:
                 search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
                 field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
@@ -93,15 +110,29 @@ class Collection:
                         "then": {"$arrayElemAt": ["$unit_weight", -1]},
                         "else": "$unit_weight"
                     }
+                },
+                "inventory": {
+                    "$cond": {
+                        "if": {"$isArray": "$inventory"},
+                        "then": {"$arrayElemAt": ["$inventory", -1]},
+                        "else": "$inventory"
+                    }
                 }
             }}
         ]
 
-        logger.debug(f"Search query: {query}")
+        logger.debug(f"Final query: {query}")
         logger.debug(f"Aggregation pipeline: {pipeline}")
 
         results = list(db[collection_name].aggregate(pipeline))
         count = len(results)
+        
+        logger.debug(f"Number of results: {count}")
+
+        if count == 0:
+            logger.info(f"No matching documents found for query in collection {collection_name}")
+            return None, 0
+
         processed_results = []
 
         for result in results:
