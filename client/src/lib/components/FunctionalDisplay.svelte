@@ -11,7 +11,7 @@
   interface InventoryItem {
     putIn: number;
     takeOut: number;
-    putBy: string;
+    by: string;
     timestamp: number;
   }
 
@@ -666,7 +666,7 @@
           <tr>
             <th>Put In</th>
             <th>Take Out</th>
-            <th>Put By</th>
+            <th>By</th>
             <th>Timestamp</th>
           </tr>
         </thead>
@@ -675,7 +675,7 @@
             <tr>
               <td>{item.putIn}</td>
               <td>{item.takeOut}</td>
-              <td>{item.putBy}</td>
+              <td>{item.by}</td>
               <td>{new Date(item.timestamp * 1000).toLocaleString()}</td>
             </tr>
           {/each}

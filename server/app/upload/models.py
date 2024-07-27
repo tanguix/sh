@@ -58,7 +58,7 @@ class Item:
             return [{
                 "putIn": int(inventory),
                 "takeOut": 0,
-                "putBy": username,
+                "by": username,
                 "timestamp": self.timestamp
             }]
         return []
