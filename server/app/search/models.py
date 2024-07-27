@@ -56,6 +56,8 @@ class Collection:
         return max(final_inventory, 0)  # Ensure non-negative result
 
 
+
+
     @staticmethod
     def search_by_multiple_criteria(collection_name, criteria, backend_local_url):
         if collection_name not in db.list_collection_names():
@@ -104,7 +106,6 @@ class Collection:
                 except ValueError:
                     logger.error(f"Invalid inventory value: {value}")
                     return None, 0
-
             else:
                 search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
                 field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
@@ -112,7 +113,6 @@ class Collection:
                     query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
                 else:
                     query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
-
 
         pipeline = [
             {"$match": query},
@@ -153,10 +153,10 @@ class Collection:
                         },
                         0  # Ensure non-negative result
                     ]
-                }
+                },
+                "original_inventory": "$inventory"  # Keep the original inventory array
             }}
         ]
-
 
         logger.debug(f"Final query: {query}")
         logger.debug(f"Aggregation pipeline: {pipeline}")
@@ -183,14 +183,11 @@ class Collection:
                     image_path = v[7:] if v.startswith('images/') else v
                     image_url = f"{backend_local_url}/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
-                elif k == 'calculated_inventory':
-                    processed_result['inventory'] = v
                 else:
                     processed_result[k] = v
             processed_results.append(processed_result)
 
         return processed_results, count
-
 
 
 

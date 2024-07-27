@@ -271,20 +271,25 @@ class ItemBatch:
             logger.exception(f"Error in save_items: {str(e)}")
             raise
 
+
+
     def _prepare_update_operation(self, new_item, existing_item):
         update_operation = {'$set': {}, '$unset': {}}
         
         for key in existing_item:
-            if key not in new_item and key not in ['_id', 'sample_token', 'timestamp']:
+            if key not in new_item and key not in ['_id', 'sample_token', 'timestamp', 'original_inventory']:
                 update_operation['$unset'][key] = ""
 
         for key, value in new_item.items():
-            if key not in ['_id', 'sample_token', 'timestamp']:
+            if key not in ['_id', 'sample_token', 'timestamp', 'original_inventory']:
                 if value is None:
                     update_operation['$unset'][key] = ""
                 else:
                     if key in ['categories', 'tags']:
                         update_operation['$set'][key] = value if isinstance(value, list) else [value]
+                    elif key == 'inventory':
+                        update_operation['$set'][key] = value
+                        update_operation['$set']['calculated_inventory'] = self._calculate_inventory(value)
                     else:
                         update_operation['$set'][key] = value
         
@@ -296,6 +301,10 @@ class ItemBatch:
             del update_operation['$unset']
 
         return update_operation
+
+
+
+
 
     def _perform_bulk_update(self, items_to_update):
         updated_ids = []
@@ -326,15 +335,27 @@ class ItemBatch:
         })
         logger.info(f"Removed {result.deleted_count} obsolete items from the main set.")
 
+
+
     def _process_item(self, item):
         processed_item = {
             "sample_token": self.main_sample_token,
             "timestamp": self.timestamp
         }
         for key, value in item.items():
-            if key not in ['_id', 'sample_token', 'timestamp']:
-                processed_item[key] = value
+            if key not in ['_id', 'sample_token', 'timestamp', 'original_inventory', 'calculated_inventory']:
+                if key == 'inventory':
+                    processed_item[key] = value
+                    processed_item['calculated_inventory'] = self._calculate_inventory(value)
+                else:
+                    processed_item[key] = value
         return processed_item
+
+    def _calculate_inventory(self, inventory):
+        return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
+
+
+
 
     def _find_existing_item(self, item):
         if 'reference_no' in item:

@@ -1,18 +1,33 @@
 
 
-
-
-
 <script lang="ts">
-  import { BASE_URL, API_ENDPOINTS } from '../utils/api';
+  import { API_ENDPOINTS } from '../utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
   import { unsavedChanges } from '$lib/utils/vars';
-  import { loadBase64Font, addImageToPDF, generatePDF } from '$lib/utils/pdf';
+  import { generatePDF } from '$lib/utils/pdf';
 
-  export let results: any[] = [];
-  export let deepCopiedResults: any[] = [];
+  interface InventoryItem {
+    putIn: number;
+    takeOut: number;
+    putBy: string;
+    timestamp: number;
+  }
+
+  interface Sample {
+    referenceNumber: string;
+    tags: string[];
+    date: string;
+    image_url: string;
+    modifiedBy: string[];
+    sample_token?: string;
+    calculated_inventory: number;
+    inventory: InventoryItem[];
+  }
+
+  export let results: Sample[] = [];
+  export let deepCopiedResults: Sample[] = [];
   export let searchOption: string = '';
   export let resultsChanged = false;
   export let resultCount: number = 0;
@@ -20,7 +35,7 @@
   // expanded items limit
   let expandedItems = new Set<number>();
 
-  export let keysToExclude: string[] = ['image_url', 'file'];
+  export let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'original_inventory', 'sample_token'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
       Description & Specifications (描述及规格)\n
@@ -47,6 +62,8 @@
   let isGridView = true;
   let expandedItemIndex: number | null = null;
 
+  let isModalOpen = false;
+  let currentInventory: InventoryItem[] = [];
 
   function toggleExpandItem(index: number) {
     if (isGridView) {
@@ -54,7 +71,6 @@
         expandedItems.delete(index);
       } else {
         if (expandedItems.size >= 2) {
-          // Remove the first item if we're at the limit
           expandedItems.delete(expandedItems.values().next().value);
         }
         expandedItems.add(index);
@@ -63,16 +79,11 @@
     }
   }
 
-
-
   function filterDisplayedKeys(result: any) {
     return Object.fromEntries(
       Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
     );
   }
-
-
-
 
   function formatPropertyValue(key: string, value: any) {
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
@@ -82,6 +93,8 @@
       return value;
     } else if (key === 'unit_price' || key === 'unit_weight') {
       return `${value.num} ${value.unit}`;
+    } else if (key === 'calculated_inventory') {
+      return value.toString();
     } else if (Array.isArray(value)) {
       return value.join(', ');
     } else if (typeof value === 'object' && value !== null) {
@@ -89,10 +102,6 @@
     }
     return value;
   }
-
-
-
-
 
   async function generatePDFWrapper() {
     await generatePDF(results, content);
@@ -440,10 +449,22 @@
     target.alt = 'Image not available';
   }
 
+  function displayInventoryDetails(inventory: InventoryItem[]) {
+    currentInventory = inventory;
+    isModalOpen = true;
+  }
+
+
+  function closeModal(event?: MouseEvent | KeyboardEvent) {
+    if (!event || event.type === 'click' || (event as KeyboardEvent).key === 'Escape') {
+      isModalOpen = false;
+    }
+  }
+
+
 
 
 </script>
-
 
 
 
@@ -489,7 +510,6 @@
                   >
 
                   {#if isGridView}
-
                     <button 
                       class="expand-collapse-btn"
                       on:click={() => toggleExpandItem(index)}
@@ -497,9 +517,7 @@
                     >
                       <p>{expandedItems.has(index) ? '−' : '+'}</p>
                     </button>
-
                   {/if}
-
                 </div>
               {:else}
                 <div class="no-image">No image available</div>
@@ -515,12 +533,13 @@
                   {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                     <div class="property-item">
                       <span class="property-key">{key}:</span>
-                      {#if key === 'additional_image_path' && Array.isArray(value)}
-                        <div class="additional-images">
-                          {#each value as imagePath}
-                            <div class="additional-image">{imagePath}</div>
-                          {/each}
-                        </div>
+                      {#if key === 'calculated_inventory'}
+                        <span class="property-value">
+                          {formatPropertyValue(key, value)}
+                          <button on:click={() => displayInventoryDetails(result.inventory)}>
+                            View Details
+                          </button>
+                        </span>
                       {:else}
                         <span class="property-value">{formatPropertyValue(key, value)}</span>
                       {/if}
@@ -627,6 +646,45 @@
     {/if}
   </div>
 </div>
+
+{#if isModalOpen}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="modal-overlay" 
+       on:click={closeModal} 
+       role="dialog"
+       aria-labelledby="modal-title"
+       >
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <div class="modal-content" 
+         on:click|stopPropagation 
+         role="document">
+      <h2 id="modal-title">Inventory Details</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Put In</th>
+            <th>Take Out</th>
+            <th>Put By</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each currentInventory as item}
+            <tr>
+              <td>{item.putIn}</td>
+              <td>{item.takeOut}</td>
+              <td>{item.putBy}</td>
+              <td>{new Date(item.timestamp * 1000).toLocaleString()}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <button on:click={closeModal}>Close</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .functional-display {
@@ -771,8 +829,6 @@
     object-fit: contain;
   }
 
-
-
   .expand-collapse-btn {
     position: absolute;
     top: 50%;
@@ -794,22 +850,18 @@
     padding: 0;
   }
 
-
   .grid-view .expand-collapse-btn {
     opacity: 0;
   }
-
 
   .grid-view .image-frame:hover .expand-collapse-btn {
     opacity: 1;
   }
 
-
   .expand-collapse-btn p {
     margin: 0;
     line-height: 1;
   }
-
 
   .expand-collapse-btn:hover {
     background-color: rgba(0, 0, 0, 0.7);
@@ -857,11 +909,12 @@
     border: 2px solid #f0f0f0;
   }
 
+
   .property-item {
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  }
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
   .property-item:last-child {
     border-bottom: none;
@@ -880,19 +933,6 @@
     display: block;
     word-break: break-word;
     color: #007bff;
-  }
-
-  .additional-images {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .additional-image {
-    background-color: #f0f0f0;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 0.9em;
   }
 
   .form-controls, .action-buttons {
@@ -924,185 +964,240 @@
   }
 
   .update-drop:hover, .drop-sample:hover {
-      background-color: #ff7a6e;
+    background-color: #ff7a6e;
+  }
+
+  .cancel-drop {
+    background-color: #4fd6be;
+    color: #333;
+  }
+
+  .cancel-drop:hover {
+    background-color: #A1EFD3;
+  }
+
+  .additional-forms {
+    margin-top: 15px;
+  }
+
+  .form-entry {
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 10px;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .input-group input {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  input[type="text"], input[type="date"], select {
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+  }
+
+  .custom-checkbox {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+  }
+
+  .checkbox-text {
+    margin-left: 5px;
+  }
+
+  .global-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+  }
+
+  .global-actions button {
+    color: #fff;
+    background: #007bff;
+  }
+
+  .no-results {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+  }
+
+  .helper-text {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  .loading-spinner {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    color: #007bff;
+  }
+
+  .error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  .result-card.grid-item.expanded {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .result-card.grid-item.expanded .result-content {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    margin-bottom: 15px;
+    height: 400px;
+  }
+
+  .result-card.grid-item.expanded .image-container {
+    flex: 0 0 66.67%;
+    height: 100%;
+  }
+
+  .result-card.grid-item.expanded .properties-wrapper {
+    flex: 0 0 33.33%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .result-card.grid-item.expanded .properties-container {
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+    scrollbar-width: thin;
+    scrollbar-color: #007bff #f0f0f0;
+  }
+
+  .property-item button {
+    margin-left: 10px;
+    padding: 2px 5px;
+    font-size: 12px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .property-item button:hover {
+    background-color: #e0e0e0;
+  }
+
+  .modal-overlay {
+    font-family: Ubuntu;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    max-width: 80%;
+    max-height: 80%;
+    overflow-y: auto;
+  }
+
+  .modal-content h2 {
+    margin-top: 0;
+  }
+
+  .modal-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+
+  .modal-content th, .modal-content td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+
+  .modal-content th {
+    background-color: #f2f2f2;
+  }
+
+  .modal-content button {
+    display: block;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 768px) {
+    .result-content {
+      flex-direction: column;
+      height: auto;
     }
 
-    .cancel-drop {
-      background-color: #4fd6be;
-      color: #333;
-    }
-
-    .cancel-drop:hover {
-      background-color: #A1EFD3;
-    }
-
-    .additional-forms {
-      margin-top: 15px;
-    }
-
-    .form-entry {
-      background-color: #f9f9f9;
-      border-radius: 4px;
-      padding: 15px;
-      margin-bottom: 10px;
-    }
-
-    .input-group {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .input-group input {
-      flex: 1 1 0;
-      min-width: 0;
-    }
-
-    input[type="text"], input[type="date"], select {
-      padding: 8px;
-      font-size: 14px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+    .image-container, .properties-wrapper {
+      flex: 0 0 auto;
       width: 100%;
     }
 
-    .custom-checkbox {
-      display: flex;
-      align-items: center;
-      margin-top: 10px;
+    .image-container {
+      height: 300px;
     }
 
-    .checkbox-text {
-      margin-left: 5px;
+    .properties-container {
+      max-height: 300px;
     }
 
-    .global-actions {
-      margin-top: 20px;
-      display: flex;
-      justify-content: center;
-      gap: 15px;
+    .results-container.grid-view {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
 
-    .global-actions button {
-      color: #fff;
-      background: #007bff;
+    .grid-item .image-container {
+      height: 150px;
     }
-
-    .no-results {
-      text-align: center;
-      color: #666;
-      font-style: italic;
-    }
-
-    .helper-text {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-top: 4px;
-      font-style: italic;
-    }
-
-    .loading-spinner {
-      text-align: center;
-      padding: 20px;
-      font-style: italic;
-      color: #007bff;
-    }
-
-    .error-message {
-      background-color: #ffebee;
-      color: #c62828;
-      padding: 10px;
-      border-radius: 4px;
-      margin-bottom: 15px;
-      text-align: center;
-    }
-
-
-    .result-card.grid-item.expanded {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      height: auto;
-      max-width: 100%;
-      padding: 20px;
-    }
-
-
 
     .result-card.grid-item.expanded .result-content {
-      display: flex;
-      flex-direction: row;
-      gap: 20px;
-      margin-bottom: 15px;
-      height: 400px;
+      flex-direction: column;
+      height: auto;
+    }
+
+    .result-card.grid-item.expanded .image-container,
+    .result-card.grid-item.expanded .properties-wrapper {
+      flex: 0 0 auto;
+      width: 100%;
     }
 
     .result-card.grid-item.expanded .image-container {
-      flex: 0 0 66.67%;
-      height: 100%;
+      height: 300px;
     }
-
-    .result-card.grid-item.expanded .properties-wrapper {
-      flex: 0 0 33.33%;
-      display: flex;
-      flex-direction: column;
-    }
-
-
-    .result-card.grid-item.expanded .properties-container {
-      background-color: #f9f9f9;
-      border-radius: 4px;
-      padding: 15px;
-      overflow-y: auto;
-      flex-grow: 1;
-      scrollbar-width: thin;
-      scrollbar-color: #007bff #f0f0f0;
-    }
-
-
-    @media (max-width: 768px) {
-      .result-content {
-        flex-direction: column;
-        height: auto;
-      }
-
-      .image-container, .properties-wrapper {
-        flex: 0 0 auto;
-        width: 100%;
-      }
-
-      .image-container {
-        height: 300px;
-      }
-
-      .properties-container {
-        max-height: 300px;
-      }
-
-      .results-container.grid-view {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      }
-
-      .grid-item .image-container {
-        height: 150px;
-      }
-
-      .result-card.grid-item.expanded .result-content {
-        flex-direction: column;
-        height: auto;
-      }
-
-      .result-card.grid-item.expanded .image-container,
-      .result-card.grid-item.expanded .properties-wrapper {
-        flex: 0 0 auto;
-        width: 100%;
-      }
-
-      .result-card.grid-item.expanded .image-container {
-        height: 300px;
-      }
-    }
+  }
 </style>
-
-
