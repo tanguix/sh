@@ -1,5 +1,7 @@
 
 
+
+
 import uuid
 from app.database import db
 from bson import ObjectId
@@ -12,17 +14,8 @@ import json
 import time
 from pymongo import UpdateOne
 
-
-# TODO: is ok that you keep copies of merged samples set using their original token 
-# because this is just for sampling process, so later during invoice section, or finished product section 
-# you will need to update the complete information, and after that, remove all redunent sets using sample tokens
-
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))  # Go up two levels to reach 'server'
-
-
-
-
+SERVER_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
 
 def json_serialize(obj):
     def convert(o):
@@ -31,9 +24,6 @@ def json_serialize(obj):
         return o.__dict__ if hasattr(o, '__dict__') else str(o)
     
     return json.dumps(obj, default=convert, indent=2)
-
-
-
 
 class Item:
     def __init__(self, **kwargs):
@@ -51,7 +41,7 @@ class Item:
         self.address = kwargs.get('address') or None
         self.phone = kwargs.get('phone') or None
         self.inventory = self._parse_inventory(kwargs.get('inventory'), kwargs.get('username'))
-
+        self.total_inventory = self._calculate_total_inventory()
 
     def _parse_inventory(self, inventory, username):
         if inventory and inventory.strip():
@@ -63,6 +53,9 @@ class Item:
             }]
         return []
 
+    def _calculate_total_inventory(self):
+        total = sum(item['putIn'] - item['takeOut'] for item in self.inventory)
+        return max(total, 0)  # Ensure total_inventory is never negative
 
     def _parse_unit_input(self, input_str, username):
         if not input_str:
@@ -75,7 +68,6 @@ class Item:
             "upload": username
         }]
 
-
     def save_item(self):
         if not self.validate_references():
             raise ValueError("Reference validation failed")
@@ -83,11 +75,7 @@ class Item:
         result = db.samples.insert_one(data)
         return result
 
-
-
     def validate_references(self):
-
-        # New check for empty reference_no
         if not self.reference_no:
             raise ValueError("Reference number cannot be empty")
 
@@ -98,9 +86,6 @@ class Item:
         if not self.is_reference_no_unique(self.reference_no):
             raise ValueError("Generated reference number is not unique")
         return True
-
-
-
 
     @classmethod
     def from_form_data(cls, form_data, files):
@@ -188,7 +173,6 @@ class Item:
     @staticmethod
     def is_reference_no_unique(ref_no):
         return db.samples.find_one({"reference_no": ref_no}) is None
-
 
 
 

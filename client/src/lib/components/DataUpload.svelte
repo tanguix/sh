@@ -5,7 +5,7 @@
 <script lang="ts">
     import { writable } from 'svelte/store';
     import { API_ENDPOINTS } from '$lib/utils/api';
-    import NewReference from './parts/NewReference.svelte';
+    import NewReference from '$lib/components/units/NewReference.svelte';
     import { page } from '$app/stores';
 
     $: user = $page.data.user;

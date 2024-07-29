@@ -39,6 +39,7 @@ __pycache__
 server/images
 server/files/
 
+
 # font (too large) --> ignore all .ttf then use (*.ttf)
 NotoSerifSC-Light.ttf
 
