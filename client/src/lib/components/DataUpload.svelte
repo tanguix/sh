@@ -269,6 +269,7 @@
                   source = '';
                   address = '';
                   phone = '';
+                  inventory = '';
                   fields.set([]);
                   tags.set([]);
                   categories.set([]);

@@ -1,12 +1,13 @@
 
 
 <script lang="ts">
-  import { API_ENDPOINTS } from '../utils/api';
+  import { API_ENDPOINTS } from '$lib/utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
   import { unsavedChanges } from '$lib/utils/vars';
   import { generatePDF } from '$lib/utils/pdf';
+
 
   interface InventoryItem {
     putIn: number;
@@ -15,6 +16,7 @@
     timestamp: number;
   }
 
+
   interface Sample {
     referenceNumber: string;
     tags: string[];
@@ -22,9 +24,10 @@
     image_url: string;
     modifiedBy: string[];
     sample_token?: string;
-    calculated_inventory: number;
+    total_inventory: number;
     inventory: InventoryItem[];
   }
+
 
   export let results: Sample[] = [];
   export let deepCopiedResults: Sample[] = [];
@@ -35,7 +38,7 @@
   // expanded items limit
   let expandedItems = new Set<number>();
 
-  export let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'original_inventory', 'sample_token'];
+  export let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
       Description & Specifications (描述及规格)\n
@@ -85,6 +88,8 @@
     );
   }
 
+
+
   function formatPropertyValue(key: string, value: any) {
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
       const lastModifier = value[value.length - 1];
@@ -93,7 +98,7 @@
       return value;
     } else if (key === 'unit_price' || key === 'unit_weight') {
       return `${value.num} ${value.unit}`;
-    } else if (key === 'calculated_inventory') {
+    } else if (key === 'total_inventory') {
       return value.toString();
     } else if (Array.isArray(value)) {
       return value.join(', ');
@@ -102,6 +107,8 @@
     }
     return value;
   }
+
+
 
   async function generatePDFWrapper() {
     await generatePDF(results, content);
@@ -524,16 +531,18 @@
               {/if}
             </div>
             {#if isGridView && !expandedItems.has(index)}
-              <div class="reference-no">{result.reference_no || 'No Reference Number'}</div>
+              <div class="reference-no">{result.referenceNumber || 'No Reference Number'}</div>
             {/if}
 
             {#if !isGridView || (isGridView && expandedItems.has(index))}
               <div class="properties-wrapper">
+
+
                 <div class="properties-container">
                   {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                     <div class="property-item">
                       <span class="property-key">{key}:</span>
-                      {#if key === 'calculated_inventory'}
+                      {#if key === 'total_inventory'}
                         <span class="property-value">
                           {formatPropertyValue(key, value)}
                           <button on:click={() => displayInventoryDetails(result.inventory)}>
@@ -546,6 +555,8 @@
                     </div>
                   {/each}
                 </div>
+
+
               </div>
             {/if}
           </div>
@@ -647,6 +658,9 @@
   </div>
 </div>
 
+
+
+
 {#if isModalOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -685,6 +699,9 @@
     </div>
   </div>
 {/if}
+
+
+
 
 <style>
   .functional-display {

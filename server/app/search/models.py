@@ -50,10 +50,36 @@ class Collection:
             raise ValueError(f"Invalid timestamp operator: {operator}")
 
 
+
+
+
+
     @staticmethod
-    def calculate_final_inventory(inventory_array):
-        final_inventory = sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory_array)
-        return max(final_inventory, 0)  # Ensure non-negative result
+    def process_general_query(key, value):
+        search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
+        if len(search_values) > 1:
+            return {key: {"$in": search_values}}
+        return {key: value}
+
+
+
+    @staticmethod
+    def process_inventory_query(key, value, operator):
+        try:
+            if operator == 'range':
+                min_value, max_value = map(int, value)
+                return {key: {"$gte": min_value, "$lte": max_value}}
+            elif operator == '>':
+                return {key: {"$gt": int(value)}}
+            elif operator == '<':
+                return {key: {"$lt": int(value)}}
+            elif operator == 'exact':
+                return {key: int(value)}
+            else:
+                raise ValueError(f"Invalid inventory operator: {operator}")
+        except ValueError:
+            logger.error(f"Invalid inventory value or operator: value={value}, operator={operator}")
+            raise ValueError(f"Invalid inventory value: {value}")
 
 
 
@@ -65,113 +91,58 @@ class Collection:
             return None, 0
 
         query = {"$and": []}
+        logger.info(f"Received search criteria: {criteria}")
+
         for criterion in criteria:
             key = criterion['key']
             value = criterion['value']
+            operator = criterion.get('operator', 'exact')
 
-            logger.debug(f"Processing criterion: key={key}, value={value}")
+            logger.debug(f"Processing criterion: key={key}, value={value}, operator={operator}")
 
-            if key == 'timestamp':
-                timestamp_query = Collection.process_timestamp_query(key, value, criterion.get('operator'))
-                query["$and"].append(timestamp_query)
-            elif key == 'inventory':
-                try:
-                    inventory_value = int(value)
-                    inventory_query = {
-                        "$expr": {
-                            "$eq": [
-                                {
-                                    "$max": [
-                                        {
-                                            "$reduce": {
-                                                "input": "$inventory",
-                                                "initialValue": 0,
-                                                "in": {
-                                                    "$add": [
-                                                        "$$value",
-                                                        {"$subtract": ["$$this.putIn", "$$this.takeOut"]}
-                                                    ]
-                                                }
-                                            }
-                                        },
-                                        0  # Ensure non-negative result
-                                    ]
-                                },
-                                inventory_value
-                            ]
-                        }
-                    }
+            try:
+                if key == 'timestamp':
+                    timestamp_query = Collection.process_timestamp_query(key, value, operator)
+                    query["$and"].append(timestamp_query)
+                elif key == 'total_inventory':
+                    inventory_query = Collection.process_inventory_query(key, value, operator)
                     query["$and"].append(inventory_query)
                     logger.debug(f"Inventory query: {inventory_query}")
-                except ValueError:
-                    logger.error(f"Invalid inventory value: {value}")
-                    return None, 0
-            else:
-                search_values = [v.strip() for v in value.split(',')] if ',' in value else [value.strip()]
-                field_path = key if key in db[collection_name].find_one() else f"additional_fields.{key}"
-                if isinstance(db[collection_name].find_one().get(key, db[collection_name].find_one().get('additional_fields', {}).get(key)), list):
-                    query["$and"].append({field_path: {"$all": search_values} if len(search_values) > 1 else {"$in": search_values}})
                 else:
-                    query["$and"].append({field_path: {"$in": search_values} if len(search_values) > 1 else value})
-
-        pipeline = [
-            {"$match": query},
-            {"$project": {
-                "quantity": 0,
-                "password": 0,
-                "role": 0,
-                "authToken": 0,
-            }},
-            {"$addFields": {
-                "unit_price": {
-                    "$cond": {
-                        "if": {"$isArray": "$unit_price"},
-                        "then": {"$arrayElemAt": ["$unit_price", -1]},
-                        "else": "$unit_price"
-                    }
-                },
-                "unit_weight": {
-                    "$cond": {
-                        "if": {"$isArray": "$unit_weight"},
-                        "then": {"$arrayElemAt": ["$unit_weight", -1]},
-                        "else": "$unit_weight"
-                    }
-                },
-                "calculated_inventory": {
-                    "$max": [
-                        {
-                            "$reduce": {
-                                "input": "$inventory",
-                                "initialValue": 0,
-                                "in": {
-                                    "$add": [
-                                        "$$value",
-                                        {"$subtract": ["$$this.putIn", "$$this.takeOut"]}
-                                    ]
-                                }
-                            }
-                        },
-                        0  # Ensure non-negative result
-                    ]
-                },
-                "original_inventory": "$inventory"  # Keep the original inventory array
-            }}
-        ]
+                    query["$and"].append(Collection.process_general_query(key, value))
+            except ValueError as e:
+                logger.error(str(e))
+                return None, 0
 
         logger.debug(f"Final query: {query}")
-        logger.debug(f"Aggregation pipeline: {pipeline}")
 
-        results = list(db[collection_name].aggregate(pipeline))
-        count = len(results)
-        
-        logger.debug(f"Number of results: {count}")
+        try:
+            # Get the count of matching documents
+            count = db[collection_name].count_documents(query)
+            logger.info(f"Number of matching documents: {count}")
 
-        if count == 0:
-            logger.info(f"No matching documents found for query in collection {collection_name}")
+            if count == 0:
+                logger.info(f"No matching documents found for query in collection {collection_name}")
+                return None, 0
+
+            # Fetch the actual documents
+            results = list(db[collection_name].find(query))
+
+            processed_results = Collection.process_results(results, backend_local_url)
+            logger.debug(f"Processed {len(processed_results)} results")
+
+            return processed_results, count
+        except Exception as e:
+            logger.error(f"Error executing query: {str(e)}")
             return None, 0
 
-        processed_results = []
 
+
+
+
+    @staticmethod
+    def process_results(results, backend_local_url):
+        processed_results = []
         for result in results:
             processed_result = {}
             for k, v in result.items():
@@ -183,11 +154,12 @@ class Collection:
                     image_path = v[7:] if v.startswith('images/') else v
                     image_url = f"{backend_local_url}/search/api/images/{image_path}"
                     processed_result['image_url'] = image_url
+                elif k in ['unit_price', 'unit_weight']:
+                    processed_result[k] = v[-1] if isinstance(v, list) else v
                 else:
                     processed_result[k] = v
             processed_results.append(processed_result)
-
-        return processed_results, count
+        return processed_results
 
 
 

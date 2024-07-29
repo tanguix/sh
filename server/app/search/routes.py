@@ -49,12 +49,17 @@ def find_key():
 def searched_result():
     collection_name = request.args.get('collection')
     criteria = json.loads(request.args.get('criteria', '[]'))
+    logger.info(f"Received search request for collection: {collection_name}, criteria: {criteria}")
+    
     if not collection_name or not criteria:
+        logger.error("Collection and search criteria must be provided")
         return jsonify({"error": "Collection and search criteria must be provided"}), 400
+
     try:
         backend_local_url = current_app.config['BACKEND_LOCAL_URL']
         results, count = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
         if results:
+            logger.info(f"Search successful. Returned {count} results.")
             return jsonify({"results": results, "count": count}), 200
         else:
             logger.info(f"No matching documents found for query in collection {collection_name}")

@@ -78,8 +78,8 @@
         resetSearch();
 
         if (searchOption === 'inventory') {
-            searchCriteria = [{ key: 'inventory', value: '' }];
-            keys = ['inventory', ...allowedKeys]; // Include both inventory and other keys
+            searchCriteria = [{ key: 'total_inventory', value: '' }];
+            keys = ['total_inventory', ...allowedKeys]; // Include both total_inventory and other keys
         } else if (searchOption === '') {
             searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
         }
@@ -98,8 +98,8 @@
 
     function resetSearch() {
         if (isInventoryMode) {
-            searchCriteria = [{ key: 'inventory', value: '' }];
-            keys = ['inventory', ...allowedKeys]; // Include both inventory and other keys
+            searchCriteria = [{ key: 'total_inventory', value: '' }];
+            keys = ['total_inventory', ...allowedKeys]; // Include both total_inventory and other keys
         } else {
             searchCriteria = [{ key: '', value: '' }];
             keys = [...allowedKeys]; // Only include allowed keys for other modes
@@ -136,7 +136,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (isInventoryMode) {
-                        keys = ['inventory', ...data.keys.filter(key => 
+                        keys = ['total_inventory', ...data.keys.filter(key => 
                             allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
                         )];
                     } else {
@@ -155,9 +155,10 @@
                 console.error('Error fetching keys:', error);
             }
         } else {
-            keys = isInventoryMode ? ['inventory', ...allowedKeys] : [];
+            keys = isInventoryMode ? ['total_inventory', ...allowedKeys] : [];
         }
     }
+
 
 
 
@@ -174,24 +175,36 @@
         }
     }
 
+
+
     function processTimestampCriteria(criteria: { key: string, value: string }) {
         const value = criteria.value.trim();
         if (value.includes(',')) {
-            const [date, operator] = value.split(',').map(s => s.trim());
-            if (operator === '<' || operator === '>') {
-                return {
-                    key: criteria.key,
-                    value: date,
-                    operator: operator
-                };
-            } else {
-                return {
-                    key: criteria.key,
-                    value: value.split(',').map(s => s.trim()),
-                    operator: 'range'
-                };
-            }
+            // Date range search
+            const [startDate, endDate] = value.split(',').map(s => s.trim());
+            return {
+                key: criteria.key,
+                value: [startDate, endDate],
+                operator: 'range'
+            };
+        } else if (value.includes('<')) {
+            // Before a specific date
+            const date = value.replace('<', '').trim();
+            return {
+                key: criteria.key,
+                value: date,
+                operator: '<'
+            };
+        } else if (value.includes('>')) {
+            // After a specific date
+            const date = value.replace('>', '').trim();
+            return {
+                key: criteria.key,
+                value: date,
+                operator: '>'
+            };
         } else {
+            // Exact date search
             return {
                 key: criteria.key,
                 value: value,
@@ -200,7 +213,60 @@
         }
     }
 
+
+
+    function processInventoryCriteria(criteria: { key: string, value: string }) {
+        const value = criteria.value.trim();
+        if (value.includes(',')) {
+            const [firstPart, secondPart] = value.split(',').map(s => s.trim());
+            if (secondPart === '>' || secondPart === '<') {
+                // Special case: "90, >" or "90, <"
+                return {
+                    key: criteria.key,
+                    value: firstPart,
+                    operator: secondPart
+                };
+            } else {
+                // Regular range search
+                return {
+                    key: criteria.key,
+                    value: [firstPart, secondPart],
+                    operator: 'range'
+                };
+            }
+        } else if (value.includes('<')) {
+            // Less than a specific inventory
+            const inventoryValue = value.replace('<', '').trim();
+            return {
+                key: criteria.key,
+                value: inventoryValue,
+                operator: '<'
+            };
+        } else if (value.includes('>')) {
+            // Greater than a specific inventory
+            const inventoryValue = value.replace('>', '').trim();
+            return {
+                key: criteria.key,
+                value: inventoryValue,
+                operator: '>'
+            };
+        } else {
+            // Exact inventory search
+            return {
+                key: criteria.key,
+                value: value,
+                operator: 'exact'
+            };
+        }
+    }
+
+
+
+
+
+    // result count
     let resultCount: number = 0;
+
     async function search() {
         let searchCollection = isSamplingMode ? selectedSamplingCollection : 
                                isInventoryMode ? selectedInventoryCollection : 
@@ -211,33 +277,26 @@
             return;
         }
 
-        // Special handling for Inventory Mode
-        if (isInventoryMode) {
-            if (searchCriteria[0].key !== 'inventory' || !searchCriteria[0].value) {
-                console.error('In Inventory Mode, "inventory" key must be selected and a value must be provided');
-                return;
-            }
-        } else {
-            // For other modes, check if all criteria are filled
-            if (searchCriteria.some(criteria => !criteria.key || !criteria.value)) {
-                console.error('All search criteria must be provided');
-                return;
-            }
+        // Filter out any criteria with empty key or value
+        const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
+
+        if (validCriteria.length === 0) {
+            console.error('At least one valid search criterion must be provided');
+            return;
         }
 
+
         try {
-            const processedCriteria = searchCriteria.map(criteria => {
+
+            const processedCriteria = validCriteria.map(criteria => {
                 if (criteria.key === 'timestamp') {
                     return processTimestampCriteria(criteria);
                 }
-                if (isInventoryMode && criteria.key === 'inventory') {
-                    return {
-                        key: 'inventory',
-                        value: criteria.value,
-                        operator: 'inStock'
-                    };
+                if (criteria.key === 'total_inventory') {
+                    return processInventoryCriteria(criteria);
                 }
                 return criteria;
+
             });
 
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
@@ -245,52 +304,55 @@
                 criteria: JSON.stringify(processedCriteria)
             });
 
-          const response = await fetch(url);
+            const response = await fetch(url);
 
-          if (response.ok) {
-              const data = await response.json();
-              let newResults = data.results || [];
-              resultCount = data.count || 0;
+            if (response.ok) {
+                const data = await response.json();
+                let newResults = data.results || [];
+                resultCount = data.count || 0;
 
-              if (isSamplingMode) {
-                  const oldLength = results.length;
-                  if (isAddOperation) {
-                      newResults = newResults.filter(newResult => 
-                          !results.some(existingResult => 
-                              existingResult.reference_no === newResult.reference_no
-                          )
-                      );
-                      results = [...results, ...newResults];
-                  } else {
-                      results = results.filter(result => 
-                          !newResults.some(newResult => 
-                              newResult.reference_no === result.reference_no
-                          )
-                      );
-                  }
-                  deepCopiedResults = JSON.parse(JSON.stringify(results));
-                  searchCriteria = [{ key: '', value: '' }];
-                  
-                  resultsChanged = oldLength !== results.length;
-                  resultCount = results.length;
-              } else {
-                  results = newResults;
-                  deepCopiedResults = JSON.parse(JSON.stringify(results));
-              }
-          } else {
-              const errorData = await response.json();
-              throw new Error(errorData.error || 'Error searching collection');
-          }
-      } catch (error) {
-          console.error('Error searching collection:', error);
-          if (!isSamplingMode) {
-              results = [];
-              deepCopiedResults = [];
-              console.log("Error occurred. Cleared previous results.");
-          }
-          resultCount = 0;
-      }
-  }
+                if (isSamplingMode) {
+                    const oldLength = results.length;
+                    if (isAddOperation) {
+                        newResults = newResults.filter(newResult => 
+                            !results.some(existingResult => 
+                                existingResult.reference_no === newResult.reference_no
+                            )
+                        );
+                        results = [...results, ...newResults];
+                    } else {
+                        results = results.filter(result => 
+                            !newResults.some(newResult => 
+                                newResult.reference_no === result.reference_no
+                            )
+                        );
+                    }
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                    searchCriteria = [{ key: '', value: '' }];
+                    
+                    resultsChanged = oldLength !== results.length;
+                    resultCount = results.length;
+                } else {
+                    results = newResults;
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                }
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error searching collection');
+            }
+        } catch (error) {
+            console.error('Error searching collection:', error);
+            if (!isSamplingMode) {
+                results = [];
+                deepCopiedResults = [];
+                console.log("Error occurred. Cleared previous results.");
+            }
+            resultCount = 0;
+        }
+    }
+
+
+
 
 
 

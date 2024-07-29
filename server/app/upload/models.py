@@ -40,7 +40,7 @@ class Item:
         self.source = kwargs.get('source')
         self.address = kwargs.get('address') or None
         self.phone = kwargs.get('phone') or None
-        self.inventory = self._parse_inventory(kwargs.get('inventory'), kwargs.get('username'))
+        self.inventory = self._parse_inventory(kwargs.get('inventory') or 0, kwargs.get('username'))
         self.total_inventory = self._calculate_total_inventory()
 
     def _parse_inventory(self, inventory, username):
