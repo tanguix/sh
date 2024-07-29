@@ -8,7 +8,7 @@
     import { API_ENDPOINTS, constructUrl } from '$lib/utils/api';
 
     interface Sample {
-        referenceNumber: string;
+        reference_no: string;
         tags: string[];
         date: string;
         sample_token?: string;
@@ -177,57 +177,20 @@
 
 
 
-    function processTimestampCriteria(criteria: { key: string, value: string }) {
-        const value = criteria.value.trim();
-        if (value.includes(',')) {
-            // Date range search
-            const [startDate, endDate] = value.split(',').map(s => s.trim());
-            return {
-                key: criteria.key,
-                value: [startDate, endDate],
-                operator: 'range'
-            };
-        } else if (value.includes('<')) {
-            // Before a specific date
-            const date = value.replace('<', '').trim();
-            return {
-                key: criteria.key,
-                value: date,
-                operator: '<'
-            };
-        } else if (value.includes('>')) {
-            // After a specific date
-            const date = value.replace('>', '').trim();
-            return {
-                key: criteria.key,
-                value: date,
-                operator: '>'
-            };
-        } else {
-            // Exact date search
-            return {
-                key: criteria.key,
-                value: value,
-                operator: 'exact'
-            };
-        }
-    }
 
-
-
-    function processInventoryCriteria(criteria: { key: string, value: string }) {
+    function processCriteria(criteria: { key: string, value: string }) {
         const value = criteria.value.trim();
         if (value.includes(',')) {
             const [firstPart, secondPart] = value.split(',').map(s => s.trim());
             if (secondPart === '>' || secondPart === '<') {
-                // Special case: "90, >" or "90, <"
+                // Special case: "value, >" or "value, <"
                 return {
                     key: criteria.key,
                     value: firstPart,
                     operator: secondPart
                 };
             } else {
-                // Regular range search
+                // Range search
                 return {
                     key: criteria.key,
                     value: [firstPart, secondPart],
@@ -235,23 +198,23 @@
                 };
             }
         } else if (value.includes('<')) {
-            // Less than a specific inventory
-            const inventoryValue = value.replace('<', '').trim();
+            // Less than a specific value
+            const criteriaValue = value.replace('<', '').trim();
             return {
                 key: criteria.key,
-                value: inventoryValue,
+                value: criteriaValue,
                 operator: '<'
             };
         } else if (value.includes('>')) {
-            // Greater than a specific inventory
-            const inventoryValue = value.replace('>', '').trim();
+            // Greater than a specific value
+            const criteriaValue = value.replace('>', '').trim();
             return {
                 key: criteria.key,
-                value: inventoryValue,
+                value: criteriaValue,
                 operator: '>'
             };
         } else {
-            // Exact inventory search
+            // Exact value search
             return {
                 key: criteria.key,
                 value: value,
@@ -259,7 +222,6 @@
             };
         }
     }
-
 
 
 
@@ -288,16 +250,7 @@
 
         try {
 
-            const processedCriteria = validCriteria.map(criteria => {
-                if (criteria.key === 'timestamp') {
-                    return processTimestampCriteria(criteria);
-                }
-                if (criteria.key === 'total_inventory') {
-                    return processInventoryCriteria(criteria);
-                }
-                return criteria;
-
-            });
+            const processedCriteria = validCriteria.map(criteria => processCriteria(criteria));
 
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,

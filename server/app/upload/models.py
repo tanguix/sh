@@ -40,22 +40,24 @@ class Item:
         self.source = kwargs.get('source')
         self.address = kwargs.get('address') or None
         self.phone = kwargs.get('phone') or None
-        self.inventory = self._parse_inventory(kwargs.get('inventory') or 0, kwargs.get('username'))
+        self.inventory = self._parse_inventory(kwargs.get('inventory'), kwargs.get('username'))
         self.total_inventory = self._calculate_total_inventory()
 
+
     def _parse_inventory(self, inventory, username):
-        if inventory and inventory.strip():
-            return [{
-                "putIn": int(inventory),
-                "takeOut": 0,
-                "by": username,
-                "timestamp": self.timestamp
-            }]
-        return []
+        # Always create an inventory entry, even if no value is provided
+        return [{
+            "putIn": int(inventory) if inventory and inventory.strip() else 0,
+            "takeOut": 0,
+            "by": username,
+            "timestamp": self.timestamp
+        }]
+
 
     def _calculate_total_inventory(self):
         total = sum(item['putIn'] - item['takeOut'] for item in self.inventory)
         return max(total, 0)  # Ensure total_inventory is never negative
+
 
     def _parse_unit_input(self, input_str, username):
         if not input_str:

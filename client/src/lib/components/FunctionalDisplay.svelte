@@ -18,7 +18,7 @@
 
 
   interface Sample {
-    referenceNumber: string;
+    reference_no: string;  // Changed from referenceNumber
     tags: string[];
     date: string;
     image_url: string;
@@ -531,7 +531,7 @@
               {/if}
             </div>
             {#if isGridView && !expandedItems.has(index)}
-              <div class="reference-no">{result.referenceNumber || 'No Reference Number'}</div>
+              <div class="reference-no">{result.reference_no || 'No Reference Number'}</div>
             {/if}
 
             {#if !isGridView || (isGridView && expandedItems.has(index))}
