@@ -1,5 +1,6 @@
 
 
+
 <script lang="ts">
   import { API_ENDPOINTS } from '$lib/utils/api';
   import { page } from '$app/stores';
@@ -8,7 +9,6 @@
   import { unsavedChanges } from '$lib/utils/vars';
   import { generatePDF } from '$lib/utils/pdf';
 
-
   interface InventoryItem {
     putIn: number;
     takeOut: number;
@@ -16,9 +16,8 @@
     timestamp: number;
   }
 
-
   interface Sample {
-    reference_no: string;  // Changed from referenceNumber
+    reference_no: string;
     tags: string[];
     date: string;
     image_url: string;
@@ -26,8 +25,8 @@
     sample_token?: string;
     total_inventory: number;
     inventory: InventoryItem[];
+    box?: string;
   }
-
 
   export let results: Sample[] = [];
   export let deepCopiedResults: Sample[] = [];
@@ -35,7 +34,6 @@
   export let resultsChanged = false;
   export let resultCount: number = 0;
 
-  // expanded items limit
   let expandedItems = new Set<number>();
 
   export let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
@@ -60,7 +58,21 @@
   const errorMessage = writable('');
   const isLoading = writable(false);
 
-  $: isEditingEnabled = searchOption === 'sampling';
+  $: isEditingEnabled = searchOption === 'sampling' || searchOption === 'inventory';
+  $: isInventoryMode = searchOption === 'inventory';
+  $: isSamplingMode = searchOption === 'sampling';
+
+
+  // Add this reactive statement to detect changes in results length
+  $: resultsLengthChanged = results.length !== deepCopiedResults.length;
+
+  let availableBoxes: { id: string; name: string; }[] = [
+    { id: 'box1', name: 'Small Box' },
+    { id: 'box2', name: 'Medium Box' },
+    { id: 'box3', name: 'Large Box' },
+    { id: 'box4', name: 'Extra Large Box' },
+  ];
+  let selectedBox: string = '';
 
   let isGridView = true;
   let expandedItemIndex: number | null = null;
@@ -88,8 +100,6 @@
     );
   }
 
-
-
   function formatPropertyValue(key: string, value: any) {
     if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
       const lastModifier = value[value.length - 1];
@@ -107,8 +117,6 @@
     }
     return value;
   }
-
-
 
   async function generatePDFWrapper() {
     await generatePDF(results, content);
@@ -157,12 +165,24 @@
     });
   }
 
+
+
+
   function confirmDropSample(index: number) {
-    pendingRemoval.update(pending => {
-      pending[index] = true;
-      return pending;
-    });
+    const result = results[index];
+    const canDrop = (isSamplingMode && result.sample_token && result.reference_no) ||
+                    (isInventoryMode && result.box && result.reference_no);
+    
+    if (canDrop) {
+      pendingRemoval.update(pending => {
+        pending[index] = true;
+        return pending;
+      });
+    }
   }
+
+
+
 
   async function dropSample(index: number) {
     const sampleToDelete = results[index];
@@ -201,6 +221,8 @@
       results = results.filter((_, i) => i !== index);
       resultsChanged = true;
 
+
+
       displayedForms.update(forms => {
         delete forms[index];
         return forms;
@@ -231,6 +253,12 @@
       isLoading.set(false);
     }
   }
+
+
+
+
+
+
 
   function cancelDropSample(index: number) {
     pendingRemoval.update(pending => {
@@ -378,26 +406,45 @@
     resultsChanged = true;
   }
 
+
+
+
   async function pushChangesToBackend() {
     isLoading.set(true);
     errorMessage.set('');
     
     try {
-      if (JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || resultsChanged) {
+      // Check for changes, including length changes
+      const hasChanges = isInventoryMode || 
+                         JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
+                         resultsChanged ||
+                         resultsLengthChanged;
+
+      if (hasChanges) {
         console.log("Changes detected, pushing to backend...");
 
         const user = get(page).data.user;
         if (!user) throw new Error("User is undefined");
 
-        const updatedResults = results.map(result => ({
+        let uniqueIdentifier = isSamplingMode ? 'sample_token' : 'box';
+        let identifierValue = isSamplingMode ? null : selectedBox;
+
+        if (isInventoryMode && !identifierValue) {
+          throw new Error("Please select a box before pushing changes in inventory mode.");
+        }
+
+        let updatedResults = results.map(result => ({
           ...result,
           timestamp: Date.now(),
           modifiedBy: Array.isArray(result.modifiedBy) 
             ? [...result.modifiedBy, user]
             : result.modifiedBy 
               ? [result.modifiedBy, user]
-              : [user]
+              : [user],
+          [uniqueIdentifier]: identifierValue
         }));
+
+        console.log("All values in results before pushing to backend:", JSON.stringify(updatedResults, null, 2));
 
         const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
           method: 'POST',
@@ -410,21 +457,22 @@
           throw new Error(errorData.error || 'Failed to upload sample data');
         }
 
-        const sampling_response = await response.json();
-        console.log("Backend response:", sampling_response);
+        const backend_response = await response.json();
+        console.log("Backend response:", backend_response);
 
-        if (sampling_response.sample_token) {
+        if (backend_response[uniqueIdentifier]) {
           results = updatedResults.map(result => ({
             ...result,
-            sample_token: sampling_response.sample_token
+            [uniqueIdentifier]: backend_response[uniqueIdentifier]
           }));
-
-          deepCopiedResults = JSON.parse(JSON.stringify(results));
         }
 
+        // After successful push, update deepCopiedResults
+        deepCopiedResults = JSON.parse(JSON.stringify(results));
         resultsChanged = false;
         unsavedChanges.set(false);
         unsavedChangesByIndex.set({});
+        if (isInventoryMode) selectedBox = '';
       } else {
         console.log("No changes to push");
       }
@@ -435,6 +483,10 @@
       isLoading.set(false);
     }
   }
+
+
+
+
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
@@ -461,7 +513,6 @@
     isModalOpen = true;
   }
 
-
   function closeModal(event?: MouseEvent | KeyboardEvent) {
     if (!event || event.type === 'click' || (event as KeyboardEvent).key === 'Escape') {
       isModalOpen = false;
@@ -469,12 +520,15 @@
   }
 
 
+  $: {
+    if (isInventoryMode && selectedBox) {
+      console.log("Box selected in Inventory Mode. Push Changes button is now enabled.");
+    }
+  }
+
 
 
 </script>
-
-
-
 
 <div class="functional-display">
   <div class="view-toggle">
@@ -536,8 +590,6 @@
 
             {#if !isGridView || (isGridView && expandedItems.has(index))}
               <div class="properties-wrapper">
-
-
                 <div class="properties-container">
                   {#each Object.entries(filterDisplayedKeys(result)) as [key, value]}
                     <div class="property-item">
@@ -554,13 +606,18 @@
                       {/if}
                     </div>
                   {/each}
+                  {#if result.box}
+                    <div class="property-item">
+                      <span class="property-key">Box:</span>
+                      <span class="property-value">{result.box}</span>
+                    </div>
+                  {/if}
                 </div>
-
-
               </div>
             {/if}
           </div>
           
+
           {#if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
             <div class="form-controls">
               <button on:click={() => addForm(index)}>Add Field</button>
@@ -571,9 +628,20 @@
                 <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
                 <button on:click={() => cancelDropSample(index)} class="cancel-drop">Cancel Drop</button>
               {:else}
-                <button on:click={() => confirmDropSample(index)} class="drop-sample">Drop Sample</button>
+                <button 
+                  on:click={() => confirmDropSample(index)} 
+                  class="drop-sample"
+                  disabled={!(
+                    (isSamplingMode && result.sample_token && result.reference_no) ||
+                    (isInventoryMode && result.box && result.reference_no)
+                  )}
+                >
+                  Drop Sample
+                </button>
               {/if}
             </div>
+
+
 
             {#if $displayedForms[index]}
               <div class="additional-forms">
@@ -644,22 +712,42 @@
       {/each}
 
       {#if !isGridView}
-        <div class="global-actions">
-          {#if isEditingEnabled && (Object.values($unsavedChangesByIndex).some(Boolean) || resultsChanged)}
-            <button on:click={pushChangesToBackend} disabled={$isLoading}>Push Changes</button>
-          {/if}
-          <button on:click={generatePDFWrapper}>Download PDF</button>
-        </div>
-      {/if}
+       
+        <div class="global-actions-wrapper">
+          <div class="global-actions">
+            {#if isInventoryMode && results.length > 0}
+              <div class="box-selection">
+                <h3>Select a box for these items:</h3>
+                <select bind:value={selectedBox}>
+                  <option value="">Choose a box</option>
+                  {#each availableBoxes as box}
+                    <option value={box.id}>{box.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
+            <div class="action-buttons">
 
+              <button 
+                on:click={pushChangesToBackend} 
+                disabled={$isLoading || 
+                          (isInventoryMode && !selectedBox) || 
+                          (!isInventoryMode && !Object.values($unsavedChangesByIndex).some(Boolean) && !resultsChanged && !resultsLengthChanged)}
+              >
+                Push Changes
+              </button>
+
+              <button on:click={generatePDFWrapper}>Download PDF</button>
+            </div>
+          </div>
+        </div>
+
+      {/if}
     {:else}
       <p class="no-results">No results found</p>
     {/if}
   </div>
 </div>
-
-
-
 
 {#if isModalOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -699,9 +787,6 @@
     </div>
   </div>
 {/if}
-
-
-
 
 <style>
   .functional-display {
@@ -838,7 +923,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-  }
+
+}
 
   .image-frame img {
     max-width: 100%;
@@ -926,12 +1012,11 @@
     border: 2px solid #f0f0f0;
   }
 
-
   .property-item {
-      margin-bottom: 10px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    }
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
 
   .property-item:last-child {
     border-bottom: none;
@@ -984,6 +1069,19 @@
     background-color: #ff7a6e;
   }
 
+
+  .drop-sample:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+  }
+
+  .drop-sample:disabled:hover {
+    background-color: #cccccc;
+  }
+
+
+
   .cancel-drop {
     background-color: #4fd6be;
     color: #333;
@@ -1033,12 +1131,75 @@
     margin-left: 5px;
   }
 
-  .global-actions {
-    margin-top: 20px;
+
+
+  .global-actions-wrapper {
     display: flex;
     justify-content: center;
-    gap: 15px;
+    margin-top: 20px;
   }
+
+  .global-actions {
+    width: 50%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .box-selection {
+    width: 100%;
+  }
+
+  .box-selection h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #333;
+  }
+
+  .box-selection select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 10px;
+  }
+
+  .action-buttons button {
+    flex: 1;
+    padding: 10px;
+    font-size: 14px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  .action-buttons button:hover:not(:disabled) {
+    background-color: #0056b3;
+  }
+
+  .action-buttons button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+
+
+
+
 
   .global-actions button {
     color: #fff;
@@ -1175,6 +1336,10 @@
     margin: 0 auto;
   }
 
+
+
+
+
   @media (max-width: 768px) {
     .result-content {
       flex-direction: column;
@@ -1216,5 +1381,24 @@
     .result-card.grid-item.expanded .image-container {
       height: 300px;
     }
+
+    .global-actions {
+      flex-direction: column;
+    }
+
+    .global-actions button {
+      width: 100%;
+    }
+
+    .box-selection {
+      margin-bottom: 15px;
+    }
+
+    .box-selection select {
+      width: 100%;
+    }
   }
 </style>
+
+
+
