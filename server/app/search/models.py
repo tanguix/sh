@@ -172,19 +172,6 @@ class Collection:
 
 
 
-
-    @staticmethod
-    def search_sample_tokens_by_user(user_name, user_role):
-        pipeline = [
-            {"$match": {"modifiedBy": {"$elemMatch": {"name": user_name, "role": user_role}}}},
-            {"$sort": {"timestamp": 1}},
-            {"$group": {"_id": "$sample_token", "doc": {"$first": "$$ROOT"}}},
-            {"$project": {"_id": 0, "sample_token": "$_id", "timestamp": "$doc.timestamp"}},
-            {"$sort": {"timestamp": 1}}
-        ]
-        result = list(db.samples_list.aggregate(pipeline))
-        return [doc['sample_token'] for doc in result]
-
     @staticmethod
     def search_workflow_tokens_by_user(user_name, user_role):
         query = {"owner": [user_name, user_role]}
@@ -201,19 +188,53 @@ class Collection:
 
 
     @staticmethod
+    def search_unique_identifiers_by_user(user_name, user_role):
+        pipeline = [
+            {"$match": {"modifiedBy": {"$elemMatch": {"name": user_name, "role": user_role}}}},
+            {"$sort": {"timestamp": 1}},
+            {"$group": {"_id": "$identifier", "doc": {"$first": "$$ROOT"}}},
+            {"$project": {"_id": 0, "identifier": "$_id", "timestamp": "$doc.timestamp"}},
+            {"$sort": {"timestamp": 1}}
+        ]
+        result = list(db.inventory.aggregate(pipeline))
+        result.extend(list(db.samples_list.aggregate(pipeline)))
+        
+        # Sort the combined results by timestamp
+        sorted_result = sorted(result, key=lambda x: x['timestamp'])
+        
+        return [doc['identifier'] for doc in sorted_result]
+
+
+
+
+    @staticmethod
     def get_categories_and_tags():
         logger.info("Fetching categories and tags from the database")
         try:
-            categories = list(db.samples.distinct('categories'))
-            tags = list(db.samples.distinct('tags'))
+            categories = set()
+            tags = set()
+            
+            # Fetch from inventory collection
+            inv_categories = list(db.inventory.distinct('categories'))
+            inv_tags = list(db.inventory.distinct('tags'))
+            
+            # Fetch from samples_list collection
+            sam_categories = list(db.samples_list.distinct('categories'))
+            sam_tags = list(db.samples_list.distinct('tags'))
+            
+            # Combine and deduplicate
+            categories.update(inv_categories)
+            categories.update(sam_categories)
+            tags.update(inv_tags)
+            tags.update(sam_tags)
+            
             logger.info(f"Successfully fetched {len(categories)} categories and {len(tags)} tags")
             logger.debug(f"Categories: {categories}")
             logger.debug(f"Tags: {tags}")
-            return categories, tags
+            return list(categories), list(tags)
         except Exception as e:
             logger.error(f"Error in get_categories_and_tags: {e}", exc_info=True)
             raise
-
 
 
 

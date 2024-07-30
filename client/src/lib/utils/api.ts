@@ -35,7 +35,7 @@ export const API_ENDPOINTS = {
 
     FETCH_COLLECTIONS: `${BASE_URL}/search/api/collections`,
     FETCH_KEYS: `${BASE_URL}/search/api/keys`,
-    FETCH_SAMPLE_TOKEN: `${BASE_URL}/search/api/get_sample_tokens`,
+    FETCH_UNIQUE_IDENTIFIERS: `${BASE_URL}/search/api/get_unique_identifiers`,
     FETCH_WORKFLOW_TOKEN: `${BASE_URL}/search/api/get_workflow_tokens`,
     SEARCH_RESULTS: `${BASE_URL}/search/api/searched_result`,
     FETCH_CATEGORIES_AND_TAGS: `${BASE_URL}/search/api/categories_and_tags`,

@@ -16,6 +16,23 @@ FILE_FOLDER = os.path.join(SERVER_DIR, 'files')
 if not os.path.exists(FILE_FOLDER):
     os.makedirs(FILE_FOLDER)
 
+
+
+
+@search_bp.route('/api/exchange_rate', methods=['GET'])
+def get_exchange_rate():
+    try:
+        exchange_rate = ExchangeRate.get_latest_rate()
+        return jsonify(exchange_rate), 200
+    except Exception as e:
+        logger.error(f"Error fetching exchange rate: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+
+
+
+
 @search_bp.route('/api/collections', methods=['GET'])
 def find_collection():
     try:
@@ -86,22 +103,6 @@ def get_image(filename):
 
 
 
-@search_bp.route('/api/get_sample_tokens', methods=['POST'])
-def get_sample_tokens():
-    try:
-        data = request.json
-        user_name = data.get('name')
-        user_role = data.get('role')
-        if not user_name or not user_role:
-            return jsonify({"error": "Invalid user data"}), 400
-        
-        sorted_sample_tokens = Collection.search_sample_tokens_by_user(user_name, user_role)
-        return jsonify({"sample_tokens": sorted_sample_tokens, "username": user_name}), 200
-    except Exception as e:
-        logger.error(f"Error in get_sample_tokens: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-
 
 
 @search_bp.route('/api/get_workflow_tokens', methods=['POST'])
@@ -121,15 +122,20 @@ def get_workflow_tokens():
 
 
 
-@search_bp.route('/api/exchange_rate', methods=['GET'])
-def get_exchange_rate():
+@search_bp.route('/api/get_unique_identifiers', methods=['POST'])
+def get_unique_identifiers():
     try:
-        exchange_rate = ExchangeRate.get_latest_rate()
-        return jsonify(exchange_rate), 200
+        data = request.json
+        user_name = data.get('name')
+        user_role = data.get('role')
+        if not user_name or not user_role:
+            return jsonify({"error": "Invalid user data"}), 400
+        
+        sorted_identifiers = Collection.search_unique_identifiers_by_user(user_name, user_role)
+        return jsonify({"unique_identifiers": sorted_identifiers, "username": user_name}), 200
     except Exception as e:
-        logger.error(f"Error fetching exchange rate: {e}")
-        return jsonify({"error": "Internal server error"}), 500
-
+        logger.error(f"Error in get_unique_identifiers: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 

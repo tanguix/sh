@@ -91,22 +91,23 @@
 
 
 
-  // Sample token related stores
-  const fetchedSampleTokens = writable([]);
-  let who = writable('');
-  let fetched = writable(false);
 
 
+  // Rename sample token related stores to unique identifier stores
+  const fetchedUniqueIdentifiers = writable([]);
+  let uniqueIdentifierWho = writable('');
+  let uniqueIdentifiersFetched = writable(false);
 
-  const toggleSampleToken = () => {
+  // Rename toggleSampleToken to toggleUniqueIdentifiers
+  const toggleUniqueIdentifiers = () => {
     sampleToken.update(n => !n);
-    if (get(sampleToken) && !get(fetched)) {
-      fetchSampleTokens();
+    if (get(sampleToken) && !get(uniqueIdentifiersFetched)) {
+      fetchUniqueIdentifiers();
     }
   };
 
-
-  async function fetchSampleTokens() {
+  // Rename fetchSampleTokens to fetchUniqueIdentifiers
+  async function fetchUniqueIdentifiers() {
     const user = get(page).data.user;
     if (!user) {
       console.log("User not defined");
@@ -114,27 +115,28 @@
     }
 
     try {
-      const response = await fetch(API_ENDPOINTS.FETCH_SAMPLE_TOKEN, {
+      const response = await fetch(API_ENDPOINTS.FETCH_UNIQUE_IDENTIFIERS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: user.name, role: user.role })
       });
 
-      if (!response.ok) throw new Error('Failed to fetch sample tokens');
+      if (!response.ok) throw new Error('Failed to fetch unique identifiers');
 
       const result = await response.json();
-      fetchedSampleTokens.set(result.sample_tokens);
-      fetched.set(true);
-      who.set(result.username === user.name ? 'you' : result.username);
+      fetchedUniqueIdentifiers.set(result.unique_identifiers);
+      uniqueIdentifiersFetched.set(true);
+      uniqueIdentifierWho.set(result.username === user.name ? 'you' : result.username);
     } catch (error) {
-      console.error("Error fetching sample tokens:", error);
+      console.error("Error fetching unique identifiers:", error);
     }
   }
 
+  // Update derived stores
+  const latestUniqueIdentifiers = derived(fetchedUniqueIdentifiers, $identifiers => $identifiers.slice(0, 9));
+  const hasMoreUniqueIdentifiers = derived(fetchedUniqueIdentifiers, $identifiers => $identifiers.length > 9);
 
-  // here you set the number of display tokens limit
-  const latestTokens = derived(fetchedSampleTokens, $tokens => $tokens.slice(0, 9));
-  const hasMoreTokens = derived(fetchedSampleTokens, $tokens => $tokens.length > 9);
+
 
 
 
@@ -166,9 +168,9 @@
     }
   }
 
-  // Limit display to 3 items for each
-  const displayedCategories = derived(categories, $cats => $cats.slice(0, 3));
-  const displayedTags = derived(tags, $t => $t.slice(0, 3));
+  // Limit display to 11 items for each
+  const displayedCategories = derived(categories, $cats => $cats.slice(0, 11));
+  const displayedTags = derived(tags, $t => $t.slice(0, 11));
 
 
 </script>
@@ -228,26 +230,29 @@
       </div>
     </div>
 
+
     <div class="section">
-      <button on:click={toggleSampleToken}>
+      <button on:click={toggleUniqueIdentifiers}>
         <span class="toggle-text" class:hide={$sampleToken} class:show={!$sampleToken}>
           {$sampleToken ? 'Hide' : 'Show'}
         </span>
-        Sample Tokens
+        Unique Identifiers
       </button>
       <div class="section-content" class:open={$sampleToken}>
-        <h3>Sample Tokens</h3>
+        <h3>Unique Identifiers</h3>
         <ul>
-          {#if $hasMoreTokens}<li>...</li>{/if}
-          {#each $latestTokens as token, index}
-            <li><p>{$who}: {token}</p></li>
-            {#if index === $latestTokens.length - 1}
+          {#if $hasMoreUniqueIdentifiers}<li>...</li>{/if}
+          {#each $latestUniqueIdentifiers as identifier, index}
+            <li><p>{$uniqueIdentifierWho}: {identifier}</p></li>
+            {#if index === $latestUniqueIdentifiers.length - 1}
               <p>(latest)</p>
             {/if}
           {/each}
         </ul>
       </div>
     </div>
+
+
 
     <div class="section">
       <button on:click={toggleCategoryTagSearch}>

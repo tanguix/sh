@@ -1,7 +1,6 @@
 
 
 
-
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -303,14 +302,11 @@
     }
 
 
-
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
-        if (isInventoryMode && (searchCriteria.length === 0 || searchCriteria[0].key !== 'total_inventory')) {
-            searchCriteria = [{ key: 'total_inventory', value: searchCriteria[0]?.value || '' }];
-        }
         search();
     }
+
 
     // $: {
         // console.log("searchCriteria changed:", JSON.stringify(searchCriteria));
