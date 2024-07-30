@@ -183,10 +183,10 @@ class Item:
 
 
 class ItemBatch:
-    def __init__(self, items, mode='normal'):
+    def __init__(self, items, mode='normal', identifier=None):
         self.items = items
         self.mode = mode
-        self.identifier = self._generate_identifier()
+        self.identifier = identifier or self._generate_identifier()
         self.timestamp = int(time.time() * 1000)
         self.collection = self._determine_collection()
 
@@ -342,22 +342,44 @@ class ItemBatch:
     def _calculate_inventory(self, inventory):
         return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
 
+
+
     @staticmethod
     def get_identifiers(mode):
-        collection = db.inventory if mode == 'inventory' else db.samples_list
+        if mode == 'inventory':
+            collection = db.inventory
+            prefix = 'INV'
+        elif mode == 'sampling':
+            collection = db.samples_list
+            prefix = 'SAM'
+        else:
+            return []  # Return an empty list if not in sampling or inventory mode
+        
         pipeline = [
+            {"$match": {"identifier": {"$regex": f"^{prefix}_"}}},
             {"$group": {"_id": "$identifier"}},
             {"$project": {"identifier": "$_id", "_id": 0}}
         ]
+        
         identifiers = list(collection.aggregate(pipeline))
         return [i['identifier'] for i in identifiers]
+
+
 
     @staticmethod
     def create_identifier(mode, name):
         prefix = "INV" if mode == 'inventory' else "SAM"
         new_identifier = f"{prefix}_{name}_{str(uuid.uuid4())[:8]}"
-        # Here you might want to store the new identifier in a separate collection
-        # For now, we'll just return it
+        
+        collection = db.inventory if mode == 'inventory' else db.samples_list
+        
+        # Store the new identifier in the appropriate collection
+        collection.insert_one({
+            "identifier": new_identifier,
+            "created_at": int(time.time() * 1000),
+            "name": name
+        })
+        
         return new_identifier
 
 

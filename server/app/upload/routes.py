@@ -76,6 +76,10 @@ def upload_data():
         logger.error(f"Error uploading sample: {str(e)}")
         return jsonify({"error": "An unexpected error occurred while uploading the sample."}), 500
 
+
+
+
+
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
     try:
@@ -84,8 +88,12 @@ def upload_sample():
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
         
         mode = request.args.get('mode', 'normal')
+        identifier = request.args.get('identifier')
         
-        sample_batch = ItemBatch(data, mode=mode)
+        if not identifier:
+            return jsonify({"error": "Identifier is required"}), 400
+        
+        sample_batch = ItemBatch(data, mode=mode, identifier=identifier)
         
         if data and '_remove' in data[0] and data[0]['_remove']:
             response = sample_batch.remove_item(data[0])
@@ -98,11 +106,14 @@ def upload_sample():
         return jsonify({"error": str(e)}), 500
 
 
+
 @upload_bp.route('/api/fetch_identifiers', methods=['GET'])
 def fetch_identifiers():
-    mode = request.args.get('mode', 'normal')
+    mode = request.args.get('mode')  # No default provided
     identifiers = ItemBatch.get_identifiers(mode)
     return jsonify({"identifiers": identifiers})
+
+
 
 @upload_bp.route('/api/create_identifier', methods=['POST'])
 def create_identifier():

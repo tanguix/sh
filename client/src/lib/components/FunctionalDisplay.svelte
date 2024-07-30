@@ -22,15 +22,15 @@
     date: string;
     image_url: string;
     modifiedBy: string[];
-    sample_token?: string;
     total_inventory: number;
     inventory: InventoryItem[];
-    box?: string;
+    identifier?: string;
   }
 
   export let results: Sample[] = [];
   export let deepCopiedResults: Sample[] = [];
   export let searchOption: string = '';
+  const clientSideSearchOption = writable('');
   export let resultsChanged = false;
   export let resultCount: number = 0;
 
@@ -72,24 +72,46 @@
   let newIdentifierName: string = '';
   let isCreatingNewIdentifier: boolean = false;
 
-  onMount(async () => {
-    await fetchAvailableIdentifiers();
+
+
+
+  let mounted = false;
+
+  onMount(() => {
+      if (searchOption === 'sampling' || searchOption === 'inventory') {
+          fetchAvailableIdentifiers();
+      }
+      mounted = true;
   });
 
-  async function fetchAvailableIdentifiers() {
-    try {
-      const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
-      if (response.ok) {
-        const data = await response.json();
-        availableIdentifiers = data.identifiers;
+
+  $: if (mounted) {
+      if (searchOption === 'sampling' || searchOption === 'inventory') {
+          fetchAvailableIdentifiers();
       } else {
-        throw new Error('Failed to fetch identifiers');
+          availableIdentifiers = [];  // Clear identifiers when not in sampling or inventory mode
       }
-    } catch (error) {
-      console.error('Error fetching identifiers:', error);
-      errorMessage.set(error.message);
-    }
   }
+
+
+  async function fetchAvailableIdentifiers() {
+      try {
+          const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
+          if (response.ok) {
+              const data = await response.json();
+              availableIdentifiers = data.identifiers;
+          } else {
+              throw new Error('Failed to fetch identifiers');
+          }
+      } catch (error) {
+          console.error('Error fetching identifiers:', error);
+          errorMessage.set('Failed to fetch identifiers. Please try again.');
+          availableIdentifiers = [];  // Reset to empty array on error
+      }
+  }
+
+
+
 
   function toggleNewIdentifierCreation() {
     isCreatingNewIdentifier = !isCreatingNewIdentifier;
@@ -97,6 +119,8 @@
       newIdentifierName = '';
     }
   }
+
+
 
   async function createNewIdentifier() {
     if (!newIdentifierName.trim()) {
@@ -125,6 +149,8 @@
       errorMessage.set(error.message);
     }
   }
+
+
 
   function toggleExpandItem(index: number) {
     if (isGridView) {
@@ -529,6 +555,10 @@
   }
 </script>
 
+
+
+
+
 <div class="functional-display">
   <div class="view-toggle">
     <label>
@@ -550,30 +580,6 @@
     {/if}
 
     {#if results.length > 0}
-      <div class="identifier-selection">
-        <h3>Select an identifier for these items:</h3>
-        <select bind:value={selectedIdentifier}>
-          <option value="">Choose an identifier</option>
-          {#each availableIdentifiers as identifier}
-            <option value={identifier}>{identifier}</option>
-          {/each}
-        </select>
-        <button on:click={toggleNewIdentifierCreation}>
-          {isCreatingNewIdentifier ? 'Cancel' : 'Create New Identifier'}
-        </button>
-      </div>
-
-      {#if isCreatingNewIdentifier}
-        <div class="new-identifier-creation">
-          <input 
-            type="text" 
-            bind:value={newIdentifierName} 
-            placeholder="Enter new identifier name"
-          />
-          <button on:click={createNewIdentifier}>Create</button>
-        </div>
-      {/if}
-
       {#each results as result, index}
         <div 
           class="result-card" 
@@ -581,7 +587,7 @@
           class:expanded={isGridView && expandedItems.has(index)}
         >
           {#if !isGridView || (isGridView && expandedItems.has(index))}
-            <h3>{result.sample_token || 'No Sample Token'}</h3>
+            <h3>{result.identifier || 'No Sample Token'}</h3>
           {/if}
           <div class="result-content" class:grid-content={isGridView && expandedItemIndex !== index}>
             <div class="image-container" role="img" aria-label="Sample image">
@@ -721,25 +727,53 @@
           {/if}
         </div>
       {/each}
-
-      {#if !isGridView}
-        <div class="global-actions-wrapper">
-          <div class="global-actions">
-            <div class="action-buttons">
-              <button 
-                on:click={pushChangesToBackend} 
-                disabled={$isLoading || !selectedIdentifier || (!resultsChanged && !resultsLengthChanged)}
-              >
-                Push Changes
-              </button>
-              <button on:click={generatePDFWrapper}>Download PDF</button>
-            </div>
-          </div>
-        </div>
-      {/if}
     {:else}
       <p class="no-results">No results found</p>
     {/if}
+  </div>
+
+  <div class="global-actions-wrapper">
+    {#if searchOption === 'sampling' || searchOption === 'inventory'}
+
+
+      <div class="identifier-selection-container">
+        <h3>Select an identifier for these items:</h3>
+        <div class="identifier-controls">
+          <select bind:value={selectedIdentifier}>
+            <option value="">Choose an identifier</option>
+            {#each availableIdentifiers as identifier}
+              <option value={identifier}>{identifier}</option>
+            {/each}
+          </select>
+          <button on:click={toggleNewIdentifierCreation}>
+            {isCreatingNewIdentifier ? 'Cancel' : 'New'}
+          </button>
+        </div>
+        
+        {#if isCreatingNewIdentifier}
+          <div class="new-identifier-creation">
+            <input 
+              type="text" 
+              bind:value={newIdentifierName} 
+              placeholder="Enter new identifier name"
+            />
+            <button on:click={createNewIdentifier}>Create</button>
+          </div>
+        {/if}
+      </div>
+
+
+    {/if}
+    
+    <div class="global-actions">
+      <button 
+        on:click={pushChangesToBackend} 
+        disabled={$isLoading || !selectedIdentifier || (!resultsChanged && !resultsLengthChanged)}
+      >
+        Push Changes
+      </button>
+      <button on:click={generatePDFWrapper}>Download PDF</button>
+    </div>
   </div>
 </div>
 
@@ -781,18 +815,11 @@
   </div>
 {/if}
 
-
-
-
-
-
-
-
-
 <style>
   .functional-display {
     margin: 2rem auto;
     font-family: 'Ubuntu';
+    max-width: 1200px;
   }
 
   .view-toggle {
@@ -924,8 +951,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-
-}
+  }
 
   .image-frame img {
     max-width: 100%;
@@ -984,10 +1010,10 @@
   }
 
   .properties-wrapper {
-    flex: 0 0 33.33%;
-    display: flex;
-    flex-direction: column;
-  }
+      flex: 0 0 33.33%;
+      display: flex;
+      flex-direction: column;
+    }
 
   .properties-container {
     background-color: #f9f9f9;
@@ -1044,22 +1070,32 @@
     margin-bottom: 15px;
   }
 
+
+
   button {
-    padding: 8px 16px;
+    padding: 10px 16px;
     font-size: 14px;
+    font-weight: 500;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
+
+
   .update-normal, .cancel-normal {
-    background-color: #ccc;
+    background-color: #f0f0f0;
+    color: #333;
   }
 
   .update-normal:hover, .cancel-normal:hover {
-    background-color: #FFE6B3;
+    background-color: #e0e0e0;
   }
+
+
 
   .update-drop, .drop-sample {
     background-color: #ff4136;
@@ -1069,6 +1105,9 @@
   .update-drop:hover, .drop-sample:hover {
     background-color: #ff7a6e;
   }
+
+
+
 
 
   .drop-sample:disabled {
@@ -1081,16 +1120,17 @@
     background-color: #cccccc;
   }
 
-
-
   .cancel-drop {
     background-color: #4fd6be;
     color: #333;
   }
 
+
   .cancel-drop:hover {
-    background-color: #A1EFD3;
+    background-color: #3ac0a8;
   }
+
+
 
   .additional-forms {
     margin-top: 15px;
@@ -1114,97 +1154,187 @@
     min-width: 0;
   }
 
-  input[type="text"], input[type="date"], select {
-    padding: 8px;
+
+
+  input[type="text"],
+  input[type="date"],
+  select {
+    padding: 10px 12px;
     font-size: 14px;
     border: 1px solid #ccc;
     border-radius: 4px;
     width: 100%;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    background-color: #fff;
   }
 
-  .custom-checkbox {
-    display: flex;
-    align-items: center;
-    margin-top: 10px;
+
+
+  input[type="text"]:focus,
+  input[type="date"]:focus,
+  select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+
+
+
+
+  .custom-checkbox input[type="checkbox"] {
+    margin-right: 8px;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #007bff;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .custom-checkbox input[type="checkbox"]:checked::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+  }
+
+
+  .custom-checkbox input[type="checkbox"]:checked {
+    background-color: #007bff;
   }
 
   .checkbox-text {
     margin-left: 5px;
   }
 
-
-
   .global-actions-wrapper {
-    display: flex;
-    justify-content: center;
-    margin-top: 20px;
-  }
-
-  .global-actions {
-    width: 50%;
-    max-width: 400px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    padding: 15px;
+    margin: 20px auto 0;
+    padding: 20px;
     background-color: #f8f9fa;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    max-width: 500px;
   }
 
-  .box-selection {
-    width: 100%;
+
+  .identifier-selection-container {
+    margin-bottom: 20px;
   }
 
-  .box-selection h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 16px;
+
+  .identifier-selection-container h3 {
+    margin-bottom: 15px;
     color: #333;
+    font-size: 18px;
   }
 
-  .box-selection select {
-    width: 100%;
-    padding: 8px;
+
+  .identifier-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    align-items: center;
+  }
+
+  .identifier-controls select {
+    font-family: Ubuntu;
+    flex-grow: 1;
+    padding: 8px 12px;
+    font-size: 14px;
     border: 1px solid #ccc;
     border-radius: 4px;
     background-color: white;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23333' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 8px;
+    padding-right: 30px;
+    height: 38px;
   }
 
-  .action-buttons {
-    display: flex;
-    gap: 10px;
+  .identifier-controls select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
   }
 
-  .action-buttons button {
-    flex: 1;
-    padding: 10px;
+
+
+  .identifier-controls button,
+  .new-identifier-creation button,
+  .global-actions button {
+    padding: 8px 16px;
     font-size: 14px;
+    font-weight: 500;
     color: #fff;
     background-color: #007bff;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .action-buttons button:hover:not(:disabled) {
+
+
+
+  .identifier-controls button:hover,
+  .new-identifier-creation button:hover,
+  .global-actions button:hover:not(:disabled) {
     background-color: #0056b3;
   }
 
-  .action-buttons button:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
+
+
+
+  .identifier-controls button:active,
+  .new-identifier-creation button:active,
+  .global-actions button:active:not(:disabled) {
+    background-color: #004085;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+    transform: translateY(1px);
   }
 
 
 
+  .new-identifier-creation {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
 
+
+
+  .new-identifier-creation input {
+    flex-grow: 1;
+  }
+
+  .global-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
 
   .global-actions button {
-    color: #fff;
-    background: #007bff;
+    flex: 1;
+  }
+
+  .global-actions button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
   }
 
   .no-results {
@@ -1337,10 +1467,6 @@
     margin: 0 auto;
   }
 
-
-
-
-
   @media (max-width: 768px) {
     .result-content {
       flex-direction: column;
@@ -1383,23 +1509,17 @@
       height: 300px;
     }
 
+    .identifier-controls,
+    .new-identifier-creation,
     .global-actions {
       flex-direction: column;
     }
 
+    .identifier-controls button,
+    .new-identifier-creation button,
     .global-actions button {
-      width: 100%;
-    }
-
-    .box-selection {
-      margin-bottom: 15px;
-    }
-
-    .box-selection select {
       width: 100%;
     }
   }
 </style>
-
-
 

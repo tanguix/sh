@@ -11,7 +11,7 @@
         reference_no: string;
         tags: string[];
         date: string;
-        sample_token?: string;
+        identifier?: string;
     }
 
     export let searchOption = '';
@@ -21,8 +21,8 @@
     let searchCriteria = [{ key: '', value: '' }];
     let resultsChanged = false;
 
-    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp'];
-    const allowedCollections = ['samples', 'samples_list'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp', 'identifier'];
+    const allowedCollections = ['samples', 'samples_list', 'inventory'];
 
     let collections: string[] = [];
     let keys: string[] = [];
@@ -375,7 +375,6 @@
                   type="text" 
                   bind:value={criteria.value} 
                   placeholder="Enter search value"
-                  on:input={(e) => console.log("Input changed:", e.target.value)}
                 >
                 {#if index > 0}
                     <button on:click={() => removeSearchCriteria(index)}>-</button>
