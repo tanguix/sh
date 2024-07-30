@@ -36,10 +36,10 @@ class Collection:
             start_of_day = int(date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
             end_of_day = int((date.replace(hour=23, minute=59, second=59, microsecond=999999) + timedelta(seconds=1)).timestamp())
             return {key: {"$gte": start_of_day, "$lt": end_of_day}}
-        elif operator == '>':
+        elif operator == '<':
             timestamp = int(datetime.strptime(value, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
             return {key: {"$lt": timestamp}}
-        elif operator == '<':
+        elif operator == '>':
             timestamp = int(datetime.strptime(value, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999).timestamp())
             return {key: {"$gt": timestamp}}
         elif operator == 'range':

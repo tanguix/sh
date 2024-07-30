@@ -1,5 +1,6 @@
 
 
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
@@ -25,6 +26,8 @@
     total_inventory: number;
     inventory: InventoryItem[];
     identifier?: string;
+    newPutIn?: number;
+    newTakeOut?: number;
   }
 
   export let results: Sample[] = [];
@@ -72,46 +75,38 @@
   let newIdentifierName: string = '';
   let isCreatingNewIdentifier: boolean = false;
 
-
-
-
   let mounted = false;
 
   onMount(() => {
-      if (searchOption === 'sampling' || searchOption === 'inventory') {
-          fetchAvailableIdentifiers();
-      }
-      mounted = true;
+    if (searchOption === 'sampling' || searchOption === 'inventory') {
+      fetchAvailableIdentifiers();
+    }
+    mounted = true;
   });
 
-
   $: if (mounted) {
-      if (searchOption === 'sampling' || searchOption === 'inventory') {
-          fetchAvailableIdentifiers();
-      } else {
-          availableIdentifiers = [];  // Clear identifiers when not in sampling or inventory mode
-      }
+    if (searchOption === 'sampling' || searchOption === 'inventory') {
+      fetchAvailableIdentifiers();
+    } else {
+      availableIdentifiers = [];
+    }
   }
-
 
   async function fetchAvailableIdentifiers() {
-      try {
-          const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
-          if (response.ok) {
-              const data = await response.json();
-              availableIdentifiers = data.identifiers;
-          } else {
-              throw new Error('Failed to fetch identifiers');
-          }
-      } catch (error) {
-          console.error('Error fetching identifiers:', error);
-          errorMessage.set('Failed to fetch identifiers. Please try again.');
-          availableIdentifiers = [];  // Reset to empty array on error
+    try {
+      const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
+      if (response.ok) {
+        const data = await response.json();
+        availableIdentifiers = data.identifiers;
+      } else {
+        throw new Error('Failed to fetch identifiers');
       }
+    } catch (error) {
+      console.error('Error fetching identifiers:', error);
+      errorMessage.set('Failed to fetch identifiers. Please try again.');
+      availableIdentifiers = [];
+    }
   }
-
-
-
 
   function toggleNewIdentifierCreation() {
     isCreatingNewIdentifier = !isCreatingNewIdentifier;
@@ -119,8 +114,6 @@
       newIdentifierName = '';
     }
   }
-
-
 
   async function createNewIdentifier() {
     if (!newIdentifierName.trim()) {
@@ -149,8 +142,6 @@
       errorMessage.set(error.message);
     }
   }
-
-
 
   function toggleExpandItem(index: number) {
     if (isGridView) {
@@ -462,66 +453,67 @@
     resultsChanged = true;
   }
 
-
   async function pushChangesToBackend() {
-      isLoading.set(true);
-      errorMessage.set('');
-      
-      try {
-        const hasChanges = JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
-                           resultsChanged ||
-                           resultsLengthChanged;
+    isLoading.set(true);
+    errorMessage.set('');
+    
 
-        if (hasChanges) {
-          console.log("Changes detected, pushing to backend...");
 
-          const user = get(page).data.user;
-          if (!user) throw new Error("User is undefined");
+    try {
+      const hasChanges = JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
+                         resultsChanged ||
+                         resultsLengthChanged;
 
-          if (!selectedIdentifier) {
-            throw new Error("Please select an identifier or create a new one before pushing changes.");
-          }
+      if (hasChanges) {
+        console.log("Changes detected, pushing to backend...");
 
-          let updatedResults = results.map(result => ({
-            ...result,
-            timestamp: Date.now(),
-            modifiedBy: Array.isArray(result.modifiedBy) 
-              ? [...result.modifiedBy, user]
-              : result.modifiedBy 
-                ? [result.modifiedBy, user]
-                : [user],
-            identifier: selectedIdentifier
-          }));
+        const user = get(page).data.user;
+        if (!user) throw new Error("User is undefined");
 
-          const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedResults),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to upload sample data');
-          }
-
-          const backend_response = await response.json();
-          console.log("Backend response:", backend_response);
-
-          results = updatedResults;
-          deepCopiedResults = JSON.parse(JSON.stringify(results));
-          resultsChanged = false;
-          unsavedChanges.set(false);
-          unsavedChangesByIndex.set({});
-        } else {
-          console.log("No changes to push");
+        if (!selectedIdentifier) {
+          throw new Error("Please select an identifier or create a new one before pushing changes.");
         }
-      } catch (error) {
-        console.error("Error pushing changes to backend:", error.message);
-        errorMessage.set(error.message);
-      } finally {
-        isLoading.set(false);
+
+        let updatedResults = results.map(result => ({
+          ...result,
+          timestamp: Date.now(),
+          modifiedBy: Array.isArray(result.modifiedBy) 
+            ? [...result.modifiedBy, user]
+            : result.modifiedBy 
+              ? [result.modifiedBy, user]
+              : [user],
+          identifier: selectedIdentifier
+        }));
+
+        const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedResults),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to upload sample data');
+        }
+
+        const backend_response = await response.json();
+        console.log("Backend response:", backend_response);
+
+        results = updatedResults;
+        deepCopiedResults = JSON.parse(JSON.stringify(results));
+        resultsChanged = false;
+        unsavedChanges.set(false);
+        unsavedChangesByIndex.set({});
+      } else {
+        console.log("No changes to push");
       }
+    } catch (error) {
+      console.error("Error pushing changes to backend:", error.message);
+      errorMessage.set(error.message);
+    } finally {
+      isLoading.set(false);
     }
+  }
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
@@ -530,11 +522,6 @@
     });
     unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
   }
-
-  $: canRemove = results.map((result, index) =>
-    Object.keys(filterDisplayedKeys(result)).length >
-    ($removeClickCounts[index] || 0)
-  );
 
   function handleImageError(e: Event) {
     const target = e.target as HTMLImageElement;
@@ -553,7 +540,29 @@
       isModalOpen = false;
     }
   }
+
+  function handleInventoryUpdate(event: CustomEvent<{referenceNo: string, newEntry: InventoryItem}>) {
+    const { referenceNo, newEntry } = event.detail;
+    const index = results.findIndex(item => item.reference_no === referenceNo);
+    if (index !== -1) {
+      results[index].inventory = [...results[index].inventory, newEntry];
+      results[index].total_inventory = calculateTotalInventory(results[index].inventory);
+      results = [...results]; // trigger update
+      setUnsavedChanges(index, true);
+    }
+  }
+
+  function calculateTotalInventory(inventory: InventoryItem[]): number {
+    return inventory.reduce((total, item) => total + item.putIn - item.takeOut, 0);
+  }
+
+  $: canRemove = results.map((result, index) =>
+    Object.keys(filterDisplayedKeys(result)).length >
+    ($removeClickCounts[index] || 0)
+  );
 </script>
+
+
 
 
 
@@ -626,7 +635,7 @@
                       {#if key === 'total_inventory'}
                         <span class="property-value">
                           {formatPropertyValue(key, value)}
-                          <button on:click={() => displayInventoryDetails(result.inventory)}>
+                          <button class="inventory_details" on:click={() => displayInventoryDetails(result.inventory)}>
                             View Details
                           </button>
                         </span>
@@ -640,7 +649,54 @@
             {/if}
           </div>
           
-          {#if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
+          {#if isInventoryMode && (!isGridView || (isGridView && expandedItems.has(index)))}
+            <div class="inventory-update">
+              <h4>Update Inventory</h4>
+              <div class="input-group">
+                <label>
+                  Put In:
+                  <input type="number" bind:value={result.newPutIn} min="0">
+                </label>
+                <label>
+                  Take Out:
+                  <input type="number" bind:value={result.newTakeOut} min="0">
+                </label>
+              </div>
+              <button on:click={() => handleInventoryUpdate({
+                detail: {
+                  referenceNo: result.reference_no,
+                  newEntry: {
+                    putIn: result.newPutIn || 0,
+                    takeOut: result.newTakeOut || 0,
+                    by: get(page).data.user.name,
+                    timestamp: Date.now()
+                  }
+                }
+              })}>Add Entry</button>
+
+              <h4>Inventory History</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Put In</th>
+                    <th>Take Out</th>
+                    <th>By</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each result.inventory as item}
+                    <tr>
+                      <td>{item.putIn}</td>
+                      <td>{item.takeOut}</td>
+                      <td>{item.by}</td>
+                      <td>{new Date(item.timestamp).toLocaleString()}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {:else if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
             <div class="form-controls">
               <button on:click={() => addForm(index)}>Add Field</button>
               {#if canRemove[index]}
@@ -734,8 +790,6 @@
 
   <div class="global-actions-wrapper">
     {#if searchOption === 'sampling' || searchOption === 'inventory'}
-
-
       <div class="identifier-selection-container">
         <h3>Select an identifier for these items:</h3>
         <div class="identifier-controls">
@@ -761,8 +815,6 @@
           </div>
         {/if}
       </div>
-
-
     {/if}
     
     <div class="global-actions">
@@ -776,6 +828,7 @@
     </div>
   </div>
 </div>
+
 
 {#if isModalOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -805,7 +858,7 @@
               <td>{item.putIn}</td>
               <td>{item.takeOut}</td>
               <td>{item.by}</td>
-              <td>{new Date(item.timestamp * 1000).toLocaleString()}</td>
+              <td>{new Date(item.timestamp).toLocaleString()}</td>
             </tr>
           {/each}
         </tbody>
@@ -815,711 +868,749 @@
   </div>
 {/if}
 
+
+
 <style>
-  .functional-display {
-    margin: 2rem auto;
-    font-family: 'Ubuntu';
-    max-width: 1200px;
+
+
+.inventory_details {
+  margin-left: 10px;
+  border: solid 1px #ccc;
+  padding: 5px;
+}
+
+.functional-display {
+  margin: 2rem auto;
+  font-family: 'Ubuntu';
+  max-width: 1200px;
+}
+
+.view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 20px;
+}
+
+.view-toggle label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+}
+
+.view-toggle input[type="checkbox"] {
+  margin-right: 8px;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ccc;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.view-toggle input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 60%;
+  background-color: transparent;
+  border-radius: 2px;
+  transition: all 0.2s ease-in-out;
+}
+
+.view-toggle input[type="checkbox"]:checked {
+  border-color: #ff7a6e;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.view-toggle input[type="checkbox"]:checked::before {
+  background-color: #ff7a6e;
+}
+
+.result-count {
+  margin-left: 15px;
+  font-size: 14px;
+  color: #666;
+}
+
+.results-container {
+  font-family: 'Ubuntu', sans-serif;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.results-container.grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 20px;
+}
+
+.result-card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  padding: 20px;
+  max-width: 100%;
+}
+
+.results-container:not(.grid-view) .result-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-card.grid-item {
+  margin-bottom: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-card.grid-item.expanded {
+  grid-column: 1 / -1;
+  max-width: 100%;
+}
+
+.results-container:not(.grid-view) .result-card.expanded {
+  grid-column: auto;
+  max-width: none;
+}
+
+h3 {
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.result-content {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.results-container:not(.grid-view) .result-content {
+  flex-direction: row;
+  height: auto;
+}
+
+.result-content.grid-content {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-container {
+  flex: 0 0 66.67%;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+}
+
+.results-container:not(.grid-view) .image-container {
+  flex: 0 0 66.67%;
+  height: 400px;
+}
+
+.grid-item .image-container {
+  flex: 1;
+  height: 180px;
+}
+
+.image-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.expand-collapse-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.grid-view .expand-collapse-btn {
+  opacity: 0;
+}
+
+.grid-view .image-frame:hover .expand-collapse-btn {
+  opacity: 1;
+}
+
+.expand-collapse-btn p {
+  margin: 0;
+  line-height: 1;
+}
+
+.expand-collapse-btn:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.no-image {
+  color: #999;
+  font-style: italic;
+}
+
+.reference-no {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}
+
+.properties-wrapper {
+  flex: 0 0 calc(33.33% - 20px);
+  display: flex;
+  flex-direction: column;
+  height: 400px;
+  overflow: hidden;
+}
+
+.results-container:not(.grid-view) .properties-wrapper {
+  flex: 0 0 calc(33.33% - 20px);
+}
+
+.properties-container {
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  padding: 15px;
+  overflow-y: auto;
+  flex-grow: 1;
+  height: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #007bff #f0f0f0;
+}
+
+.properties-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.properties-container::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.properties-container::-webkit-scrollbar-thumb {
+  background-color: #007bff;
+  border-radius: 4px;
+  border: 2px solid #f0f0f0;
+}
+
+.property-item {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.property-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.property-key {
+  font-weight: bold;
+  color: #555;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.property-value {
+  display: block;
+  word-break: break-word;
+  color: #007bff;
+}
+
+.form-controls, .action-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+button {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.update-normal, .cancel-normal {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.update-normal:hover, .cancel-normal:hover {
+  background-color: #e0e0e0;
+}
+
+.update-drop, .drop-sample {
+  background-color: #ff4136;
+  color: white;
+}
+
+.update-drop:hover, .drop-sample:hover {
+  background-color: #ff7a6e;
+}
+
+.drop-sample:disabled {
+  background-color: #cccccc;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+.drop-sample:disabled:hover {
+  background-color: #cccccc;
+}
+
+.cancel-drop {
+  background-color: #4fd6be;
+  color: #333;
+}
+
+.cancel-drop:hover {
+  background-color: #3ac0a8;
+}
+
+.additional-forms {
+  margin-top: 15px;
+}
+
+.form-entry {
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 10px;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.input-group input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"],
+select {
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background-color: #fff;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="number"]:focus,
+select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.custom-checkbox input[type="checkbox"] {
+  margin-right: 8px;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #007bff;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-checkbox input[type="checkbox"]:checked::before {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+}
+
+.custom-checkbox input[type="checkbox"]:checked {
+  background-color: #007bff;
+}
+
+.checkbox-text {
+  margin-left: 5px;
+}
+
+.global-actions-wrapper {
+  margin: 20px auto 0;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-width: 500px;
+}
+
+.identifier-selection-container {
+  margin-bottom: 20px;
+}
+
+.identifier-selection-container h3 {
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 18px;
+}
+
+.identifier-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: center;
+}
+
+.identifier-controls select {
+  font-family: Ubuntu;
+  flex-grow: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23333' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 8px;
+  padding-right: 30px;
+  height: 38px;
+}
+
+.identifier-controls select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.identifier-controls button,
+.new-identifier-creation button,
+.global-actions button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.identifier-controls button:hover,
+.new-identifier-creation button:hover,
+.global-actions button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.identifier-controls button:active,
+.new-identifier-creation button:active,
+.global-actions button:active:not(:disabled) {
+  background-color: #004085;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+  transform: translateY(1px);
+}
+
+.new-identifier-creation {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.new-identifier-creation input {
+  flex-grow: 1;
+}
+
+.global-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.global-actions button {
+  flex: 1;
+}
+
+.global-actions button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.no-results {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+.helper-text {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+  color: #007bff;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+
+.inventory-update {
+  margin-top: 20px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.inventory-update h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.inventory-update .input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.inventory-update label {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  color: #555;
+}
+
+.inventory-update input[type="number"] {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.inventory-update button {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.inventory-update button:hover {
+  background-color: #0056b3;
+}
+
+.inventory-update table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+.inventory-update th, .inventory-update td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.inventory-update th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 5px;
+  max-width: 80%;
+  max-height: 80%;
+  overflow-y: auto;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+}
+
+.modal-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.modal-content th, .modal-content td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.modal-content th {
+  background-color: #f2f2f2;
+}
+
+.modal-content button {
+  display: block;
+  margin: 0 auto;
+}
+
+.result-card.grid-item.expanded .result-content {
+  flex-direction: row;
+  height: auto;
+}
+
+.result-card.grid-item.expanded .image-container {
+  flex: 0 0 66.67%;
+  height: 400px;
+}
+
+.result-card.grid-item.expanded .properties-wrapper {
+  flex: 0 0 calc(33.33% - 20px);
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .result-content,
+  .results-container:not(.grid-view) .result-content,
+  .result-card.grid-item.expanded .result-content {
+    flex-direction: column;
   }
 
-  .view-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    margin-bottom: 20px;
+  .image-container,
+  .properties-wrapper,
+  .results-container:not(.grid-view) .image-container,
+  .results-container:not(.grid-view) .properties-wrapper,
+  .result-card.grid-item.expanded .image-container,
+  .result-card.grid-item.expanded .properties-wrapper {
+    flex: 0 0 auto;
+    width: 100%;
   }
 
-  .view-toggle label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 14px;
-    color: #666;
+  .image-container,
+  .results-container:not(.grid-view) .image-container,
+  .result-card.grid-item.expanded .image-container {
+    height: 300px;
   }
 
-  .view-toggle input[type="checkbox"] {
-    margin-right: 8px;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #ccc;
-    border-radius: 3px;
-    outline: none;
-    cursor: pointer;
-    position: relative;
-    transition: all 0.2s ease-in-out;
-  }
-
-  .view-toggle input[type="checkbox"]::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 60%;
-    height: 60%;
-    background-color: transparent;
-    border-radius: 2px;
-    transition: all 0.2s ease-in-out;
-  }
-
-  .view-toggle input[type="checkbox"]:checked {
-    border-color: #ff7a6e;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-  }
-
-  .view-toggle input[type="checkbox"]:checked::before {
-    background-color: #ff7a6e;
-  }
-
-  .result-count {
-    margin-left: 15px;
-    font-size: 14px;
-    color: #666;
-  }
-
-  .results-container {
-    font-family: 'Ubuntu', sans-serif;
-    max-width: 100%;
-    margin: 0 auto;
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  .properties-container {
+    max-height: 300px;
   }
 
   .results-container.grid-view {
-    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 20px;
-  }
-
-  .result-card {
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-    padding: 20px;
-  }
-
-  .result-card.grid-item {
-    margin-bottom: 0;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .result-content.grid-content {
-    height: auto;
-    display: flex;
-    flex-direction: column;
-  }
-
-  h3 {
-    color: #333;
-    margin-bottom: 15px;
-  }
-
-  .result-content {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 15px;
-    height: 400px;
-  }
-
-  .image-container {
-    flex: 0 0 66.67%;
-    background-color: #f5f5f5;
-    border-radius: 4px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .grid-item .image-container {
-    flex: 1;
-    height: 180px;
+    height: 150px;
   }
 
-  .image-frame {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    background-color: white;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .identifier-controls,
+  .new-identifier-creation,
+  .global-actions {
+    flex-direction: column;
   }
-
-  .image-frame img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-
-  .expand-collapse-btn {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    font-size: 20px;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-  }
-
-  .grid-view .expand-collapse-btn {
-    opacity: 0;
-  }
-
-  .grid-view .image-frame:hover .expand-collapse-btn {
-    opacity: 1;
-  }
-
-  .expand-collapse-btn p {
-    margin: 0;
-    line-height: 1;
-  }
-
-  .expand-collapse-btn:hover {
-    background-color: rgba(0, 0, 0, 0.7);
-  }
-
-  .no-image {
-    color: #999;
-    font-style: italic;
-  }
-
-  .reference-no {
-    margin-top: 10px;
-    font-size: 12px;
-    color: #666;
-    text-align: center;
-  }
-
-  .properties-wrapper {
-      flex: 0 0 33.33%;
-      display: flex;
-      flex-direction: column;
-    }
-
-  .properties-container {
-    background-color: #f9f9f9;
-    border-radius: 4px;
-    padding: 15px;
-    overflow-y: auto;
-    flex-grow: 1;
-    scrollbar-width: thin;
-    scrollbar-color: #007bff #f0f0f0;
-  }
-
-  .properties-container::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .properties-container::-webkit-scrollbar-track {
-    background: #f0f0f0;
-  }
-
-  .properties-container::-webkit-scrollbar-thumb {
-    background-color: #007bff;
-    border-radius: 4px;
-    border: 2px solid #f0f0f0;
-  }
-
-  .property-item {
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  }
-
-  .property-item:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .property-key {
-    font-weight: bold;
-    color: #555;
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .property-value {
-    display: block;
-    word-break: break-word;
-    color: #007bff;
-  }
-
-  .form-controls, .action-buttons {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-  }
-
-
-
-  button {
-    padding: 10px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-
-
-  .update-normal, .cancel-normal {
-    background-color: #f0f0f0;
-    color: #333;
-  }
-
-  .update-normal:hover, .cancel-normal:hover {
-    background-color: #e0e0e0;
-  }
-
-
-
-  .update-drop, .drop-sample {
-    background-color: #ff4136;
-    color: white;
-  }
-
-  .update-drop:hover, .drop-sample:hover {
-    background-color: #ff7a6e;
-  }
-
-
-
-
-
-  .drop-sample:disabled {
-    background-color: #cccccc;
-    color: #666666;
-    cursor: not-allowed;
-  }
-
-  .drop-sample:disabled:hover {
-    background-color: #cccccc;
-  }
-
-  .cancel-drop {
-    background-color: #4fd6be;
-    color: #333;
-  }
-
-
-  .cancel-drop:hover {
-    background-color: #3ac0a8;
-  }
-
-
-
-  .additional-forms {
-    margin-top: 15px;
-  }
-
-  .form-entry {
-    background-color: #f9f9f9;
-    border-radius: 4px;
-    padding: 15px;
-    margin-bottom: 10px;
-  }
-
-  .input-group {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-
-  .input-group input {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-
-
-  input[type="text"],
-  input[type="date"],
-  select {
-    padding: 10px 12px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    width: 100%;
-    transition: border-color 0.3s, box-shadow 0.3s;
-    background-color: #fff;
-  }
-
-
-
-  input[type="text"]:focus,
-  input[type="date"]:focus,
-  select:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-
-
-
-
-  .custom-checkbox input[type="checkbox"] {
-    margin-right: 8px;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #007bff;
-    border-radius: 3px;
-    outline: none;
-    cursor: pointer;
-    position: relative;
-    transition: all 0.2s ease-in-out;
-  }
-
-  .custom-checkbox input[type="checkbox"]:checked::before {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 12px;
-  }
-
-
-  .custom-checkbox input[type="checkbox"]:checked {
-    background-color: #007bff;
-  }
-
-  .checkbox-text {
-    margin-left: 5px;
-  }
-
-  .global-actions-wrapper {
-    margin: 20px auto 0;
-    padding: 20px;
-    background-color: #f8f9fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    max-width: 500px;
-  }
-
-
-  .identifier-selection-container {
-    margin-bottom: 20px;
-  }
-
-
-  .identifier-selection-container h3 {
-    margin-bottom: 15px;
-    color: #333;
-    font-size: 18px;
-  }
-
-
-  .identifier-controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-    align-items: center;
-  }
-
-  .identifier-controls select {
-    font-family: Ubuntu;
-    flex-grow: 1;
-    padding: 8px 12px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: white;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23333' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    background-size: 8px;
-    padding-right: 30px;
-    height: 38px;
-  }
-
-  .identifier-controls select:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-
-
 
   .identifier-controls button,
   .new-identifier-creation button,
   .global-actions button {
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
-    background-color: #007bff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 100%;
   }
 
-
-
-
-  .identifier-controls button:hover,
-  .new-identifier-creation button:hover,
-  .global-actions button:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
-
-
-
-
-  .identifier-controls button:active,
-  .new-identifier-creation button:active,
-  .global-actions button:active:not(:disabled) {
-    background-color: #004085;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
-    transform: translateY(1px);
-  }
-
-
-
-  .new-identifier-creation {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-
-
-  .new-identifier-creation input {
-    flex-grow: 1;
-  }
-
-  .global-actions {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .global-actions button {
-    flex: 1;
-  }
-
-  .global-actions button:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-  }
-
-  .no-results {
-    text-align: center;
-    color: #666;
-    font-style: italic;
-  }
-
-  .helper-text {
-    display: block;
-    font-size: 12px;
-    color: #666;
-    margin-top: 4px;
-    font-style: italic;
-  }
-
-  .loading-spinner {
-    text-align: center;
-    padding: 20px;
-    font-style: italic;
-    color: #007bff;
-  }
-
-  .error-message {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    text-align: center;
-  }
-
-  .result-card.grid-item.expanded {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    max-width: 100%;
-    padding: 20px;
-  }
-
-  .result-card.grid-item.expanded .result-content {
-    display: flex;
-    flex-direction: row;
-    gap: 20px;
-    margin-bottom: 15px;
-    height: 400px;
-  }
-
-  .result-card.grid-item.expanded .image-container {
-    flex: 0 0 66.67%;
-    height: 100%;
-  }
-
-  .result-card.grid-item.expanded .properties-wrapper {
-    flex: 0 0 33.33%;
-    display: flex;
+  .inventory-update .input-group {
     flex-direction: column;
   }
+}
 
-  .result-card.grid-item.expanded .properties-container {
-    background-color: #f9f9f9;
-    border-radius: 4px;
-    padding: 15px;
-    overflow-y: auto;
-    flex-grow: 1;
-    scrollbar-width: thin;
-    scrollbar-color: #007bff #f0f0f0;
-  }
 
-  .property-item button {
-    margin-left: 10px;
-    padding: 2px 5px;
-    font-size: 12px;
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-
-  .property-item button:hover {
-    background-color: #e0e0e0;
-  }
-
-  .modal-overlay {
-    font-family: Ubuntu;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background-color: white;
-    padding: 20px;
-    border-radius: 5px;
-    max-width: 80%;
-    max-height: 80%;
-    overflow-y: auto;
-  }
-
-  .modal-content h2 {
-    margin-top: 0;
-  }
-
-  .modal-content table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-  }
-
-  .modal-content th, .modal-content td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-  }
-
-  .modal-content th {
-    background-color: #f2f2f2;
-  }
-
-  .modal-content button {
-    display: block;
-    margin: 0 auto;
-  }
-
-  @media (max-width: 768px) {
-    .result-content {
-      flex-direction: column;
-      height: auto;
-    }
-
-    .image-container, .properties-wrapper {
-      flex: 0 0 auto;
-      width: 100%;
-    }
-
-    .image-container {
-      height: 300px;
-    }
-
-    .properties-container {
-      max-height: 300px;
-    }
-
-    .results-container.grid-view {
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    }
-
-    .grid-item .image-container {
-      height: 150px;
-    }
-
-    .result-card.grid-item.expanded .result-content {
-      flex-direction: column;
-      height: auto;
-    }
-
-    .result-card.grid-item.expanded .image-container,
-    .result-card.grid-item.expanded .properties-wrapper {
-      flex: 0 0 auto;
-      width: 100%;
-    }
-
-    .result-card.grid-item.expanded .image-container {
-      height: 300px;
-    }
-
-    .identifier-controls,
-    .new-identifier-creation,
-    .global-actions {
-      flex-direction: column;
-    }
-
-    .identifier-controls button,
-    .new-identifier-creation button,
-    .global-actions button {
-      width: 100%;
-    }
-  }
 </style>
 
