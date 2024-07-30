@@ -541,16 +541,26 @@
     }
   }
 
+
+
+
   function handleInventoryUpdate(event: CustomEvent<{referenceNo: string, newEntry: InventoryItem}>) {
     const { referenceNo, newEntry } = event.detail;
     const index = results.findIndex(item => item.reference_no === referenceNo);
     if (index !== -1) {
       results[index].inventory = [...results[index].inventory, newEntry];
       results[index].total_inventory = calculateTotalInventory(results[index].inventory);
+      
+      // Clear the newPutIn and newTakeOut values
+      results[index].newPutIn = 0;
+      results[index].newTakeOut = 0;
+      
       results = [...results]; // trigger update
       setUnsavedChanges(index, true);
     }
   }
+
+
 
   function calculateTotalInventory(inventory: InventoryItem[]): number {
     return inventory.reduce((total, item) => total + item.putIn - item.takeOut, 0);
@@ -652,6 +662,8 @@
           {#if isInventoryMode && (!isGridView || (isGridView && expandedItems.has(index)))}
             <div class="inventory-update">
               <h4>Update Inventory</h4>
+
+
               <div class="input-group">
                 <label>
                   Put In:
@@ -673,6 +685,7 @@
                   }
                 }
               })}>Add Entry</button>
+
 
               <h4>Inventory History</h4>
               <table>
@@ -1498,6 +1511,7 @@ select:focus {
 }
 
 .modal-overlay {
+  font-family: Ubuntu;
   position: fixed;
   top: 0;
   left: 0;

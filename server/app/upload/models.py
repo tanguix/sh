@@ -221,6 +221,7 @@ class ItemBatch:
 
 
 
+
     def save_items(self):
         try:
             items_to_update = []
@@ -231,9 +232,17 @@ class ItemBatch:
                 existing_item = self._find_existing_item(item)
                 
                 if existing_item:
-                    update_operation = self._prepare_update_operation(item, existing_item)
-                    if update_operation:
-                        items_to_update.append((existing_item['_id'], update_operation))
+                    if 'newPutIn' in item or 'newTakeOut' in item:
+                        # Handle inventory update
+                        self.update_inventory(
+                            item['reference_no'],
+                            item.get('newPutIn', 0),
+                            item.get('newTakeOut', 0)
+                        )
+                    else:
+                        update_operation = self._prepare_update_operation(item, existing_item)
+                        if update_operation:
+                            items_to_update.append((existing_item['_id'], update_operation))
                 else:
                     new_item = self._process_item(item)
                     items_to_insert.append(new_item)
@@ -257,6 +266,8 @@ class ItemBatch:
 
 
 
+
+
     def _find_existing_item(self, item):
         query = {
             'reference_no': item['reference_no'],
@@ -265,8 +276,60 @@ class ItemBatch:
         return self.collection.find_one(query)
 
 
+
+
+    def update_inventory(self, reference_no, put_in, take_out):
+        query = {
+            "identifier": self.identifier,
+            "reference_no": reference_no
+        }
+        
+        item = self.collection.find_one(query)
+        
+        if not item:
+            raise ValueError(f"Item with reference number {reference_no} not found")
+        
+        # Create new inventory entry
+        new_entry = {
+            "putIn": put_in,
+            "takeOut": take_out,
+            "by": "User",  # You might want to pass the user information from the frontend
+            "timestamp": int(time.time() * 1000)
+        }
+        
+        # Append new entry to existing inventory
+        inventory = item.get('inventory', [])
+        inventory.append(new_entry)
+        
+        # Calculate new total inventory
+        new_total_inventory = self._calculate_inventory(inventory)
+        
+        # Update the document
+        update_operation = {
+            "$set": {
+                "inventory": inventory,
+                "total_inventory": new_total_inventory
+            }
+        }
+        
+        result = self.collection.update_one(query, update_operation)
+        
+        if result.modified_count == 0:
+            raise ValueError("Failed to update inventory")
+        
+        return {
+            "message": "Inventory updated successfully",
+            "reference_no": reference_no,
+            "total_inventory": new_total_inventory
+        }
+
+
+
+
+
     def _calculate_inventory(self, inventory):
         return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
+
 
 
     def _process_item(self, item):
