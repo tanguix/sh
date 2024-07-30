@@ -1,7 +1,7 @@
 
 
-
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
@@ -35,8 +35,7 @@
   export let resultCount: number = 0;
 
   let expandedItems = new Set<number>();
-
-  export let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
+  let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
   let content: string = `
       Marks & Order Nos.(标志及订单号码)\n
       Description & Specifications (描述及规格)\n
@@ -61,24 +60,71 @@
   $: isEditingEnabled = searchOption === 'sampling' || searchOption === 'inventory';
   $: isInventoryMode = searchOption === 'inventory';
   $: isSamplingMode = searchOption === 'sampling';
-
-
-  // Add this reactive statement to detect changes in results length
   $: resultsLengthChanged = results.length !== deepCopiedResults.length;
-
-  let availableBoxes: { id: string; name: string; }[] = [
-    { id: 'box1', name: 'Small Box' },
-    { id: 'box2', name: 'Medium Box' },
-    { id: 'box3', name: 'Large Box' },
-    { id: 'box4', name: 'Extra Large Box' },
-  ];
-  let selectedBox: string = '';
 
   let isGridView = true;
   let expandedItemIndex: number | null = null;
-
   let isModalOpen = false;
   let currentInventory: InventoryItem[] = [];
+
+  let availableIdentifiers: string[] = [];
+  let selectedIdentifier: string = '';
+  let newIdentifierName: string = '';
+  let isCreatingNewIdentifier: boolean = false;
+
+  onMount(async () => {
+    await fetchAvailableIdentifiers();
+  });
+
+  async function fetchAvailableIdentifiers() {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
+      if (response.ok) {
+        const data = await response.json();
+        availableIdentifiers = data.identifiers;
+      } else {
+        throw new Error('Failed to fetch identifiers');
+      }
+    } catch (error) {
+      console.error('Error fetching identifiers:', error);
+      errorMessage.set(error.message);
+    }
+  }
+
+  function toggleNewIdentifierCreation() {
+    isCreatingNewIdentifier = !isCreatingNewIdentifier;
+    if (!isCreatingNewIdentifier) {
+      newIdentifierName = '';
+    }
+  }
+
+  async function createNewIdentifier() {
+    if (!newIdentifierName.trim()) {
+      errorMessage.set('Please enter a name for the new identifier');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_ENDPOINTS.CREATE_IDENTIFIER}?mode=${searchOption}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newIdentifierName })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        availableIdentifiers = [...availableIdentifiers, data.identifier];
+        selectedIdentifier = data.identifier;
+        isCreatingNewIdentifier = false;
+        newIdentifierName = '';
+      } else {
+        throw new Error('Failed to create new identifier');
+      }
+    } catch (error) {
+      console.error('Error creating new identifier:', error);
+      errorMessage.set(error.message);
+    }
+  }
 
   function toggleExpandItem(index: number) {
     if (isGridView) {
@@ -165,9 +211,6 @@
     });
   }
 
-
-
-
   function confirmDropSample(index: number) {
     const result = results[index];
     const canDrop = (isSamplingMode && result.sample_token && result.reference_no) ||
@@ -181,17 +224,13 @@
     }
   }
 
-
-
-
   async function dropSample(index: number) {
     const sampleToDelete = results[index];
-    const sampleToken = sampleToDelete.sample_token;
     const referenceNo = sampleToDelete.reference_no;
 
-    if (!sampleToken || !referenceNo) {
-      console.error("Sample token or reference number is missing");
-      errorMessage.set("Unable to drop sample: Missing sample token or reference number");
+    if (!referenceNo) {
+      console.error("Reference number is missing");
+      errorMessage.set("Unable to drop sample: Missing reference number");
       return;
     }
 
@@ -199,12 +238,11 @@
     errorMessage.set('');
 
     try {
-      const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
+      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([{ 
           _remove: true, 
-          sample_token: sampleToken,
           reference_no: referenceNo,
           ...sampleToDelete
         }]),
@@ -220,8 +258,6 @@
 
       results = results.filter((_, i) => i !== index);
       resultsChanged = true;
-
-
 
       displayedForms.update(forms => {
         delete forms[index];
@@ -253,12 +289,6 @@
       isLoading.set(false);
     }
   }
-
-
-
-
-
-
 
   function cancelDropSample(index: number) {
     pendingRemoval.update(pending => {
@@ -407,86 +437,65 @@
   }
 
 
-
-
   async function pushChangesToBackend() {
-    isLoading.set(true);
-    errorMessage.set('');
-    
-    try {
-      // Check for changes, including length changes
-      const hasChanges = isSamplingMode || isInventoryMode || 
-                         JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
-                         resultsChanged ||
-                         resultsLengthChanged;
+      isLoading.set(true);
+      errorMessage.set('');
+      
+      try {
+        const hasChanges = JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
+                           resultsChanged ||
+                           resultsLengthChanged;
 
-      if (hasChanges) {
-        console.log("Changes detected, pushing to backend...");
+        if (hasChanges) {
+          console.log("Changes detected, pushing to backend...");
 
-        const user = get(page).data.user;
-        if (!user) throw new Error("User is undefined");
+          const user = get(page).data.user;
+          if (!user) throw new Error("User is undefined");
 
-        let uniqueIdentifier = isSamplingMode ? 'sample_token' : 'box';
-        let identifierValue = isSamplingMode ? null : selectedBox;
+          if (!selectedIdentifier) {
+            throw new Error("Please select an identifier or create a new one before pushing changes.");
+          }
 
-        if (isInventoryMode && !identifierValue) {
-          throw new Error("Please select a box before pushing changes in inventory mode.");
-        }
-
-        let updatedResults = results.map(result => ({
-          ...result,
-          timestamp: Date.now(),
-          modifiedBy: Array.isArray(result.modifiedBy) 
-            ? [...result.modifiedBy, user]
-            : result.modifiedBy 
-              ? [result.modifiedBy, user]
-              : [user],
-          [uniqueIdentifier]: identifierValue
-        }));
-
-        console.log("All values in results before pushing to backend:", JSON.stringify(updatedResults, null, 2));
-
-        const response = await fetch(API_ENDPOINTS.UPLOAD_SAMPLE, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedResults),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to upload sample data');
-        }
-
-        const backend_response = await response.json();
-        console.log("Backend response:", backend_response);
-
-        if (backend_response[uniqueIdentifier]) {
-          results = updatedResults.map(result => ({
+          let updatedResults = results.map(result => ({
             ...result,
-            [uniqueIdentifier]: backend_response[uniqueIdentifier]
+            timestamp: Date.now(),
+            modifiedBy: Array.isArray(result.modifiedBy) 
+              ? [...result.modifiedBy, user]
+              : result.modifiedBy 
+                ? [result.modifiedBy, user]
+                : [user],
+            identifier: selectedIdentifier
           }));
+
+          const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedResults),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to upload sample data');
+          }
+
+          const backend_response = await response.json();
+          console.log("Backend response:", backend_response);
+
+          results = updatedResults;
+          deepCopiedResults = JSON.parse(JSON.stringify(results));
+          resultsChanged = false;
+          unsavedChanges.set(false);
+          unsavedChangesByIndex.set({});
+        } else {
+          console.log("No changes to push");
         }
-
-        // After successful push, update deepCopiedResults
-        deepCopiedResults = JSON.parse(JSON.stringify(results));
-        resultsChanged = false;
-        unsavedChanges.set(false);
-        unsavedChangesByIndex.set({});
-        if (isInventoryMode) selectedBox = '';
-      } else {
-        console.log("No changes to push");
+      } catch (error) {
+        console.error("Error pushing changes to backend:", error.message);
+        errorMessage.set(error.message);
+      } finally {
+        isLoading.set(false);
       }
-    } catch (error) {
-      console.error("Error pushing changes to backend:", error.message);
-      errorMessage.set(error.message);
-    } finally {
-      isLoading.set(false);
     }
-  }
-
-
-
-
 
   function setUnsavedChanges(index: number, value: boolean) {
     unsavedChangesByIndex.update(changes => {
@@ -518,16 +527,6 @@
       isModalOpen = false;
     }
   }
-
-
-  $: {
-    if (isInventoryMode && selectedBox) {
-      console.log("Box selected in Inventory Mode. Push Changes button is now enabled.");
-    }
-  }
-
-
-
 </script>
 
 <div class="functional-display">
@@ -551,6 +550,30 @@
     {/if}
 
     {#if results.length > 0}
+      <div class="identifier-selection">
+        <h3>Select an identifier for these items:</h3>
+        <select bind:value={selectedIdentifier}>
+          <option value="">Choose an identifier</option>
+          {#each availableIdentifiers as identifier}
+            <option value={identifier}>{identifier}</option>
+          {/each}
+        </select>
+        <button on:click={toggleNewIdentifierCreation}>
+          {isCreatingNewIdentifier ? 'Cancel' : 'Create New Identifier'}
+        </button>
+      </div>
+
+      {#if isCreatingNewIdentifier}
+        <div class="new-identifier-creation">
+          <input 
+            type="text" 
+            bind:value={newIdentifierName} 
+            placeholder="Enter new identifier name"
+          />
+          <button on:click={createNewIdentifier}>Create</button>
+        </div>
+      {/if}
+
       {#each results as result, index}
         <div 
           class="result-card" 
@@ -606,18 +629,11 @@
                       {/if}
                     </div>
                   {/each}
-                  {#if result.box}
-                    <div class="property-item">
-                      <span class="property-key">Box:</span>
-                      <span class="property-value">{result.box}</span>
-                    </div>
-                  {/if}
                 </div>
               </div>
             {/if}
           </div>
           
-
           {#if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
             <div class="form-controls">
               <button on:click={() => addForm(index)}>Add Field</button>
@@ -631,17 +647,12 @@
                 <button 
                   on:click={() => confirmDropSample(index)} 
                   class="drop-sample"
-                  disabled={!(
-                    (isSamplingMode && result.sample_token && result.reference_no) ||
-                    (isInventoryMode && result.box && result.reference_no)
-                  )}
+                  disabled={!result.reference_no}
                 >
                   Drop Sample
                 </button>
               {/if}
             </div>
-
-
 
             {#if $displayedForms[index]}
               <div class="additional-forms">
@@ -712,36 +723,19 @@
       {/each}
 
       {#if !isGridView}
-       
         <div class="global-actions-wrapper">
           <div class="global-actions">
-            {#if isInventoryMode && results.length > 0}
-              <div class="box-selection">
-                <h3>Select a box for these items:</h3>
-                <select bind:value={selectedBox}>
-                  <option value="">Choose a box</option>
-                  {#each availableBoxes as box}
-                    <option value={box.id}>{box.name}</option>
-                  {/each}
-                </select>
-              </div>
-            {/if}
             <div class="action-buttons">
-
               <button 
                 on:click={pushChangesToBackend} 
-                disabled={$isLoading || 
-                          (isInventoryMode && !selectedBox) || 
-                          (!isInventoryMode && !Object.values($unsavedChangesByIndex).some(Boolean) && !resultsChanged && !resultsLengthChanged)}
+                disabled={$isLoading || !selectedIdentifier || (!resultsChanged && !resultsLengthChanged)}
               >
                 Push Changes
               </button>
-
               <button on:click={generatePDFWrapper}>Download PDF</button>
             </div>
           </div>
         </div>
-
       {/if}
     {:else}
       <p class="no-results">No results found</p>
@@ -755,8 +749,7 @@
   <div class="modal-overlay" 
        on:click={closeModal} 
        role="dialog"
-       aria-labelledby="modal-title"
-       >
+       aria-labelledby="modal-title">
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
     <div class="modal-content" 
@@ -787,6 +780,14 @@
     </div>
   </div>
 {/if}
+
+
+
+
+
+
+
+
 
 <style>
   .functional-display {

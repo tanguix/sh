@@ -23,6 +23,8 @@ export const API_ENDPOINTS = {
     UPLOAD_REFERENCE: `${BASE_URL}/upload/api/upload_reference`,
     FETCH_REF_KEYS: `${BASE_URL}/upload/api/fetch_reference_keys`,
     UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
+    FETCH_IDENTIFIERS: `${BASE_URL}/upload/api/fetch_identifiers`,
+    CREATE_IDENTIFIER: `${BASE_URL}/upload/api/create_identifier`,
     UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
     WORKFLOW_COMMIT: `${BASE_URL}/upload/api/workflow_commit`,
     FETCH_LOCKED_WORKFLOW: `${BASE_URL}/upload/api/fetch_locked_workflow`,

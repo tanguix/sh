@@ -23,7 +23,6 @@ if not os.path.exists(FILE_FOLDER):
 
 
 
-
 @upload_bp.route('/api/upload_reference', methods=['POST'])
 def upload_reference():
     try:
@@ -44,15 +43,10 @@ def upload_reference():
     
     except ValueError as e:
         logger.error(f"ValueError in upload_reference: {str(e)}")
-        return jsonify({"error": str(e)}), 409  # 409 Conflict for duplicate
+        return jsonify({"error": str(e)}), 409
     except Exception as e:
         logger.error(f"Unexpected error in upload_reference: {str(e)}")
-        logger.error(traceback.format_exc())
         return jsonify({"error": "An unexpected error occurred while uploading the reference"}), 500
-
-
-
-
 
 @upload_bp.route('/api/fetch_reference_keys', methods=['GET'])
 def fetch_reference_keys():
@@ -62,9 +56,6 @@ def fetch_reference_keys():
     except Exception as e:
         logger.error(f"Error fetching reference keys: {str(e)}")
         return jsonify({"error": "An unexpected error occurred while fetching reference keys"}), 500
-
-
-
 
 @upload_bp.route('/api/upload_data', methods=['POST'])
 def upload_data():
@@ -80,17 +71,10 @@ def upload_data():
         }), 200
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")
-        return jsonify({
-            "error": str(e)
-        }), 400
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error uploading sample: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({
-            "error": "An unexpected error occurred while uploading the sample."
-        }), 500
-
-
+        return jsonify({"error": "An unexpected error occurred while uploading the sample."}), 500
 
 @upload_bp.route('/api/upload_sample', methods=['POST'])
 def upload_sample():
@@ -98,39 +82,38 @@ def upload_sample():
         data = request.json
         if not isinstance(data, list):
             return jsonify({"error": "Invalid data format, expected a list of documents"}), 400
-
-        sample_batch = ItemBatch(data)
-
-        # Check if we're removing a sample
+        
+        mode = request.args.get('mode', 'normal')
+        
+        sample_batch = ItemBatch(data, mode=mode)
+        
         if data and '_remove' in data[0] and data[0]['_remove']:
-            sample_token = data[0].get('sample_token')
-            reference_no = data[0].get('reference_no')
-            
-            if not sample_token or not reference_no:
-                return jsonify({"error": "Sample token and reference number are required for removal"}), 400
-            
-            removed_ids = sample_batch.remove_sample(data[0])
-            
-            response = {
-                "message": "Sample removed successfully",
-                "removed_ids": removed_ids,
-                "sample_token": sample_token,
-                "reference_no": reference_no
-            }
+            response = sample_batch.remove_item(data[0])
         else:
-            # Regular save operation
-            result = sample_batch.save_items()
-            response = {
-                "message": "Samples processed successfully",
-                "inserted_ids": result.inserted_ids,
-                "updated_ids": result.modified_ids,
-                "sample_token": sample_batch.main_sample_token
-            }
-
+            response = sample_batch.save_items()
+        
         return jsonify(response), 201
     except Exception as e:
         logger.exception(f"Error in upload_sample: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+@upload_bp.route('/api/fetch_identifiers', methods=['GET'])
+def fetch_identifiers():
+    mode = request.args.get('mode', 'normal')
+    identifiers = ItemBatch.get_identifiers(mode)
+    return jsonify({"identifiers": identifiers})
+
+@upload_bp.route('/api/create_identifier', methods=['POST'])
+def create_identifier():
+    mode = request.args.get('mode', 'normal')
+    name = request.json.get('name')
+    
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    
+    new_identifier = ItemBatch.create_identifier(mode, name)
+    return jsonify({"identifier": new_identifier})
 
 
 

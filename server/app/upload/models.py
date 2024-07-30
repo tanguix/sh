@@ -183,43 +183,45 @@ class Item:
 
 
 class ItemBatch:
-    def __init__(self, items):
+    def __init__(self, items, mode='normal'):
         self.items = items
-        self.main_sample_token = self._determine_main_sample_token()
-        self.timestamp = int(time.time() * 1000)  # Current time in milliseconds
-        logger.info(f"ItemBatch initialized with {len(items)} items and main_sample_token: {self.main_sample_token}")
-
-    def _determine_main_sample_token(self):
-        for item in self.items:
-            if 'sample_token' in item and item['sample_token']:
-                return item['sample_token']
-        return str(uuid.uuid4())
-
-    def remove_sample(self, sample_data):
-        logger.info(f"Attempting to remove sample: {sample_data}")
-        
-        query = {key: value for key, value in sample_data.items() if key not in ['_remove']}
-        
-        items_to_remove = list(db.samples_list.find(query))
-        
-        if not items_to_remove:
-            logger.warning(f"No items found matching the criteria: {query}")
-            return []
-        
-        result = db.samples_list.delete_many(query)
-        
-        removed_ids = [str(item['_id']) for item in items_to_remove]
-        logger.info(f"Removed {result.deleted_count} items matching the criteria. IDs: {removed_ids}")
-        
-        return removed_ids
+        self.mode = mode
+        self.identifier = self._generate_identifier()
+        self.timestamp = int(time.time() * 1000)
+        self.collection = self._determine_collection()
 
 
 
+
+    def _generate_identifier(self):
+        prefix = "INV" if self.mode == 'inventory' else "SAM"
+        return f"{prefix}_{str(uuid.uuid4())[:8]}"
+
+    def _determine_collection(self):
+        return db.inventory if self.mode == 'inventory' else db.samples_list
+
+
+    def remove_item(self, item_data):
+        reference_no = item_data.get('reference_no')
+        if not reference_no:
+            raise ValueError("Reference number is required for removal")
+        
+        query = {
+            "identifier": self.identifier,
+            "reference_no": reference_no
+        }
+        result = self.collection.delete_many(query)
+        
+        return {
+            "message": "Item removed successfully",
+            "removed_count": result.deleted_count,
+            "identifier": self.identifier,
+            "reference_no": reference_no
+        }
 
 
 
     def save_items(self):
-        logger.info("Starting save_items method")
         try:
             items_to_update = []
             items_to_insert = []
@@ -229,29 +231,25 @@ class ItemBatch:
                 existing_item = self._find_existing_item(item)
                 
                 if existing_item:
-                    if existing_item['sample_token'] != self.main_sample_token:
-                        new_item = self._process_item(item)
-                        items_to_insert.append(new_item)
-                    else:
-                        update_operation = self._prepare_update_operation(item, existing_item)
-                        if update_operation:
-                            items_to_update.append((existing_item['_id'], update_operation))
+                    update_operation = self._prepare_update_operation(item, existing_item)
+                    if update_operation:
+                        items_to_update.append((existing_item['_id'], update_operation))
                 else:
                     new_item = self._process_item(item)
                     items_to_insert.append(new_item)
                 
                 processed_reference_nos.add(item.get('reference_no'))
 
-            logger.info(f"Processed {len(self.items)} items")
-            logger.info(f"Items to update: {len(items_to_update)}")
-            logger.info(f"Items to insert: {len(items_to_insert)}")
-            logger.info(f"Processed reference numbers: {processed_reference_nos}")
-
             updated_ids = self._perform_bulk_update(items_to_update)
             inserted_ids = self._insert_new_items(items_to_insert)
             self._remove_obsolete_items(processed_reference_nos)
 
-            return self._create_result(inserted_ids, updated_ids)
+            return {
+                "message": "Items processed successfully",
+                "inserted_ids": inserted_ids,
+                "updated_ids": updated_ids,
+                "identifier": self.identifier
+            }
 
         except Exception as e:
             logger.exception(f"Error in save_items: {str(e)}")
@@ -259,15 +257,39 @@ class ItemBatch:
 
 
 
+    def _find_existing_item(self, item):
+        query = {
+            'reference_no': item['reference_no'],
+            'identifier': self.identifier
+        }
+        return self.collection.find_one(query)
+
+    def _process_item(self, item):
+        processed_item = {
+            "timestamp": self.timestamp,
+            "identifier": self.identifier
+        }
+
+        for key, value in item.items():
+            if key not in ['_id', 'timestamp', 'identifier']:
+                if key == 'inventory':
+                    processed_item[key] = value
+                    processed_item['calculated_inventory'] = self._calculate_inventory(value)
+                else:
+                    processed_item[key] = value
+        return processed_item
+
+
+
     def _prepare_update_operation(self, new_item, existing_item):
         update_operation = {'$set': {}, '$unset': {}}
         
         for key in existing_item:
-            if key not in new_item and key not in ['_id', 'sample_token', 'timestamp', 'original_inventory']:
+            if key not in new_item and key not in ['_id', 'identifier', 'timestamp', 'original_inventory']:
                 update_operation['$unset'][key] = ""
 
         for key, value in new_item.items():
-            if key not in ['_id', 'sample_token', 'timestamp', 'original_inventory']:
+            if key not in ['_id', 'identifier', 'timestamp', 'original_inventory']:
                 if value is None:
                     update_operation['$unset'][key] = ""
                 else:
@@ -288,10 +310,6 @@ class ItemBatch:
 
         return update_operation
 
-
-
-
-
     def _perform_bulk_update(self, items_to_update):
         updated_ids = []
         if items_to_update:
@@ -301,7 +319,7 @@ class ItemBatch:
             ]
             
             if bulk_operations:
-                update_result = db.samples_list.bulk_write(bulk_operations)
+                update_result = self.collection.bulk_write(bulk_operations)
                 updated_ids = [str(item_id) for item_id, _ in items_to_update]
                 logger.info(f"Updated {update_result.modified_count} existing items. Updated IDs: {updated_ids}")
         return updated_ids
@@ -309,58 +327,39 @@ class ItemBatch:
     def _insert_new_items(self, items_to_insert):
         inserted_ids = []
         if items_to_insert:
-            insert_result = db.samples_list.insert_many(items_to_insert)
+            insert_result = self.collection.insert_many(items_to_insert)
             inserted_ids = [str(id) for id in insert_result.inserted_ids]
             logger.info(f"Inserted {len(inserted_ids)} new items. Inserted IDs: {inserted_ids}")
         return inserted_ids
 
     def _remove_obsolete_items(self, processed_reference_nos):
-        result = db.samples_list.delete_many({
-            'sample_token': self.main_sample_token,
+        result = self.collection.delete_many({
+            'identifier': self.identifier,
             'reference_no': {'$nin': list(processed_reference_nos)}
         })
-        logger.info(f"Removed {result.deleted_count} obsolete items from the main set.")
-
-
-
-    def _process_item(self, item):
-        processed_item = {
-            "sample_token": self.main_sample_token,
-            "timestamp": self.timestamp
-        }
-        for key, value in item.items():
-            if key not in ['_id', 'sample_token', 'timestamp', 'original_inventory', 'calculated_inventory']:
-                if key == 'inventory':
-                    processed_item[key] = value
-                    processed_item['calculated_inventory'] = self._calculate_inventory(value)
-                else:
-                    processed_item[key] = value
-        return processed_item
+        logger.info(f"Removed {result.deleted_count} obsolete items from the set.")
 
     def _calculate_inventory(self, inventory):
         return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
 
+    @staticmethod
+    def get_identifiers(mode):
+        collection = db.inventory if mode == 'inventory' else db.samples_list
+        pipeline = [
+            {"$group": {"_id": "$identifier"}},
+            {"$project": {"identifier": "$_id", "_id": 0}}
+        ]
+        identifiers = list(collection.aggregate(pipeline))
+        return [i['identifier'] for i in identifiers]
 
+    @staticmethod
+    def create_identifier(mode, name):
+        prefix = "INV" if mode == 'inventory' else "SAM"
+        new_identifier = f"{prefix}_{name}_{str(uuid.uuid4())[:8]}"
+        # Here you might want to store the new identifier in a separate collection
+        # For now, we'll just return it
+        return new_identifier
 
-
-    def _find_existing_item(self, item):
-        if 'reference_no' in item:
-            existing = db.samples_list.find_one({
-                'reference_no': item['reference_no'],
-                'sample_token': self.main_sample_token
-            })
-            if existing:
-                logger.info(f"Found existing item with reference_no: {item['reference_no']} in main set")
-                return existing
-        return None
-
-    def _create_result(self, inserted_ids, updated_ids):
-        class Result:
-            def __init__(self, inserted_ids, modified_ids):
-                self.inserted_ids = inserted_ids or []
-                self.modified_ids = modified_ids
-
-        return Result(inserted_ids, updated_ids)
 
 
 
