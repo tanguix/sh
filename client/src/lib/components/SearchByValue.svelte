@@ -91,22 +91,23 @@
     function clearResults() {
         results = [];
         deepCopiedResults = [];
-        console.log("Results cleared due to mode switch");
+        // console.log("Results cleared due to mode switch");
     }
 
 
 
     function resetSearch() {
+        console.log("resetSearch called. Current mode:", searchOption);
         if (isInventoryMode) {
             searchCriteria = [{ key: 'total_inventory', value: '' }];
-            keys = ['total_inventory', ...allowedKeys]; // Include both total_inventory and other keys
         } else {
             searchCriteria = [{ key: '', value: '' }];
-            keys = [...allowedKeys]; // Only include allowed keys for other modes
         }
+        keys = isInventoryMode ? ['total_inventory', ...allowedKeys] : [...allowedKeys];
         selectedSamplingCollection = '';
         selectedCollectionName = '';
         selectedInventoryCollection = '';
+        // console.log("Reset search. New search criteria:", JSON.stringify(searchCriteria));
     }
 
 
@@ -120,6 +121,7 @@
         } else {
             selectedCollectionName = value;
         }
+        // console.log("Selected collection:", value);
         updateKeys();
     }
 
@@ -225,11 +227,12 @@
 
 
 
-
     // result count
     let resultCount: number = 0;
 
     async function search() {
+        // console.log("Search function called. searchCriteria:", JSON.stringify(searchCriteria));
+
         let searchCollection = isSamplingMode ? selectedSamplingCollection : 
                                isInventoryMode ? selectedInventoryCollection : 
                                selectedCollectionName;
@@ -239,8 +242,15 @@
             return;
         }
 
+        // Ensure total_inventory is always the key in inventory mode
+        if (isInventoryMode && (searchCriteria.length === 0 || searchCriteria[0].key !== 'total_inventory')) {
+            searchCriteria = [{ key: 'total_inventory', value: searchCriteria[0]?.value || '' }];
+        }
+
         // Filter out any criteria with empty key or value
         const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
+
+        // console.log("Valid criteria:", JSON.stringify(validCriteria));
 
         if (validCriteria.length === 0) {
             console.error('At least one valid search criterion must be provided');
@@ -250,7 +260,7 @@
 
         try {
 
-            const processedCriteria = validCriteria.map(criteria => processCriteria(criteria));
+            const processedCriteria = validCriteria.map(processCriteria);
 
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,
@@ -264,7 +274,7 @@
                 let newResults = data.results || [];
                 resultCount = data.count || 0;
 
-                if (isSamplingMode) {
+                if (isSamplingMode || isInventoryMode) {
                     const oldLength = results.length;
                     if (isAddOperation) {
                         newResults = newResults.filter(newResult => 
@@ -295,7 +305,7 @@
             }
         } catch (error) {
             console.error('Error searching collection:', error);
-            if (!isSamplingMode) {
+            if (!isSamplingMode && !isInventoryMode) {
                 results = [];
                 deepCopiedResults = [];
                 console.log("Error occurred. Cleared previous results.");
@@ -306,13 +316,18 @@
 
 
 
-
-
-
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
+        if (isInventoryMode && (searchCriteria.length === 0 || searchCriteria[0].key !== 'total_inventory')) {
+            searchCriteria = [{ key: 'total_inventory', value: searchCriteria[0]?.value || '' }];
+        }
         search();
     }
+
+    // $: {
+        // console.log("searchCriteria changed:", JSON.stringify(searchCriteria));
+    // }
+
 </script>
 
 
@@ -342,21 +357,26 @@
 
                 <select class="custom-select" 
                         bind:value={criteria.key} 
-                        disabled={isInventoryMode && index === 0}
+                        disabled={isInventoryMode}
                         on:change={() => {
-                            if (isInventoryMode && index === 0) {
-                                criteria.key = 'inventory';
+                            if (isInventoryMode) {
+                                criteria.key = 'total_inventory';
                             }
                         }}>
                     <option value="" disabled selected={criteria.key === ''}>
-                        {(isInventoryMode && index === 0) ? 'inventory' : (criteria.key === '' ? 'Select a key' : criteria.key)}
+                        {isInventoryMode ? 'total_inventory' : (criteria.key === '' ? 'Select a key' : criteria.key)}
                     </option>
                     {#each keys as key}
                         <option value={key}>{key}</option>
                     {/each}
                 </select>
 
-                <input type="text" bind:value={criteria.value} placeholder="Enter search value">
+                <input 
+                  type="text" 
+                  bind:value={criteria.value} 
+                  placeholder="Enter search value"
+                  on:input={(e) => console.log("Input changed:", e.target.value)}
+                >
                 {#if index > 0}
                     <button on:click={() => removeSearchCriteria(index)}>-</button>
                 {/if}
@@ -369,7 +389,7 @@
         <button on:click={addSearchCriteria}>+</button>
 
         <div class="input-group">
-            {#if isSamplingMode}
+            {#if isSamplingMode || isInventoryMode}
                 <button on:click={() => toggleAddRemove(true)} class="sampling-button" class:active={isAddOperation}>Add</button>
                 <button on:click={() => toggleAddRemove(false)} class="sampling-button" class:active={!isAddOperation}>Remove</button>
             {:else}

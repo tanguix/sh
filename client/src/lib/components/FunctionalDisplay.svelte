@@ -415,7 +415,7 @@
     
     try {
       // Check for changes, including length changes
-      const hasChanges = isInventoryMode || 
+      const hasChanges = isSamplingMode || isInventoryMode || 
                          JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
                          resultsChanged ||
                          resultsLengthChanged;
