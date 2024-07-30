@@ -21,7 +21,7 @@
     let searchCriteria = [{ key: '', value: '' }];
     let resultsChanged = false;
 
-    const allowedKeys = ['reference_no', 'tags', 'categories', 'sample_token', 'timestamp', 'identifier'];
+    const allowedKeys = ['reference_no', 'tags', 'categories', 'total_inventory', 'timestamp', 'identifier'];
     const allowedCollections = ['samples', 'samples_list', 'inventory'];
 
     let collections: string[] = [];
@@ -66,44 +66,15 @@
 
 
 
-    function toggleMode() {
-        clearResults();
-        if (searchOption === '') {
-            searchOption = 'sampling';
-        } else if (searchOption === 'sampling') {
-            searchOption = 'inventory';
-        } else {
-            searchOption = '';
-        }
-        resetSearch();
-
-        if (searchOption === 'inventory') {
-            searchCriteria = [{ key: 'total_inventory', value: '' }];
-            keys = ['total_inventory', ...allowedKeys]; // Include both total_inventory and other keys
-        } else if (searchOption === '') {
-            searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
-        }
-    }
 
 
-
-
-    function clearResults() {
-        results = [];
-        deepCopiedResults = [];
-        // console.log("Results cleared due to mode switch");
-    }
 
 
 
     function resetSearch() {
         console.log("resetSearch called. Current mode:", searchOption);
-        if (isInventoryMode) {
-            searchCriteria = [{ key: 'total_inventory', value: '' }];
-        } else {
-            searchCriteria = [{ key: '', value: '' }];
-        }
-        keys = isInventoryMode ? ['total_inventory', ...allowedKeys] : [...allowedKeys];
+        searchCriteria = [{ key: '', value: '' }];
+        keys = [...allowedKeys];
         selectedSamplingCollection = '';
         selectedCollectionName = '';
         selectedInventoryCollection = '';
@@ -121,10 +92,11 @@
         } else {
             selectedCollectionName = value;
         }
+        // Clear the key selection when a new collection is selected
+        searchCriteria = [{ key: '', value: '' }];
         // console.log("Selected collection:", value);
         updateKeys();
     }
-
 
 
     async function updateKeys() {
@@ -137,19 +109,9 @@
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
-                    if (isInventoryMode) {
-                        keys = ['total_inventory', ...data.keys.filter(key => 
-                            allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
-                        )];
-                    } else {
-                        keys = data.keys.filter(key => 
-                            allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
-                        );
-                    }
-                    // Don't auto-select any key in normal mode
-                    if (!isSamplingMode && !isInventoryMode) {
-                        searchCriteria = searchCriteria.map(criteria => ({ ...criteria, key: '' }));
-                    }
+                    keys = data.keys.filter(key => 
+                        allowedKeys.includes(key) && (searchKey.length === 0 || searchKey.includes(key))
+                    );
                 } else {
                     throw new Error('Failed to fetch keys');
                 }
@@ -157,13 +119,32 @@
                 console.error('Error fetching keys:', error);
             }
         } else {
-            keys = isInventoryMode ? ['total_inventory', ...allowedKeys] : [];
+            keys = [...allowedKeys];
         }
+    }
+
+
+    function toggleMode() {
+        clearResults();
+        if (searchOption === '') {
+            searchOption = 'sampling';
+        } else if (searchOption === 'sampling') {
+            searchOption = 'inventory';
+        } else {
+            searchOption = '';
+        }
+        resetSearch();
     }
 
 
 
 
+
+    function clearResults() {
+        results = [];
+        deepCopiedResults = [];
+        // console.log("Results cleared due to mode switch");
+    }
 
 
 
@@ -348,6 +329,8 @@
         <h3><span class="mode-label">&nbsp;{searchOption === 'inventory' ? 'Inventory' : searchOption === 'sampling' ? 'Sampling' : 'Normal'} Mode</span></h3>
     </div>
 
+
+
     <div class="search-controls">
         <select class="custom-select" bind:value={selectedCollection} on:change={updateSelectedCollection}>
             <option value="">Select Collection</option>
@@ -356,22 +339,11 @@
             {/each}
         </select>
 
-
-
-
         {#each searchCriteria as criteria, index}
             <div class="search-criteria">
-
-                <select class="custom-select" 
-                        bind:value={criteria.key} 
-                        disabled={isInventoryMode}
-                        on:change={() => {
-                            if (isInventoryMode) {
-                                criteria.key = 'total_inventory';
-                            }
-                        }}>
+                <select class="custom-select" bind:value={criteria.key}>
                     <option value="" disabled selected={criteria.key === ''}>
-                        {isInventoryMode ? 'total_inventory' : (criteria.key === '' ? 'Select a key' : criteria.key)}
+                        Select a key
                     </option>
                     {#each keys as key}
                         <option value={key}>{key}</option>

@@ -390,7 +390,6 @@ class ItemBatch:
 
 
 
-
 class Workflow:
     def __init__(self, name, workflow_id, is_locked, status, owner, timestamp=None):
         self._id = ObjectId()
