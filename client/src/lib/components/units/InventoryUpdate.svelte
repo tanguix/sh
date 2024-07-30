@@ -66,6 +66,10 @@
   .inventory-update {
     margin-top: 20px;
   }
+  .inventory-update button {
+    color: white;
+    background-color: #007bff;
+  }
   .input-group {
     display: flex;
     gap: 10px;

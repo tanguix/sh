@@ -1,6 +1,7 @@
 
 
 
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
@@ -9,6 +10,8 @@
   import { writable } from 'svelte/store';
   import { unsavedChanges } from '$lib/utils/vars';
   import { generatePDF } from '$lib/utils/pdf';
+  import InventoryUpdate from '$lib/components/units/InventoryUpdate.svelte';  // Add this line
+
 
   interface InventoryItem {
     putIn: number;
@@ -33,7 +36,6 @@
   export let results: Sample[] = [];
   export let deepCopiedResults: Sample[] = [];
   export let searchOption: string = '';
-  const clientSideSearchOption = writable('');
   export let resultsChanged = false;
   export let resultCount: number = 0;
 
@@ -230,24 +232,26 @@
 
   function confirmDropSample(index: number) {
     const result = results[index];
-    const canDrop = (isSamplingMode && result.sample_token && result.reference_no) ||
-                    (isInventoryMode && result.box && result.reference_no);
+    const canDrop = result.reference_no && result.identifier && (isSamplingMode || isInventoryMode);
     
     if (canDrop) {
       pendingRemoval.update(pending => {
         pending[index] = true;
         return pending;
       });
+    } else {
+      errorMessage.set("Cannot drop sample: Missing reference number or identifier");
     }
   }
 
   async function dropSample(index: number) {
     const sampleToDelete = results[index];
     const referenceNo = sampleToDelete.reference_no;
+    const identifier = sampleToDelete.identifier;
 
-    if (!referenceNo) {
-      console.error("Reference number is missing");
-      errorMessage.set("Unable to drop sample: Missing reference number");
+    if (!referenceNo || !identifier) {
+      console.error("Reference number or identifier is missing");
+      errorMessage.set("Unable to drop sample: Missing reference number or identifier");
       return;
     }
 
@@ -255,12 +259,13 @@
     errorMessage.set('');
 
     try {
-      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
+      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(identifier)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([{ 
           _remove: true, 
           reference_no: referenceNo,
+          identifier: identifier,
           ...sampleToDelete
         }]),
       });
@@ -297,7 +302,7 @@
         return pending;
       });
 
-      console.log(`Sample with reference number ${referenceNo} dropped successfully`);
+      console.log(`Sample with reference number ${referenceNo} and identifier ${identifier} dropped successfully`);
 
     } catch (error) {
       console.error("Error dropping sample:", error.message);
@@ -456,8 +461,6 @@
   async function pushChangesToBackend() {
     isLoading.set(true);
     errorMessage.set('');
-    
-
 
     try {
       const hasChanges = JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
@@ -542,23 +545,17 @@
   }
 
 
-
-
   function handleInventoryUpdate(event: CustomEvent<{referenceNo: string, newEntry: InventoryItem}>) {
     const { referenceNo, newEntry } = event.detail;
     const index = results.findIndex(item => item.reference_no === referenceNo);
     if (index !== -1) {
       results[index].inventory = [...results[index].inventory, newEntry];
       results[index].total_inventory = calculateTotalInventory(results[index].inventory);
-      
-      // Clear the newPutIn and newTakeOut values
-      results[index].newPutIn = 0;
-      results[index].newTakeOut = 0;
-      
       results = [...results]; // trigger update
       setUnsavedChanges(index, true);
     }
   }
+
 
 
 
@@ -571,12 +568,6 @@
     ($removeClickCounts[index] || 0)
   );
 </script>
-
-
-
-
-
-
 
 <div class="functional-display">
   <div class="view-toggle">
@@ -660,60 +651,20 @@
           </div>
           
           {#if isInventoryMode && (!isGridView || (isGridView && expandedItems.has(index)))}
-            <div class="inventory-update">
-              <h4>Update Inventory</h4>
 
+            <InventoryUpdate
+              inventory={result.inventory}
+              referenceNo={result.reference_no}
+              on:update={handleInventoryUpdate}
+            />
 
-              <div class="input-group">
-                <label>
-                  Put In:
-                  <input type="number" bind:value={result.newPutIn} min="0">
-                </label>
-                <label>
-                  Take Out:
-                  <input type="number" bind:value={result.newTakeOut} min="0">
-                </label>
-              </div>
-              <button on:click={() => handleInventoryUpdate({
-                detail: {
-                  referenceNo: result.reference_no,
-                  newEntry: {
-                    putIn: result.newPutIn || 0,
-                    takeOut: result.newTakeOut || 0,
-                    by: get(page).data.user.name,
-                    timestamp: Date.now()
-                  }
-                }
-              })}>Add Entry</button>
+          {/if}
 
-
-              <h4>Inventory History</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Put In</th>
-                    <th>Take Out</th>
-                    <th>By</th>
-                    <th>Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each result.inventory as item}
-                    <tr>
-                      <td>{item.putIn}</td>
-                      <td>{item.takeOut}</td>
-                      <td>{item.by}</td>
-                      <td>{new Date(item.timestamp).toLocaleString()}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {:else if isEditingEnabled && (!isGridView || (isGridView && expandedItemIndex === index))}
+          {#if isEditingEnabled && (!isGridView || (isGridView && expandedItems.has(index)))}
             <div class="form-controls">
-              <button on:click={() => addForm(index)}>Add Field</button>
+              <button on:click={() => addForm(index)} disabled={isInventoryMode}>Add Field</button>
               {#if canRemove[index]}
-                <button on:click={() => removeKey(index)}>Remove Field</button>
+                <button on:click={() => removeKey(index)} disabled={isInventoryMode}>Remove Field</button>
               {/if}
               {#if $pendingRemoval[index]}
                 <button on:click={() => dropSample(index)} class="update-drop">Confirm Drop</button>
@@ -722,7 +673,7 @@
                 <button 
                   on:click={() => confirmDropSample(index)} 
                   class="drop-sample"
-                  disabled={!result.reference_no}
+                  disabled={!result.reference_no || !result.identifier}
                 >
                   Drop Sample
                 </button>
@@ -842,7 +793,6 @@
   </div>
 </div>
 
-
 {#if isModalOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -881,11 +831,7 @@
   </div>
 {/if}
 
-
-
 <style>
-
-
 .inventory_details {
   margin-left: 10px;
   border: solid 1px #ccc;
@@ -1254,7 +1200,6 @@ button {
 
 input[type="text"],
 input[type="date"],
-input[type="number"],
 select {
   padding: 10px 12px;
   font-size: 14px;
@@ -1267,7 +1212,6 @@ select {
 
 input[type="text"]:focus,
 input[type="date"]:focus,
-input[type="number"]:focus,
 select:focus {
   outline: none;
   border-color: #007bff;
@@ -1403,6 +1347,7 @@ select:focus {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+
 }
 
 .global-actions button {
@@ -1444,71 +1389,6 @@ select:focus {
   text-align: center;
 }
 
-
-.inventory-update {
-  margin-top: 20px;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  padding: 15px;
-}
-
-.inventory-update h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.inventory-update .input-group {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.inventory-update label {
-  display: flex;
-  flex-direction: column;
-  font-size: 14px;
-  color: #555;
-}
-
-.inventory-update input[type="number"] {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.inventory-update button {
-  padding: 8px 16px;
-  font-size: 14px;
-  color: #fff;
-  background-color: #007bff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.inventory-update button:hover {
-  background-color: #0056b3;
-}
-
-.inventory-update table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-}
-
-.inventory-update th, .inventory-update td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-
-.inventory-update th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
 
 .modal-overlay {
   font-family: Ubuntu;
@@ -1620,11 +1500,5 @@ select:focus {
     width: 100%;
   }
 
-  .inventory-update .input-group {
-    flex-direction: column;
-  }
 }
-
-
 </style>
-
