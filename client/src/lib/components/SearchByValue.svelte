@@ -259,12 +259,12 @@
 
 
         try {
-
             const processedCriteria = validCriteria.map(processCriteria);
 
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,
-                criteria: JSON.stringify(processedCriteria)
+                criteria: JSON.stringify(processedCriteria),
+                mode: searchOption
             });
 
             const response = await fetch(url);
@@ -273,6 +273,13 @@
                 const data = await response.json();
                 let newResults = data.results || [];
                 resultCount = data.count || 0;
+
+                // Remove duplicates based on reference_no and identifier
+                newResults = newResults.filter((result, index, self) =>
+                    index === self.findIndex((t) => (
+                        t.reference_no === result.reference_no && t.identifier === result.identifier
+                    ))
+                );
 
                 if (isSamplingMode || isInventoryMode) {
                     const oldLength = results.length;

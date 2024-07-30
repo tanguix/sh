@@ -44,7 +44,6 @@ def find_key():
 
 
 
-
 @search_bp.route('/api/searched_result', methods=['GET'])
 def searched_result():
     collection_name = request.args.get('collection')
@@ -59,7 +58,7 @@ def searched_result():
         backend_local_url = current_app.config['BACKEND_LOCAL_URL']
         results, count = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
         if results:
-            logger.info(f"Search successful. Returned {count} results.")
+            logger.info(f"Search successful. Returned {count} unique results.")
             return jsonify({"results": results, "count": count}), 200
         else:
             logger.info(f"No matching documents found for query in collection {collection_name}")

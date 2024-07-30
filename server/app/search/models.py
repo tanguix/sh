@@ -107,7 +107,6 @@ class Collection:
                 elif key == 'total_inventory':
                     inventory_query = Collection.process_inventory_query(key, value, operator)
                     query["$and"].append(inventory_query)
-                    logger.debug(f"Inventory query: {inventory_query}")
                 else:
                     query["$and"].append(Collection.process_general_query(key, value))
             except ValueError as e:
@@ -117,16 +116,25 @@ class Collection:
         logger.debug(f"Final query: {query}")
 
         try:
-            # Get the count of matching documents
-            count = db[collection_name].count_documents(query)
-            logger.info(f"Number of matching documents: {count}")
+            # Use aggregation to ensure unique results based on reference_no and identifier
+            pipeline = [
+                {"$match": query},
+                {"$group": {
+                    "_id": {
+                        "reference_no": "$reference_no",
+                        "identifier": "$identifier"
+                    },
+                    "doc": {"$first": "$$ROOT"}
+                }},
+                {"$replaceRoot": {"newRoot": "$doc"}}
+            ]
+
+            results = list(db[collection_name].aggregate(pipeline))
+            count = len(results)
 
             if count == 0:
                 logger.info(f"No matching documents found for query in collection {collection_name}")
                 return None, 0
-
-            # Fetch the actual documents
-            results = list(db[collection_name].find(query))
 
             processed_results = Collection.process_results(results, backend_local_url)
             logger.debug(f"Processed {len(processed_results)} results")
@@ -135,6 +143,7 @@ class Collection:
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
             return None, 0
+
 
 
 

@@ -264,6 +264,11 @@ class ItemBatch:
         }
         return self.collection.find_one(query)
 
+
+    def _calculate_inventory(self, inventory):
+        return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
+
+
     def _process_item(self, item):
         processed_item = {
             "timestamp": self.timestamp,
@@ -274,11 +279,10 @@ class ItemBatch:
             if key not in ['_id', 'timestamp', 'identifier']:
                 if key == 'inventory':
                     processed_item[key] = value
-                    processed_item['calculated_inventory'] = self._calculate_inventory(value)
+                    processed_item['total_inventory'] = self._calculate_inventory(value)
                 else:
                     processed_item[key] = value
         return processed_item
-
 
 
     def _prepare_update_operation(self, new_item, existing_item):
@@ -289,7 +293,7 @@ class ItemBatch:
                 update_operation['$unset'][key] = ""
 
         for key, value in new_item.items():
-            if key not in ['_id', 'identifier', 'timestamp', 'original_inventory']:
+            if key not in ['_id', 'identifier', 'timestamp']:
                 if value is None:
                     update_operation['$unset'][key] = ""
                 else:
@@ -297,7 +301,7 @@ class ItemBatch:
                         update_operation['$set'][key] = value if isinstance(value, list) else [value]
                     elif key == 'inventory':
                         update_operation['$set'][key] = value
-                        update_operation['$set']['calculated_inventory'] = self._calculate_inventory(value)
+                        update_operation['$set']['total_inventory'] = self._calculate_inventory(value)
                     else:
                         update_operation['$set'][key] = value
         
@@ -309,6 +313,8 @@ class ItemBatch:
             del update_operation['$unset']
 
         return update_operation
+
+
 
     def _perform_bulk_update(self, items_to_update):
         updated_ids = []
@@ -338,9 +344,6 @@ class ItemBatch:
             'reference_no': {'$nin': list(processed_reference_nos)}
         })
         logger.info(f"Removed {result.deleted_count} obsolete items from the set.")
-
-    def _calculate_inventory(self, inventory):
-        return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
 
 
 
