@@ -209,97 +209,88 @@
 
     // result count
     let resultCount: number = 0;
+  async function search() {
+      let searchCollection = isSamplingMode ? selectedSamplingCollection : 
+                             isInventoryMode ? selectedInventoryCollection : 
+                             selectedCollectionName;
 
-    async function search() {
-        // console.log("Search function called. searchCriteria:", JSON.stringify(searchCriteria));
+      if (!searchCollection) {
+          console.error('Collection must be selected');
+          return;
+      }
 
-        let searchCollection = isSamplingMode ? selectedSamplingCollection : 
-                               isInventoryMode ? selectedInventoryCollection : 
-                               selectedCollectionName;
+      // Filter out any criteria with empty key or value
+      const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
 
-        if (!searchCollection) {
-            console.error('Collection must be selected');
-            return;
-        }
+      if (validCriteria.length === 0) {
+          console.error('At least one valid search criterion must be provided');
+          return;
+      }
 
-        // Ensure total_inventory is always the key in inventory mode
-        if (isInventoryMode && (searchCriteria.length === 0 || searchCriteria[0].key !== 'total_inventory')) {
-            searchCriteria = [{ key: 'total_inventory', value: searchCriteria[0]?.value || '' }];
-        }
+      try {
+          const processedCriteria = validCriteria.map(processCriteria);
 
-        // Filter out any criteria with empty key or value
-        const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
+          const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
+              collection: searchCollection,
+              criteria: JSON.stringify(processedCriteria),
+              mode: searchOption
+          });
 
-        // console.log("Valid criteria:", JSON.stringify(validCriteria));
+          const response = await fetch(url);
 
-        if (validCriteria.length === 0) {
-            console.error('At least one valid search criterion must be provided');
-            return;
-        }
+          if (response.ok) {
+              const data = await response.json();
+              let newResults = data.results || [];
+              resultCount = data.count || 0;
+
+              // Remove duplicates based on reference_no and identifier
+              newResults = newResults.filter((result, index, self) =>
+                  index === self.findIndex((t) => (
+                      t.reference_no === result.reference_no && t.identifier === result.identifier
+                  ))
+              );
+
+              if (isSamplingMode || isInventoryMode) {
+                  const oldLength = results.length;
+                  if (isAddOperation) {
+                      newResults = newResults.filter(newResult => 
+                          !results.some(existingResult => 
+                              existingResult.reference_no === newResult.reference_no
+                          )
+                      );
+                      results = [...results, ...newResults];
+                  } else {
+                      results = results.filter(result => 
+                          !newResults.some(newResult => 
+                              newResult.reference_no === result.reference_no
+                          )
+                      );
+                  }
+                  deepCopiedResults = JSON.parse(JSON.stringify(results));
+                  searchCriteria = [{ key: '', value: '' }];
+                  
+                  resultsChanged = oldLength !== results.length;
+                  resultCount = results.length;
+              } else {
+                  results = newResults;
+                  deepCopiedResults = JSON.parse(JSON.stringify(results));
+              }
+          } else {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Error searching collection');
+          }
+      } catch (error) {
+          console.error('Error searching collection:', error);
+          if (!isSamplingMode && !isInventoryMode) {
+              results = [];
+              deepCopiedResults = [];
+              console.log("Error occurred. Cleared previous results.");
+          }
+          resultCount = 0;
+      }
+  }
 
 
-        try {
-            const processedCriteria = validCriteria.map(processCriteria);
-
-            const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-                collection: searchCollection,
-                criteria: JSON.stringify(processedCriteria),
-                mode: searchOption
-            });
-
-            const response = await fetch(url);
-
-            if (response.ok) {
-                const data = await response.json();
-                let newResults = data.results || [];
-                resultCount = data.count || 0;
-
-                // Remove duplicates based on reference_no and identifier
-                newResults = newResults.filter((result, index, self) =>
-                    index === self.findIndex((t) => (
-                        t.reference_no === result.reference_no && t.identifier === result.identifier
-                    ))
-                );
-
-                if (isSamplingMode || isInventoryMode) {
-                    const oldLength = results.length;
-                    if (isAddOperation) {
-                        newResults = newResults.filter(newResult => 
-                            !results.some(existingResult => 
-                                existingResult.reference_no === newResult.reference_no
-                            )
-                        );
-                        results = [...results, ...newResults];
-                    } else {
-                        results = results.filter(result => 
-                            !newResults.some(newResult => 
-                                newResult.reference_no === result.reference_no
-                            )
-                        );
-                    }
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                    searchCriteria = [{ key: '', value: '' }];
-                    
-                    resultsChanged = oldLength !== results.length;
-                    resultCount = results.length;
-                } else {
-                    results = newResults;
-                    deepCopiedResults = JSON.parse(JSON.stringify(results));
-                }
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Error searching collection');
-            }
-        } catch (error) {
-            console.error('Error searching collection:', error);
-            if (!isSamplingMode && !isInventoryMode) {
-                results = [];
-                deepCopiedResults = [];
-                console.log("Error occurred. Cleared previous results.");
-            }
-            resultCount = 0;
-        }
-    }
 
 
     function toggleAddRemove(add: boolean) {
