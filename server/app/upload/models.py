@@ -837,7 +837,31 @@ class File:
         return file_info, None
 
 
+    @staticmethod
+    # TODO: if the path is not locating accurately, remove is won't happen, solve that later
+    def remove_files_for_section(section_id: str):
+        try:
+            # Find all files associated with the section
+            files = db.files.find({"section_id": section_id})
+            
+            print(SERVER_DIR)
+            for file in files:
+                # Remove the file from the filesystem
+                file_path = os.path.join(f'{SERVER_DIR}/files', file['path'])
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"Deleted file: {file_path}")
+                else:
+                    print(f"File not found on filesystem: {file_path}")
 
+            # Remove all file documents associated with the section from the database
+            result = db.files.delete_many({"section_id": section_id})
+            print(f"Removed {result.deleted_count} file documents from the database")
+
+            return result.deleted_count
+        except Exception as e:
+            print(f"Error removing files for section {section_id}: {str(e)}")
+            return 0
 
 
 
@@ -1188,6 +1212,7 @@ class HandleWorkflow:
 
 
 
+
     @staticmethod
     def _remove_section(data: Dict[str, Any]) -> Dict[str, Any]:
         workflow_id = data.get('workflow_id')
@@ -1207,6 +1232,9 @@ class HandleWorkflow:
         node = db.nodes.find_one({"node_id": node_id, "workflow_id": workflow_id})
         if not node:
             raise ValueError(f"Node with id {node_id} not found in workflow {workflow_id}")
+
+        # Remove associated files
+        files_removed = File.remove_files_for_section(section_id)
 
         # Remove the section from the sections collection
         section_result = db.sections.delete_one({"section_id": section_id, "node_id": node_id, "workflow_id": workflow_id})
@@ -1228,10 +1256,9 @@ class HandleWorkflow:
             "node_id": node_id,
             "section_id": section_id,
             "section_deleted": section_result.deleted_count,
-            "node_updated": node_result.modified_count
+            "node_updated": node_result.modified_count,
+            "files_removed": files_removed
         }
-
-
 
 
 
