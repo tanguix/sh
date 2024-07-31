@@ -128,7 +128,9 @@ def create_identifier():
 
 
 
-# --------------------------------------------- collective operation ----------------------------------------------
+# --------------------------------------------- workflow operation ----------------------------------------------
+
+
 
 
 # Update the API endpoint to handle potential multiple workflow error
@@ -263,6 +265,7 @@ def download_file(workflow_id, node_id, section_id, file_id):
     except Exception as e:
         logger.error(f"Error sending file: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
+
 
 
 

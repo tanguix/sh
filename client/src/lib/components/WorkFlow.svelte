@@ -2,8 +2,6 @@
 
 
 
-
-
 <script lang="ts">
   import { fade } from 'svelte/transition';
   import { onMount, afterUpdate } from 'svelte';
@@ -104,13 +102,7 @@
 
   function createDefaultSections(): Section[] {
     const sectionId = generateUniqueId('section', 'expense', []);
-    return [
-      {
-        section_id: sectionId,
-        label: 'Expense',
-        files: []
-      },
-    ];
+    return [];
   }
 
   // ------------------------------------------ Main WorkFlow Instruction (modify data sent to backend) ------------------------------------------
@@ -138,7 +130,7 @@
         node_id: nodeId,
         label: label,
         status: 'Sleep',
-        sections: createDefaultSections()
+        sections: [],
       };
     });
 
@@ -266,7 +258,7 @@
       node_id: newNodeId,
       label: newNodeLabel,
       status: 'Sleep',
-      sections: createDefaultSections()
+      sections: [],
     };
       
     const prevNode = workflows[workflowIndex].nodes.find(node => node.label.toLowerCase() === newNodePrevLabel.toLowerCase());
@@ -349,7 +341,7 @@
       return;
     }
 
-    const newSectionId = generateUniqueId('section', newSectionLabel.toLowerCase(), []);
+    const newSectionId = generateUniqueId('section', `${nodeId}-${newSectionLabel.toLowerCase()}`, []);
 
     workflows = workflows.map(workflow => {
       if (workflow.workflow_id === workflowId) {
@@ -1312,9 +1304,5 @@
   }
 
 </style>
-
-
-
-
 
 
