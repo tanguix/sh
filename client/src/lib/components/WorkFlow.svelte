@@ -380,6 +380,39 @@
     newSectionLabel = '';
   }
 
+
+  function removeSection(workflowId: string, nodeId: string, sectionId: string) {
+    workflows = workflows.map(workflow => {
+      if (workflow.workflow_id === workflowId) {
+        return {
+          ...workflow,
+          nodes: workflow.nodes.map(node => {
+            if (node.node_id === nodeId) {
+              return {
+                ...node,
+                sections: node.sections.filter(section => section.section_id !== sectionId)
+              };
+            }
+            return node;
+          })
+        };
+      }
+      return workflow;
+    });
+
+    emitChange(workflowId, { 
+      type: 'remove_section', 
+      data: { 
+        workflow_id: workflowId,
+        node_id: nodeId,
+        section_id: sectionId
+      } 
+    });
+  }
+
+
+
+
   function handleFileSelect(event: any, sectionId: any) {
     const input = event.target;
     const fileName = input.files.length > 0 
@@ -769,7 +802,18 @@
 
                     {#each node.sections as section}
                       <div>
-                        <h4>{section.label}</h4>
+                        <div class="section-header">
+                          <h4>{section.label}</h4>
+                          <button 
+                            class="drop-section-button" 
+                            on:click={() => removeSection(workflow.workflow_id, node.node_id, section.section_id)}
+                            disabled={workflow.is_locked}
+                          >
+                            Drop Section
+                          </button>
+                        </div>
+
+
                         {#if node.status === 'Active' && workflow.status !== 'created' }
                           <div class="file-upload">
                             <input 
@@ -1124,6 +1168,39 @@
     cursor: not-allowed;
   }
 
+
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .drop-section-button {
+    padding: 0.25rem 0.5rem;
+    background-color: #ffcdd2;
+    color: #c62828;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.3s ease;
+  }
+
+  .drop-section-button:hover {
+    background-color: #ef9a9a;
+  }
+
+  .drop-section-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+
+
+
+
   .input-button-group {
     display: flex;
     align-items: center;
@@ -1196,7 +1273,7 @@
     opacity: 0;
   }
 
-.icon-button:hover::before {
+  .icon-button:hover::before {
     opacity: 0;
     transform: translate(-50%, -50%) translateY(20px);
   }

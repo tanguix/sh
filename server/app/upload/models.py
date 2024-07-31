@@ -903,6 +903,8 @@ class HandleWorkflow:
                 return HandleWorkflow._add_node(data)
             elif change_type == 'add_section':
                 return HandleWorkflow._add_section(data)
+            elif change_type == 'remove_section':  # Add this new condition
+                return HandleWorkflow._remove_section(data)
             elif change_type == 'update_node_status':
                 return HandleWorkflow._update_node_status(data)
             elif change_type == 'update_lock_status':
@@ -1186,7 +1188,48 @@ class HandleWorkflow:
 
 
 
+    @staticmethod
+    def _remove_section(data: Dict[str, Any]) -> Dict[str, Any]:
+        workflow_id = data.get('workflow_id')
+        node_id = data.get('node_id')
+        section_id = data.get('section_id')
 
+        if not all([workflow_id, node_id, section_id]):
+            raise ValueError(f"Missing required data for removing section: {data}")
+
+        workflow = db.workflows.find_one({"workflow_id": workflow_id})
+        if not workflow:
+            raise ValueError(f"Workflow with id {workflow_id} not found")
+
+        if workflow.get('is_locked'):
+            raise ValueError(f"Cannot remove section. Workflow {workflow_id} is locked.")
+
+        node = db.nodes.find_one({"node_id": node_id, "workflow_id": workflow_id})
+        if not node:
+            raise ValueError(f"Node with id {node_id} not found in workflow {workflow_id}")
+
+        # Remove the section from the sections collection
+        section_result = db.sections.delete_one({"section_id": section_id, "node_id": node_id, "workflow_id": workflow_id})
+
+        # Remove the section_id from the node's section_ids array
+        node_result = db.nodes.update_one(
+            {"node_id": node_id},
+            {"$pull": {"section_ids": section_id}}
+        )
+
+        if section_result.deleted_count == 0:
+            raise ValueError(f"Section with id {section_id} not found or already removed")
+
+        print(f"\nRemoved section with id: {section_id} from node: {node_id}")
+
+        return {
+            "type": "remove_section",
+            "workflow_id": workflow_id,
+            "node_id": node_id,
+            "section_id": section_id,
+            "section_deleted": section_result.deleted_count,
+            "node_updated": node_result.modified_count
+        }
 
 
 

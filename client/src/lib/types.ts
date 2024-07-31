@@ -57,6 +57,7 @@ export interface Change {
     'add_node' | 
     'remove_node' | 
     'add_section' | 
+    'remove_section' |  // Add this new type
     'upload_file' | 
     'update_lock_status' |
     'update_node_status';
