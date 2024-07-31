@@ -24,7 +24,7 @@ pnpm-debug.log*
 # vscode
 .vscode
 
-# netlify
+# netlifsheety
 .netlify
 
 # macOS-specific files
@@ -36,8 +36,9 @@ __pycache__
 
 
 # directory store files uploaded
-server/images
+server/images/
 server/files/
+server/sheet/
 
 
 # font (too large) --> ignore all .ttf then use (*.ttf)
@@ -45,6 +46,12 @@ NotoSerifSC-Light.ttf
 
 # base64 font transfering file 
 # font.ts
+
+
+# excel related 
+*.xlsx
+*.csv
+
 
 
 

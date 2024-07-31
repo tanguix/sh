@@ -9,7 +9,7 @@
   import { eventBus } from '$lib/utils/eventBus';
   import { WORKFLOW_CHANGE_EVENT } from '$lib/utils/vars'
   // component 
-  import Pipeline from './Pipeline.svelte';
+  import Pipeline from '$lib/components/units/Pipeline.svelte';
   import Loader from '$lib/components/css/Loader.svelte';
 
   // New prop to receive user information

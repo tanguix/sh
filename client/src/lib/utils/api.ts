@@ -43,7 +43,7 @@ export const API_ENDPOINTS = {
 
     UPLOAD_EXCEL: `${BASE_URL}/excel/api/upload_excel`,
     PROCESS_EXCEL: `${BASE_URL}/excel/api/process_excel`,
-    DS_OPERATION: `${BASE_URL}/excel/api/operations`,
+    DS_OPERATION: `${BASE_URL}/excel/api/excel_operations`,
 
 
 
