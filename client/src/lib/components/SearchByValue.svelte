@@ -1,6 +1,8 @@
 
 
 
+
+
 <script lang="ts">
     import { onMount } from 'svelte';
     import FunctionalDisplay from './FunctionalDisplay.svelte';
@@ -18,7 +20,6 @@
     export let searchKey: string[] = [];
 
     let searchCriteria = [{ key: '', value: '' }];
-    let resultsChanged = false;
 
     const allowedKeys = ['reference_no', 'tags', 'categories', 'total_inventory', 'timestamp', 'identifier'];
     const allowedCollections = ['samples', 'samples_list', 'inventory'];
@@ -39,8 +40,6 @@
     $: selectedCollection = isSamplingMode ? selectedSamplingCollection : 
                             isInventoryMode ? selectedInventoryCollection : 
                             selectedCollectionName;
-
-
 
     onMount(async () => {
         await fetchCollections();
@@ -63,24 +62,13 @@
         }
     }
 
-
-
-
-
-
-
-
     function resetSearch() {
-        console.log("resetSearch called. Current mode:", searchOption);
         searchCriteria = [{ key: '', value: '' }];
         keys = [...allowedKeys];
         selectedSamplingCollection = '';
         selectedCollectionName = '';
         selectedInventoryCollection = '';
-        // console.log("Reset search. New search criteria:", JSON.stringify(searchCriteria));
     }
-
-
 
     function updateSelectedCollection(event: Event) {
         const value = (event.target as HTMLSelectElement).value;
@@ -91,12 +79,9 @@
         } else {
             selectedCollectionName = value;
         }
-        // Clear the key selection when a new collection is selected
         searchCriteria = [{ key: '', value: '' }];
-        // console.log("Selected collection:", value);
         updateKeys();
     }
-
 
     async function updateKeys() {
         let collectionToUse = isSamplingMode ? selectedSamplingCollection : 
@@ -122,7 +107,6 @@
         }
     }
 
-
     function toggleMode() {
         clearResults();
         if (searchOption === '') {
@@ -135,17 +119,10 @@
         resetSearch();
     }
 
-
-
-
-
     function clearResults() {
         results = [];
         deepCopiedResults = [];
-        // console.log("Results cleared due to mode switch");
     }
-
-
 
     function addSearchCriteria() {
         searchCriteria = [...searchCriteria, { key: '', value: '' }];
@@ -157,22 +134,17 @@
         }
     }
 
-
-
-
     function processCriteria(criteria: { key: string, value: string }) {
         const value = criteria.value.trim();
         if (value.includes(',')) {
             const [firstPart, secondPart] = value.split(',').map(s => s.trim());
             if (secondPart === '>' || secondPart === '<') {
-                // Special case: "value, >" or "value, <"
                 return {
                     key: criteria.key,
                     value: firstPart,
                     operator: secondPart
                 };
             } else {
-                // Range search
                 return {
                     key: criteria.key,
                     value: [firstPart, secondPart],
@@ -180,7 +152,6 @@
                 };
             }
         } else if (value.includes('<')) {
-            // Less than a specific value
             const criteriaValue = value.replace('<', '').trim();
             return {
                 key: criteria.key,
@@ -188,7 +159,6 @@
                 operator: '<'
             };
         } else if (value.includes('>')) {
-            // Greater than a specific value
             const criteriaValue = value.replace('>', '').trim();
             return {
                 key: criteria.key,
@@ -196,7 +166,6 @@
                 operator: '>'
             };
         } else {
-            // Exact value search
             return {
                 key: criteria.key,
                 value: value,
@@ -205,108 +174,88 @@
         }
     }
 
-
-
-    // result count
     let resultCount: number = 0;
-  async function search() {
-      let searchCollection = isSamplingMode ? selectedSamplingCollection : 
-                             isInventoryMode ? selectedInventoryCollection : 
-                             selectedCollectionName;
+    async function search() {
+        let searchCollection = isSamplingMode ? selectedSamplingCollection : 
+                               isInventoryMode ? selectedInventoryCollection : 
+                               selectedCollectionName;
 
-      if (!searchCollection) {
-          console.error('Collection must be selected');
-          return;
-      }
+        if (!searchCollection) {
+            console.error('Collection must be selected');
+            return;
+        }
 
-      // Filter out any criteria with empty key or value
-      const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
+        const validCriteria = searchCriteria.filter(criteria => criteria.key && criteria.value.trim());
 
-      if (validCriteria.length === 0) {
-          console.error('At least one valid search criterion must be provided');
-          return;
-      }
+        if (validCriteria.length === 0) {
+            console.error('At least one valid search criterion must be provided');
+            return;
+        }
 
-      try {
-          const processedCriteria = validCriteria.map(processCriteria);
+        try {
+            const processedCriteria = validCriteria.map(processCriteria);
 
-          const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
-              collection: searchCollection,
-              criteria: JSON.stringify(processedCriteria),
-              mode: searchOption
-          });
+            const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
+                collection: searchCollection,
+                criteria: JSON.stringify(processedCriteria),
+                mode: searchOption
+            });
 
-          const response = await fetch(url);
+            const response = await fetch(url);
 
-          if (response.ok) {
-              const data = await response.json();
-              let newResults = data.results || [];
-              resultCount = data.count || 0;
+            if (response.ok) {
+                const data = await response.json();
+                let newResults = data.results || [];
+                resultCount = data.count || 0;
 
-              // Remove duplicates based on reference_no and identifier
-              newResults = newResults.filter((result, index, self) =>
-                  index === self.findIndex((t) => (
-                      t.reference_no === result.reference_no && t.identifier === result.identifier
-                  ))
-              );
+                newResults = newResults.filter((result, index, self) =>
+                    index === self.findIndex((t) => (
+                        t.reference_no === result.reference_no && t.identifier === result.identifier
+                    ))
+                );
 
-              if (isSamplingMode || isInventoryMode) {
-                  const oldLength = results.length;
-                  if (isAddOperation) {
-                      newResults = newResults.filter(newResult => 
-                          !results.some(existingResult => 
-                              existingResult.reference_no === newResult.reference_no
-                          )
-                      );
-                      results = [...results, ...newResults];
-                  } else {
-                      results = results.filter(result => 
-                          !newResults.some(newResult => 
-                              newResult.reference_no === result.reference_no
-                          )
-                      );
-                  }
-                  deepCopiedResults = JSON.parse(JSON.stringify(results));
-                  searchCriteria = [{ key: '', value: '' }];
-                  
-                  resultsChanged = oldLength !== results.length;
-                  resultCount = results.length;
-              } else {
-                  results = newResults;
-                  deepCopiedResults = JSON.parse(JSON.stringify(results));
-              }
-          } else {
-              const errorData = await response.json();
-              throw new Error(errorData.error || 'Error searching collection');
-          }
-      } catch (error) {
-          console.error('Error searching collection:', error);
-          if (!isSamplingMode && !isInventoryMode) {
-              results = [];
-              deepCopiedResults = [];
-              console.log("Error occurred. Cleared previous results.");
-          }
-          resultCount = 0;
-      }
-  }
-
-
-
+                if (isSamplingMode || isInventoryMode) {
+                    if (isAddOperation) {
+                        newResults = newResults.filter(newResult => 
+                            !results.some(existingResult => 
+                                existingResult.reference_no === newResult.reference_no
+                            )
+                        );
+                        results = [...results, ...newResults];
+                    } else {
+                        results = results.filter(result => 
+                            !newResults.some(newResult => 
+                                newResult.reference_no === result.reference_no
+                            )
+                        );
+                    }
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                    searchCriteria = [{ key: '', value: '' }];
+                    
+                    resultCount = results.length;
+                } else {
+                    results = newResults;
+                    deepCopiedResults = JSON.parse(JSON.stringify(results));
+                }
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error searching collection');
+            }
+        } catch (error) {
+            console.error('Error searching collection:', error);
+            if (!isSamplingMode && !isInventoryMode) {
+                results = [];
+                deepCopiedResults = [];
+            }
+            resultCount = 0;
+        }
+    }
 
     function toggleAddRemove(add: boolean) {
         isAddOperation = add;
         search();
     }
-
-
-    // $: {
-        // console.log("searchCriteria changed:", JSON.stringify(searchCriteria));
-    // }
-
 </script>
-
-
-
 
 <div class="search-container">
     <div class="mode-switch">
@@ -315,8 +264,6 @@
         </button>
         <h3><span class="mode-label">&nbsp;{searchOption === 'inventory' ? 'Inventory' : searchOption === 'sampling' ? 'Sampling' : 'Normal'} Mode</span></h3>
     </div>
-
-
 
     <div class="search-controls">
         <select class="custom-select" bind:value={selectedCollection} on:change={updateSelectedCollection}>
@@ -348,9 +295,6 @@
             </div>
         {/each}
 
-
-
-
         <button on:click={addSearchCriteria}>+</button>
 
         <div class="input-group">
@@ -364,16 +308,15 @@
     </div>
 </div>
 
-
-
-
 <FunctionalDisplay 
   {results} 
   {deepCopiedResults} 
   {searchOption} 
-  {resultsChanged}
   {resultCount}
 />
+
+
+
 
 
 

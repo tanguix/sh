@@ -2,15 +2,21 @@
 
 
 
+
+
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, beforeUpdate } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { writable } from 'svelte/store';
   import { unsavedChanges } from '$lib/utils/vars';
   import { generatePDF } from '$lib/utils/pdf';
+  import Modal from '$lib/components/units/Modal.svelte';
+
   import InventoryUpdate from '$lib/components/units/InventoryUpdate.svelte';  // Add this line
+
+
 
 
   interface InventoryItem {
@@ -36,7 +42,6 @@
   export let results: Sample[] = [];
   export let deepCopiedResults: Sample[] = [];
   export let searchOption: string = '';
-  export let resultsChanged = false;
   export let resultCount: number = 0;
 
   let expandedItems = new Set<number>();
@@ -279,7 +284,6 @@
       console.log("Sample dropped:", result);
 
       results = results.filter((_, i) => i !== index);
-      resultsChanged = true;
 
       displayedForms.update(forms => {
         delete forms[index];
@@ -455,7 +459,6 @@
     });
 
     console.log(`Updated result at index ${index}:`, results[index]);
-    resultsChanged = true;
   }
 
   async function pushChangesToBackend() {
@@ -463,53 +466,44 @@
     errorMessage.set('');
 
     try {
-      const hasChanges = JSON.stringify(deepCopiedResults) !== JSON.stringify(results) || 
-                         resultsChanged ||
-                         resultsLengthChanged;
 
-      if (hasChanges) {
-        console.log("Changes detected, pushing to backend...");
+      const user = get(page).data.user;
+      if (!user) throw new Error("User is undefined");
 
-        const user = get(page).data.user;
-        if (!user) throw new Error("User is undefined");
-
-        if (!selectedIdentifier) {
-          throw new Error("Please select an identifier or create a new one before pushing changes.");
-        }
-
-        let updatedResults = results.map(result => ({
-          ...result,
-          timestamp: Date.now(),
-          modifiedBy: Array.isArray(result.modifiedBy) 
-            ? [...result.modifiedBy, user]
-            : result.modifiedBy 
-              ? [result.modifiedBy, user]
-              : [user],
-          identifier: selectedIdentifier
-        }));
-
-        const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedResults),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to upload sample data');
-        }
-
-        const backend_response = await response.json();
-        console.log("Backend response:", backend_response);
-
-        results = updatedResults;
-        deepCopiedResults = JSON.parse(JSON.stringify(results));
-        resultsChanged = false;
-        unsavedChanges.set(false);
-        unsavedChangesByIndex.set({});
-      } else {
-        console.log("No changes to push");
+      if (!selectedIdentifier) {
+        throw new Error("Please select an identifier or create a new one before pushing changes.");
       }
+
+      let updatedResults = results.map(result => ({
+        ...result,
+        timestamp: Date.now(),
+        modifiedBy: Array.isArray(result.modifiedBy) 
+          ? [...result.modifiedBy, user]
+          : result.modifiedBy 
+            ? [result.modifiedBy, user]
+            : [user],
+        identifier: selectedIdentifier
+      }));
+
+      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedResults),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload sample data');
+      }
+
+      const backend_response = await response.json();
+      console.log("Backend response:", backend_response);
+
+      results = updatedResults;
+      deepCopiedResults = JSON.parse(JSON.stringify(results));
+      unsavedChanges.set(false);
+      unsavedChangesByIndex.set({});
+
     } catch (error) {
       console.error("Error pushing changes to backend:", error.message);
       errorMessage.set(error.message);
@@ -567,7 +561,53 @@
     Object.keys(filterDisplayedKeys(result)).length >
     ($removeClickCounts[index] || 0)
   );
+
+
+
+  let noChanged = true;
+  let showModal = false;
+  $: {
+    noChanged = JSON.stringify(deepCopiedResults) === JSON.stringify(results);
+  }
+
+
+  import { goto } from '$app/navigation';
+  import { beforeNavigate } from '$app/navigation';
+
+
+  let pendingNavigation = null;
+  let modalMessage = "You have unsaved changes. Are you sure you want to leave?";
+
+
+  beforeNavigate(({ to, cancel }) => {
+    if (!noChanged) {
+      cancel();
+      pendingNavigation = to ? to.url.toString() : null;
+      showModal = true;
+    }
+  });
+
+  function handleConfirm() {
+    showModal = false;
+    if (pendingNavigation) {
+      noChanged = true; // Reset the change status
+      window.location.href = pendingNavigation; // Use window.location for navigation
+    }
+    pendingNavigation = null;
+  }
+
+  function handleCancel() {
+    showModal = false;
+    pendingNavigation = null;
+  }
+
+
+
+
 </script>
+
+
+
 
 <div class="functional-display">
   <div class="view-toggle">
@@ -780,11 +820,12 @@
         {/if}
       </div>
     {/if}
+
     
     <div class="global-actions">
       <button 
         on:click={pushChangesToBackend} 
-        disabled={$isLoading || !selectedIdentifier || (!resultsChanged && !resultsLengthChanged)}
+        disabled={$isLoading || !selectedIdentifier}
       >
         Push Changes
       </button>
@@ -829,6 +870,15 @@
       <button on:click={closeModal}>Close</button>
     </div>
   </div>
+{/if}
+
+
+{#if showModal}
+  <Modal 
+    message={modalMessage}
+    onConfirm={handleConfirm}
+    onCancel={handleCancel}
+  />
 {/if}
 
 <style>
@@ -973,7 +1023,6 @@ h3 {
 .image-container {
   flex: 0 0 66.67%;
   background-color: #f5f5f5;
-  border-radius: 4px;
   overflow: hidden;
   display: flex;
   align-items: center;
