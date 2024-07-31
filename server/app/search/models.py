@@ -214,19 +214,12 @@ class Collection:
             categories = set()
             tags = set()
             
-            # Fetch from inventory collection
-            inv_categories = list(db.inventory.distinct('categories'))
-            inv_tags = list(db.inventory.distinct('tags'))
-            
-            # Fetch from samples_list collection
-            sam_categories = list(db.samples_list.distinct('categories'))
-            sam_tags = list(db.samples_list.distinct('tags'))
+            find_categories = list(db.samples.distinct('categories'))
+            find_tags = list(db.samples.distinct('tags'))
             
             # Combine and deduplicate
-            categories.update(inv_categories)
-            categories.update(sam_categories)
-            tags.update(inv_tags)
-            tags.update(sam_tags)
+            categories.update(find_categories)
+            tags.update(find_tags)
             
             logger.info(f"Successfully fetched {len(categories)} categories and {len(tags)} tags")
             logger.debug(f"Categories: {categories}")
