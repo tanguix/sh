@@ -2,9 +2,7 @@ from flask import Blueprint, request, jsonify, send_file
 import os
 import json
 from app.logger import logger
-from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow, json_serialize
-import traceback
-
+from app.upload.models import Item, ItemBatch, Workflow, File, HandleWorkflow 
 # create Blueprint object, which is this file
 upload_bp = Blueprint('upload', __name__)
 # the folder for saving the uploaded sample image
@@ -269,9 +267,3 @@ def download_file(workflow_id, node_id, section_id, file_id):
 
 
 
-
-
-
-
-# ------------------------------------------ indivdual operation -------------------------------------------------
-# maybe you need in the future

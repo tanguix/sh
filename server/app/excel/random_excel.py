@@ -31,7 +31,7 @@ data = {**numeric_data, **categorical_data, **date_data}
 df = pd.DataFrame(data)
 
 # Save to Excel
-excel_filename = '../../sheet/random_data.xlsx'
+excel_filename = 'random_data.xlsx'
 df.to_excel(excel_filename, index=False)
 
 print(f"Random Excel file '{excel_filename}' has been created.")

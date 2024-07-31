@@ -9,17 +9,8 @@ import os
 
 excel_bp = Blueprint('excel', __name__)
 
-
 EXCEL_FOLDER = 'sheet'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
-
-
-# Ensure the directory exists
-if not os.path.exists(EXCEL_FOLDER):
-    os.makedirs(EXCEL_FOLDER)
-
-
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -44,16 +35,21 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        filepath = os.path.join(EXCEL_FOLDER, filename)
-        file.save(filepath)
-        
         try:
+            # Ensure the directory exists
+            os.makedirs(EXCEL_FOLDER, exist_ok=True)
+            
+            filepath = os.path.join(EXCEL_FOLDER, filename)
+            file.save(filepath)
+            
             summary = ExcelProcessor.process_excel(filepath)
             return jsonify({'summary': summary}), 200
+        except OSError as e:
+            logger.error(f"OS error occurred when saving file: {str(e)}")
+            return jsonify({'error': 'Failed to save file due to system error'}), 500
         except Exception as e:
             logger.error(f"Error processing Excel file: {str(e)}")
             return jsonify({'error': 'Failed to process Excel file'}), 500
     else:
         return jsonify({'error': 'File type not allowed'}), 400
-
 

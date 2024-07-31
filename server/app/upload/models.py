@@ -1,7 +1,6 @@
 
 
 
-
 import uuid
 from app.database import db
 from bson import ObjectId
@@ -704,13 +703,16 @@ class Section:
 
 
 class File:
-    def __init__(self, file_id, name, type, size, path):
+    def __init__(self, file_id, name, type, size, path, workflow_id, node_id, section_id):
         self._id = ObjectId()
         self.file_id = file_id
         self.name = name
         self.type = type
         self.size = size
         self.path = path
+        self.workflow_id = workflow_id
+        self.node_id = node_id
+        self.section_id = section_id
 
 
 
@@ -737,9 +739,14 @@ class File:
                 "name": file["name"],
                 "type": file["type"],
                 "size": file["size"],
-                "path": os.path.join(SERVER_DIR, file["path"]),  # This should now correctly point to the 'files' directory
+                "path": os.path.join(SERVER_DIR, file["path"]),
+                "workflow_id": file["workflow_id"],
+                "node_id": file["node_id"],
+                "section_id": file["section_id"]
             }
         return None
+
+
 
 
     @staticmethod
@@ -763,6 +770,7 @@ class File:
 
     @staticmethod
     def process_single_upload(file, file_data, workflow_id, node_id, section_id, FILE_FOLDER):
+        logger.info(f"Processing upload for workflow_id: {workflow_id}, node_id: {node_id}, section_id: {section_id}")
         try:
             filename = secure_filename(file.filename)
             relative_path = os.path.join('files', filename)
@@ -774,12 +782,14 @@ class File:
                 "name": file_data['name'],
                 "type": file_data['type'],
                 "size": file_data['size'],
-                "path": relative_path  # Store the relative path
+                "path": relative_path,
+                "workflow_id": workflow_id,
+                "node_id": node_id,
+                "section_id": section_id
             }
 
             # Insert file document into files collection
             file_result = db.files.insert_one(file_document)
-
 
             if file_result.inserted_id:
                 # Update the section with the new file_id
@@ -808,6 +818,7 @@ class File:
                 "error": f"Error processing file upload: {str(e)}",
                 "file_id": file_data['file_id']
             }
+
 
 
 
@@ -908,6 +919,8 @@ class HandleWorkflow:
                 return HandleWorkflow._update_node_status(data)
             elif change_type == 'update_lock_status':
                 return HandleWorkflow._update_lock_status(data)
+            elif change_type == 'upload_files':  # Add this case
+                return HandleWorkflow._process_file_upload(data)
             else:
                 raise ValueError(f"Unknown change type: {change_type}")
         except KeyError as e:
@@ -918,10 +931,25 @@ class HandleWorkflow:
             return {"error": f"Error processing {change_type}: {str(e)}", "type": change_type}
 
 
+    @staticmethod
+    def _process_file_upload(data: Dict[str, Any]) -> Dict[str, Any]:
+        workflow_id = data.get('workflow_id')
+        node_id = data.get('node_id')
+        section_id = data.get('section_id')
+        new_files = data.get('new_files', [])
 
+        if not all([workflow_id, node_id, section_id]):
+            raise ValueError("Missing required data for file upload")
 
-
-
+        # Here you would typically update your database to reflect the new files
+        # For this example, we'll just return the data as confirmation
+        return {
+            "type": "upload_files",
+            "workflow_id": workflow_id,
+            "node_id": node_id,
+            "section_id": section_id,
+            "files_added": len(new_files)
+        }
 
 
     @staticmethod
