@@ -2,8 +2,17 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
+  interface InventoryItem {
+    putIn: number;
+    takeOut: number;
+    by: string;
+    timestamp: number;
+  }
+
   export let inventory: InventoryItem[];
   export let referenceNo: string;
+  export let userName: string;
+
 
   const dispatch = createEventDispatcher();
 
@@ -15,7 +24,7 @@
       const newEntry = {
         putIn: newPutIn,
         takeOut: newTakeOut,
-        by: "Current User", // Replace with actual user info
+        by: userName, // Replace with actual user info
         timestamp: Date.now()
       };
       dispatch('update', { referenceNo, newEntry });

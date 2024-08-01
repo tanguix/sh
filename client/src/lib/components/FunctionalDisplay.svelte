@@ -602,6 +602,8 @@
   }
 
 
+  $: user = $page.data.user;
+
 
 
 </script>
@@ -695,6 +697,7 @@
             <InventoryUpdate
               inventory={result.inventory}
               referenceNo={result.reference_no}
+              userName={user.name}
               on:update={handleInventoryUpdate}
             />
 
