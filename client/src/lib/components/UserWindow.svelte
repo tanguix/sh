@@ -27,12 +27,6 @@
     return date.toLocaleString();
   }
 
-
-  function formatDate(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  }
-
   
 
   async function fetchExchangeRate() {
@@ -205,7 +199,6 @@
             <div class="exchange-rate-header">
               <div class="base-currency">Base: {$exchange_rate.base}</div>
               <div class="date-time">
-                <div>{formatDate($exchange_rate.date)}</div>
                 <div>{formatTimestamp($exchange_rate.timestamp)}</div>
               </div>
             </div>
