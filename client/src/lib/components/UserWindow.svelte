@@ -27,6 +27,12 @@
     return date.toLocaleString();
   }
 
+
+  function formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
   
 
   async function fetchExchangeRate() {
@@ -183,6 +189,8 @@
     <h2>Dashboard</h2>
     <p>Welcome, {$page.data.user.name}!</p>
     
+
+
     <div class="section">
       <button on:click={toggleExchangeRate}>
         <span class="toggle-text" class:hide={$exchangeRate} class:show={!$exchangeRate}>
@@ -190,24 +198,35 @@
         </span>
         Exchange Rate
       </button>
-      <div class="section-content" class:open={$exchangeRate}>
+      <div class="section-content exchange-rate-section" class:open={$exchangeRate}>
         <h3>Exchange Rates</h3>
         {#if $exchange_rate}
-          <div class="ex-card">
-            <h4>Date: {$exchange_rate.date}</h4>
-            <h4>Time: {formatTimestamp($exchange_rate.timestamp)}</h4>
-            <h4>Base Currency: {$exchange_rate.base}</h4>
+          <div class="exchange-rate-container">
+            <div class="exchange-rate-header">
+              <div class="base-currency">Base: {$exchange_rate.base}</div>
+              <div class="date-time">
+                <div>{formatDate($exchange_rate.date)}</div>
+                <div>{formatTimestamp($exchange_rate.timestamp)}</div>
+              </div>
+            </div>
+            <div class="rates-grid">
+              {#each Object.entries($exchange_rate.rates) as [currency, rate]}
+                <div class="rate-card">
+                  <div class="currency">{currency}</div>
+                  <div class="rate">{rate.toFixed(4)}</div>
+                </div>
+              {/each}
+            </div>
           </div>
-          {#each Object.entries($exchange_rate.rates) as [currency, rate]}
-            <div class="ex-card"><h3>{currency}: {rate}</h3></div>
-          {/each}
         {:else if $error}
-          <p>{$error}</p>
+          <p class="error">{$error}</p>
         {:else}
-          <p>Loading exchange rates...</p>
+          <p class="loading">Loading exchange rates...</p>
         {/if}
       </div>
     </div>
+
+
 
     <div class="section">
       <button on:click={toggleWorkflowToken}>
@@ -229,6 +248,8 @@
         </ul>
       </div>
     </div>
+
+
 
 
     <div class="section">
@@ -300,6 +321,7 @@
 {/if}
 
 <style>
+
   .user-window {
     width: 100%;
     max-width: 600px;
@@ -332,7 +354,86 @@
     border-top: none;
     border-radius: 0 0 4px 4px;
     box-sizing: border-box;
+
   }
+
+  .exchange-rate-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .exchange-rate-container {
+    width: 80%;
+    margin: 15px 0;
+    font-family: Ubuntu;
+    background-color: #f0f4f8;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .exchange-rate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #d1d5db;
+  }
+
+  .base-currency {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #2c3e50;
+  }
+
+  .date-time {
+    text-align: right;
+    color: #5a6c7d;
+  }
+
+  .rates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 16px;
+  }
+
+  .rate-card {
+    background-color: #ffffff;
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .rate-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .currency {
+    font-weight: bold;
+    color: #3498db;
+    margin-bottom: 4px;
+  }
+
+  .rate {
+    font-size: 1.1em;
+    color: #2c3e50;
+  }
+
+  .error {
+    color: #e74c3c;
+    font-weight: bold;
+  }
+
+  .loading {
+    color: #7f8c8d;
+    font-style: italic;
+  }
+
+
 
   .tips {
     padding: 1rem 0 0 0;
@@ -390,12 +491,6 @@
     font-family: "Ubuntu";
   }
 
-  .ex-card {
-    border: 1px solid #ddd;
-    padding: 16px;
-    margin: 16px 0;
-    background-color: #f9f9f9;
-  }
 
   .search-options {
     display: flex;

@@ -3,7 +3,6 @@
 
 
 
-
 <script lang="ts">
   import { onMount, beforeUpdate } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
@@ -15,7 +14,6 @@
   import Modal from '$lib/components/units/Modal.svelte';
 
   import InventoryUpdate from '$lib/components/units/InventoryUpdate.svelte';  // Add this line
-
 
 
 

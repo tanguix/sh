@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify, send_file, current_app
 from app.logger import logger
-from app.search.models import Collection, ExchangeRate
+from app.search.models import Collection
 import os
 import json
 
@@ -18,21 +18,6 @@ if not os.path.exists(FILE_FOLDER):
 
 
 
-
-@search_bp.route('/api/exchange_rate', methods=['GET'])
-def get_exchange_rate():
-    try:
-        exchange_rate = ExchangeRate.get_latest_rate()
-        return jsonify(exchange_rate), 200
-    except Exception as e:
-        logger.error(f"Error fetching exchange rate: {e}")
-        return jsonify({"error": "Internal server error"}), 500
-
-
-
-
-
-
 @search_bp.route('/api/collections', methods=['GET'])
 def find_collection():
     try:
@@ -42,6 +27,8 @@ def find_collection():
     except Exception as e:
         logger.error(f"Error fetching collections: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
 
 @search_bp.route('/api/keys', methods=['GET'])
 def find_key():
@@ -70,10 +57,10 @@ def searched_result():
     if not collection_name or not criteria:
         logger.error("Collection and search criteria must be provided")
         return jsonify({"error": "Collection and search criteria must be provided"}), 400
-
+    
     try:
-        backend_local_url = current_app.config['BACKEND_LOCAL_URL']
-        results, count = Collection.search_by_multiple_criteria(collection_name, criteria, backend_local_url)
+        logger.debug(f"Processing search criteria: {criteria}")
+        results, count = Collection.search_by_multiple_criteria(collection_name, criteria)
         if results:
             logger.info(f"Search successful. Returned {count} unique results.")
             return jsonify({"results": results, "count": count}), 200
@@ -99,8 +86,6 @@ def get_image(filename):
     except Exception as e:
         logger.error(f"Error fetching image {filename}: {e}")
         return jsonify({"error": "Internal server error"}), 500
-
-
 
 
 
@@ -154,3 +139,10 @@ def get_categories_and_tags():
     except Exception as e:
         logger.error(f"Error fetching categories and tags: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+
+
+
+
+
+

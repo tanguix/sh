@@ -49,5 +49,6 @@ class Config:
     LOCAL_IP = get_local_ip()
     PORT = 5000                                         # default flask port
     BACKEND_LOCAL_URL = f'http://{LOCAL_IP}:{PORT}'
+    IMAGE_BASE_URL = f'{BACKEND_LOCAL_URL}/search/api'
 
 

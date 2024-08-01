@@ -5,6 +5,8 @@ from app.database import db
 from app.logger import logger
 import time
 from datetime import datetime, timedelta
+from flask import current_app
+
 
 
 
@@ -13,6 +15,7 @@ class Collection:
     @staticmethod
     def get_all_collections():
         return db.list_collection_names()
+
 
     @staticmethod
     def get_keys(collection_name):
@@ -28,6 +31,7 @@ class Collection:
                         keys.add(key)
                 return list(keys)
         return None
+
 
     @staticmethod
     def process_timestamp_query(key, value, operator):
@@ -48,8 +52,6 @@ class Collection:
             return {key: {"$gte": start_timestamp, "$lt": end_timestamp}}
         else:
             raise ValueError(f"Invalid timestamp operator: {operator}")
-
-
 
 
 
@@ -85,7 +87,7 @@ class Collection:
 
 
     @staticmethod
-    def search_by_multiple_criteria(collection_name, criteria, backend_local_url):
+    def search_by_multiple_criteria(collection_name, criteria):
         if collection_name not in db.list_collection_names():
             logger.error(f"Collection {collection_name} not found")
             return None, 0
@@ -136,7 +138,7 @@ class Collection:
                 logger.info(f"No matching documents found for query in collection {collection_name}")
                 return None, 0
 
-            processed_results = Collection.process_results(results, backend_local_url)
+            processed_results = Collection.process_results(results)
             logger.debug(f"Processed {len(processed_results)} results")
 
             return processed_results, count
@@ -144,14 +146,11 @@ class Collection:
             logger.error(f"Error executing query: {str(e)}")
             return None, 0
 
-
-
-
-
-
     @staticmethod
-    def process_results(results, backend_local_url):
+    def process_results(results):
         processed_results = []
+        image_base_url = current_app.config['IMAGE_BASE_URL']
+
         for result in results:
             processed_result = {}
             for k, v in result.items():
@@ -160,8 +159,9 @@ class Collection:
                 if k == "additional_fields":
                     processed_result.update(v)
                 elif k == 'image_path':
-                    image_path = v[7:] if v.startswith('images/') else v
-                    image_url = f"{backend_local_url}/search/api/images/{image_path}"
+                    # Remove the leading slash if it exists
+                    image_path = v[1:] if v.startswith('/') else v
+                    image_url = f"{image_base_url}/{image_path}"
                     processed_result['image_url'] = image_url
                 elif k in ['unit_price', 'unit_weight']:
                     processed_result[k] = v[-1] if isinstance(v, list) else v
@@ -169,6 +169,7 @@ class Collection:
                     processed_result[k] = v
             processed_results.append(processed_result)
         return processed_results
+
 
 
 
@@ -231,16 +232,4 @@ class Collection:
 
 
 
-class ExchangeRate:
 
-
-    @staticmethod
-    def get_latest_rate():
-        # Implement the logic to fetch the latest exchange rate
-        # This is a placeholder implementation
-        return {
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "timestamp": int(time.time()),
-            "base": "USD",
-            "rates": {"EUR": 0.85, "GBP": 0.75, "JPY": 110.0}
-        }

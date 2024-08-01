@@ -195,16 +195,23 @@
         try {
             const processedCriteria = validCriteria.map(processCriteria);
 
+            console.log('Processed criteria:', processedCriteria); // Log processed criteria
+
             const url = constructUrl(API_ENDPOINTS.SEARCH_RESULTS, {
                 collection: searchCollection,
                 criteria: JSON.stringify(processedCriteria),
                 mode: searchOption
             });
 
+            console.log('Constructed URL:', url); // Log the constructed URL
+
             const response = await fetch(url);
+
+            console.log('Response status:', response.status); // Log the response status
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('Response data:', data); // Log the response data
                 let newResults = data.results || [];
                 resultCount = data.count || 0;
 
@@ -239,6 +246,7 @@
                 }
             } else {
                 const errorData = await response.json();
+                console.error('Error response:', errorData); // Log error response
                 throw new Error(errorData.error || 'Error searching collection');
             }
         } catch (error) {

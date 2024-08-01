@@ -2,9 +2,9 @@
 // Base URL for all API calls
 
 // export const BACKEND_LOCAL_HOST = 'http://192.168.2.62:5000';      // this should be the flask address, it might change to be aware
-// export const BACKEND_LOCAL_HOST = 'http://192.168.110.122:5000';      // like this 
+export const BACKEND_LOCAL_HOST = 'http://192.168.110.122:5000';      // like this 
 // TODO: originally, set that manually, but later when you use docker or Kubernetes, we can solve that elgantly
-export const BACKEND_LOCAL_HOST = 'http://localhost:5000';      // like this 
+// export const BACKEND_LOCAL_HOST = 'http://localhost:5000';      // like this 
 export const BASE_URL = BACKEND_LOCAL_HOST;            // local network
 
 

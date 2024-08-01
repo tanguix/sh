@@ -331,20 +331,34 @@ class ItemBatch:
 
 
 
+    @staticmethod
+    def _get_relative_path(full_path):
+        # Assume the full path always contains '/search/api/images/' directory
+        if '/search/api/images/' in full_path:
+            return full_path.split('/search/api/images/')[-1]
+        return full_path  # Return as is if it doesn't contain '/search/api/images/'
+
+
+
     def _process_item(self, item):
         processed_item = {
             "timestamp": self.timestamp,
             "identifier": self.identifier
         }
-
         for key, value in item.items():
             if key not in ['_id', 'timestamp', 'identifier']:
                 if key == 'inventory':
                     processed_item[key] = value
                     processed_item['total_inventory'] = self._calculate_inventory(value)
+                elif key == 'image_url':
+                    # Convert full URL to relative path
+                    relative_path = self._get_relative_path(value)
+                    processed_item['image_path'] = f"images/{relative_path}"
                 else:
                     processed_item[key] = value
         return processed_item
+
+
 
 
     def _prepare_update_operation(self, new_item, existing_item):
@@ -364,6 +378,10 @@ class ItemBatch:
                     elif key == 'inventory':
                         update_operation['$set'][key] = value
                         update_operation['$set']['total_inventory'] = self._calculate_inventory(value)
+                    elif key == 'image_url':
+                        # Convert full URL to relative path
+                        relative_path = self._get_relative_path(value)
+                        update_operation['$set']['image_path'] = f"/images/{relative_path}"
                     else:
                         update_operation['$set'][key] = value
         
@@ -375,6 +393,7 @@ class ItemBatch:
             del update_operation['$unset']
 
         return update_operation
+
 
 
 
@@ -406,6 +425,10 @@ class ItemBatch:
             'reference_no': {'$nin': list(processed_reference_nos)}
         })
         logger.info(f"Removed {result.deleted_count} obsolete items from the set.")
+
+
+
+
 
 
 
