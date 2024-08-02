@@ -201,6 +201,12 @@
 
         const formData = new FormData();
 
+
+        // Generate timestamp in the frontend
+        const currentTimestamp = Date.now();
+        formData.append('timestamp', currentTimestamp.toString());
+
+
         if (imageFile) {
             formData.append('image', imageFile);
         }

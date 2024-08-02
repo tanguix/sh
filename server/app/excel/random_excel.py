@@ -1,43 +1,77 @@
 
+
 import pandas as pd
 import numpy as np
-import random
 from datetime import datetime, timedelta
 
 # Set random seed for reproducibility
 np.random.seed(42)
 
-# Define the number of rows and columns
-num_rows = 100
-num_numeric_columns = 5
-num_categorical_columns = 3
-num_date_columns = 2
+# Define the number of rows
+num_rows = 1000
 
-# Generate numeric data
-numeric_data = {f'Numeric_{i+1}': np.random.randint(1, 1000, num_rows) for i in range(num_numeric_columns)}
+# Define date range
+start_date = datetime(2023, 1, 1)
+end_date = datetime(2023, 12, 31)
 
-# Generate categorical data
-categories = ['Category A', 'Category B', 'Category C', 'Category D', 'Category E']
-categorical_data = {f'Categorical_{i+1}': [random.choice(categories) for _ in range(num_rows)] for i in range(num_categorical_columns)}
+# Generate dates
+dates = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+dates = np.random.choice(dates, num_rows)
+dates.sort()
 
-# Generate date data
-start_date = datetime(2020, 1, 1)
-date_data = {f'Date_{i+1}': [start_date + timedelta(days=np.random.randint(0, 1095)) for _ in range(num_rows)] for i in range(num_date_columns)}
+# Generate product data
+products = ['T-shirt', 'Jeans', 'Dress', 'Jacket', 'Skirt', 'Shoes', 'Handbag']
+product_costs = {'T-shirt': 10, 'Jeans': 25, 'Dress': 30, 'Jacket': 40, 'Skirt': 20, 'Shoes': 35, 'Handbag': 45}
+products_list = np.random.choice(products, num_rows)
 
-# Combine all data
-data = {**numeric_data, **categorical_data, **date_data}
+# Generate quantities
+quantities = np.random.randint(1, 100, num_rows)
+
+# Calculate costs and revenues
+costs = [product_costs[product] * quantity for product, quantity in zip(products_list, quantities)]
+revenues = [cost * np.random.uniform(1.2, 1.8) for cost in costs]  # 20-80% markup
+
+# Generate customer types
+customer_types = ['Retail', 'Wholesale', 'Online']
+customer_types_list = np.random.choice(customer_types, num_rows)
+
+# Generate payment methods
+payment_methods = ['Credit Card', 'Cash', 'Bank Transfer', 'PayPal']
+payment_methods_list = np.random.choice(payment_methods, num_rows)
+
+# Generate locations
+locations = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Miami']
+locations_list = np.random.choice(locations, num_rows)
 
 # Create DataFrame
-df = pd.DataFrame(data)
+df = pd.DataFrame({
+    'Date': dates,
+    'Product': products_list,
+    'Quantity': quantities,
+    'Cost': costs,
+    'Revenue': revenues,
+    'Profit': np.array(revenues) - np.array(costs),
+    'Customer Type': customer_types_list,
+    'Payment Method': payment_methods_list,
+    'Location': locations_list
+})
+
+# Add some additional calculated columns
+df['Profit Margin'] = (df['Profit'] / df['Revenue']) * 100
+df['Average Sale Price'] = df['Revenue'] / df['Quantity']
+
+# Sort by date
+df = df.sort_values('Date')
 
 # Save to Excel
-excel_filename = 'random_data.xlsx'
+excel_filename = 'fashion_production_financial_data.xlsx'
 df.to_excel(excel_filename, index=False)
 
-print(f"Random Excel file '{excel_filename}' has been created.")
+print(f"Fashion and Production Industry Financial Data file '{excel_filename}' has been created.")
 print("File summary:")
 print(f"Number of rows: {num_rows}")
 print(f"Number of columns: {len(df.columns)}")
 print("Column names:")
 for col in df.columns:
     print(f"- {col}")
+

@@ -46,6 +46,9 @@ def upload_reference():
         logger.error(f"Unexpected error in upload_reference: {str(e)}")
         return jsonify({"error": "An unexpected error occurred while uploading the reference"}), 500
 
+
+
+
 @upload_bp.route('/api/fetch_reference_keys', methods=['GET'])
 def fetch_reference_keys():
     try:
@@ -54,6 +57,9 @@ def fetch_reference_keys():
     except Exception as e:
         logger.error(f"Error fetching reference keys: {str(e)}")
         return jsonify({"error": "An unexpected error occurred while fetching reference keys"}), 500
+
+
+
 
 @upload_bp.route('/api/upload_data', methods=['POST'])
 def upload_data():

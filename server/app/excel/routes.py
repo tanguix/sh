@@ -6,9 +6,9 @@ from werkzeug.utils import secure_filename
 from app.excel.models import ExcelProcessor
 from app.logger import logger
 import os
+from urllib.parse import unquote
 
 excel_bp = Blueprint('excel', __name__)
-
 EXCEL_FOLDER = 'sheet'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
@@ -27,7 +27,7 @@ def get_operations():
         return jsonify({'error': 'Failed to fetch allowed operations'}), 500
 
 @excel_bp.route('/api/upload_excel', methods=['POST'])
-def upload_file():
+def upload_excel():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
@@ -36,20 +36,33 @@ def upload_file():
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         try:
-            # Ensure the directory exists
             os.makedirs(EXCEL_FOLDER, exist_ok=True)
-            
             filepath = os.path.join(EXCEL_FOLDER, filename)
             file.save(filepath)
-            
-            summary = ExcelProcessor.process_excel(filepath)
-            return jsonify({'summary': summary}), 200
+            return jsonify({'message': 'File uploaded successfully', 'filepath': filepath}), 200
         except OSError as e:
             logger.error(f"OS error occurred when saving file: {str(e)}")
             return jsonify({'error': 'Failed to save file due to system error'}), 500
-        except Exception as e:
-            logger.error(f"Error processing Excel file: {str(e)}")
-            return jsonify({'error': 'Failed to process Excel file'}), 500
     else:
         return jsonify({'error': 'File type not allowed'}), 400
+
+@excel_bp.route('/api/process_excel', methods=['GET'])
+def process_excel():
+    filepath = unquote(request.args.get('filepath', ''))
+    operations = request.args.get('operations', '').split(',')
+    
+    if not filepath:
+        return jsonify({'error': 'No file path provided'}), 400
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    if not operations:
+        return jsonify({'error': 'No operations selected'}), 400
+    
+    try:
+        results = ExcelProcessor.process_excel(filepath, operations)
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Error processing Excel file: {str(e)}")
+        return jsonify({'error': 'Failed to process Excel file'}), 500
+
 

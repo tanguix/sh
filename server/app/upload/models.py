@@ -41,6 +41,7 @@ class Item:
         self.phone = kwargs.get('phone') or None
         self.inventory = self._parse_inventory(kwargs.get('inventory'), kwargs.get('username'))
         self.total_inventory = self._calculate_total_inventory()
+        self.timestamp = int(kwargs.get('timestamp', time.time() * 1000))
 
 
     def _parse_inventory(self, inventory, username):
@@ -94,6 +95,8 @@ class Item:
         for key, value in form_data.items():
             if key in ['tags', 'categories', 'additional_fields']:
                 data[key] = json.loads(value)
+            elif key == 'timestamp':
+                data[key] = int(value)  # Convert the timestamp string to integer
             else:
                 data[key] = value
 
@@ -180,7 +183,6 @@ class Item:
 
 
 
-
 class ItemBatch:
     def __init__(self, items, mode='normal', identifier=None):
         self.items = items
@@ -236,7 +238,7 @@ class ItemBatch:
                         self.update_inventory(
                             item['reference_no'],
                             item.get('newPutIn', 0),
-                            item.get('newTakeOut', 0)
+                            item.get('newTakeOut', 0),
                         )
                     else:
                         update_operation = self._prepare_update_operation(item, existing_item)
@@ -287,12 +289,12 @@ class ItemBatch:
         
         if not item:
             raise ValueError(f"Item with reference number {reference_no} not found")
-        
+         
         # Create new inventory entry
         new_entry = {
             "putIn": put_in,
             "takeOut": take_out,
-            "by": "User",  # You might want to pass the user information from the frontend
+            "by": "User",
             "timestamp": int(time.time() * 1000)
         }
         
@@ -325,7 +327,6 @@ class ItemBatch:
 
 
 
-
     def _calculate_inventory(self, inventory):
         return sum(item.get('putIn', 0) - item.get('takeOut', 0) for item in inventory)
 
@@ -337,6 +338,7 @@ class ItemBatch:
         if '/search/api/images/' in full_path:
             return full_path.split('/search/api/images/')[-1]
         return full_path  # Return as is if it doesn't contain '/search/api/images/'
+
 
 
 
@@ -370,7 +372,7 @@ class ItemBatch:
 
         for key, value in new_item.items():
             if key not in ['_id', 'identifier', 'timestamp']:
-                if value is None:
+                if value is None or value == "":
                     update_operation['$unset'][key] = ""
                 else:
                     if key in ['categories', 'tags']:
@@ -381,10 +383,15 @@ class ItemBatch:
                     elif key == 'image_url':
                         # Convert full URL to relative path
                         relative_path = self._get_relative_path(value)
-                        update_operation['$set']['image_path'] = f"/images/{relative_path}"
+                        update_operation['$set']['image_path'] = f"images/{relative_path}"
                     else:
                         update_operation['$set'][key] = value
-        
+
+        # Remove any fields that are in both $set and $unset
+        for key in list(update_operation['$set'].keys()):
+            if key in update_operation['$unset']:
+                del update_operation['$unset'][key]
+
         update_operation['$set']['timestamp'] = self.timestamp
 
         if not update_operation['$set']:
@@ -430,8 +437,6 @@ class ItemBatch:
 
 
 
-
-
     @staticmethod
     def get_identifiers(mode):
         if mode == 'inventory':
@@ -451,6 +456,7 @@ class ItemBatch:
         
         identifiers = list(collection.aggregate(pipeline))
         return [i['identifier'] for i in identifiers]
+
 
 
 
@@ -486,6 +492,7 @@ class Workflow:
         self.is_locked = is_locked
         self.owner = owner
         self.timestamp = timestamp or int(time.time() * 1000)  # Use provided timestamp or current time
+
 
     def save(self):
         data = {
@@ -724,7 +731,6 @@ class Section:
 
 
 
-
 class File:
     def __init__(self, file_id, name, type, size, path):
         self._id = ObjectId()
@@ -738,7 +744,10 @@ class File:
 
     @staticmethod
     def allowed_file(filename):
-        ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'docx'}  # Added 'docx'
+        ALLOWED_EXTENSIONS = {
+            'txt', 'pdf', 'png', 'jpg', 'jpeg', 
+            'gif', 'docx', 'xlsx', 'csv'
+        }
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
@@ -746,7 +755,6 @@ class File:
     @staticmethod
     def save_file(file_data):
         return db.files.insert_one(file_data)
-
 
 
     
@@ -893,7 +901,6 @@ class File:
 class HandleWorkflow:
 
 
-
     @staticmethod
     def process_changes(changes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
@@ -969,9 +976,6 @@ class HandleWorkflow:
 
 
 
-
-
-
     @staticmethod
     def _confirm_workflow(data: Dict[str, Any]) -> Dict[str, Any]:
         workflow_id = data['id']
@@ -1036,6 +1040,7 @@ class HandleWorkflow:
 
 
 
+
     @staticmethod
     def _update_lock_status(data: Dict[str, Any]) -> Dict[str, Any]:
         workflow_id = data['workflow_id']
@@ -1051,6 +1056,8 @@ class HandleWorkflow:
             "workflow_id": workflow_id,
             "is_locked": is_locked
         }
+
+
 
 
     @staticmethod
@@ -1135,11 +1142,6 @@ class HandleWorkflow:
                 "old_status": old_status,
                 "updated": False
             }
-
-
-
-
-
 
 
 
