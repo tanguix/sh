@@ -8,19 +8,20 @@
   type EntrySet = {
     id: number;
     date: string;
+    remarks: string;
     detailedSubject: string;
+    category: string;
     quantity: string;
     specifications: string;
-    category: string;
     voucherNumber: string;
-    customer: string;
-    remarks: string;
-    paymentStatus: string;
+
     accountSubject: string;
     debitAmount: string;
     creditAmount: string;
     exchangeRate: string;
-    usdAmount: string;
+    curreny: string;
+    customer: string;
+    paymentStatus: string;
     status: string;
     isPreviewMode: boolean;
   };
@@ -28,21 +29,22 @@
   const createInitialEntrySet = (): EntrySet => ({
     id: Date.now(),
     date: '',
+    remarks: '',
     detailedSubject: '',
+    category: '',
     quantity: '',
     specifications: '',
-    category: '',
     voucherNumber: '',
-    customer: '',
-    remarks: '',
-    paymentStatus: '',
+
     accountSubject: '',
     debitAmount: '',
     creditAmount: '',
     exchangeRate: '',
-    usdAmount: '',
+    curreny: '',
+    customer: '',
+    paymentStatus: '',
     status: '',
-    isPreviewMode: false
+    isPreviewMode: false,
   });
 
   const entrySets = writable<EntrySet[]>([createInitialEntrySet()]);
@@ -157,14 +159,28 @@
       {#if !set.isPreviewMode}
         <div class="entry-fields">
           <div class="row">
+
+
             <div class="input-group">
               <label for="date-{set.id}">日期</label>
               <input type="date" id="date-{set.id}" bind:value={set.date}>
             </div>
+
+            <div class="input-group">
+              <label for="remarks-{set.id}">摘要</label>
+              <input type="text" id="remarks-{set.id}" bind:value={set.remarks} placeholder="摘要">
+            </div>
+
             <div class="input-group">
               <label for="detailedSubject-{set.id}">明细科目</label>
               <input type="text" id="detailedSubject-{set.id}" bind:value={set.detailedSubject} placeholder="明细科目">
             </div>
+
+            <div class="input-group">
+              <label for="category-{set.id}">类别</label>
+              <input type="text" id="category-{set.id}" bind:value={set.category} placeholder="类别">
+            </div>
+
             <div class="input-group">
               <label for="quantity-{set.id}">数量</label>
               <input type="number" id="quantity-{set.id}" bind:value={set.quantity} placeholder="数量">
@@ -173,26 +189,14 @@
               <label for="specifications-{set.id}">规格</label>
               <input type="text" id="specifications-{set.id}" bind:value={set.specifications} placeholder="规格">
             </div>
-            <div class="input-group">
-              <label for="category-{set.id}">类别</label>
-              <input type="text" id="category-{set.id}" bind:value={set.category} placeholder="类别">
-            </div>
+
             <div class="input-group">
               <label for="voucherNumber-{set.id}">凭证号</label>
               <input type="text" id="voucherNumber-{set.id}" bind:value={set.voucherNumber} placeholder="凭证号" required>
             </div>
-            <div class="input-group">
-              <label for="customer-{set.id}">客户</label>
-              <input type="text" id="customer-{set.id}" bind:value={set.customer} placeholder="客户" required>
-            </div>
-            <div class="input-group">
-              <label for="remarks-{set.id}">备注</label>
-              <input type="text" id="remarks-{set.id}" bind:value={set.remarks} placeholder="备注">
-            </div>
-            <div class="input-group">
-              <label for="paymentStatus-{set.id}">收款情况</label>
-              <input type="text" id="paymentStatus-{set.id}" bind:value={set.paymentStatus} placeholder="收款情况">
-            </div>
+
+
+
           </div>
           <div class="row">
             <div class="input-group">
@@ -212,13 +216,26 @@
               <input type="number" id="exchangeRate-{set.id}" bind:value={set.exchangeRate} placeholder="汇率" step="0.0001">
             </div>
             <div class="input-group">
-              <label for="usdAmount-{set.id}">美元</label>
-              <input type="number" id="usdAmount-{set.id}" bind:value={set.usdAmount} placeholder="美元" step="0.01">
+              <label for="curreny-{set.id}">货币</label>
+              <input type="number" id="curreny-{set.id}" bind:value={set.curreny} placeholder="货币" step="0.01">
             </div>
+
+            <div class="input-group">
+              <label for="customer-{set.id}">客户</label>
+              <input type="text" id="customer-{set.id}" bind:value={set.customer} placeholder="客户" required>
+            </div>
+
+            <div class="input-group">
+              <label for="paymentStatus-{set.id}">收款情况</label>
+              <input type="text" id="paymentStatus-{set.id}" bind:value={set.paymentStatus} placeholder="收款情况">
+            </div>
+
             <div class="input-group">
               <label for="status-{set.id}">状态</label>
               <input type="text" id="status-{set.id}" bind:value={set.status} placeholder="状态">
             </div>
+
+
           </div>
         </div>
       {:else}
@@ -258,19 +275,26 @@
   </div>
 </div>
 
+
+
 <style>
+  .file-selection-container .input-wrapper input {
+    margin: 0 0 10px 0;
+    padding: 10px;
+  }
+
   .file-selection-container {
     display: flex;
     gap: 1rem;
     align-items: flex-start;
-    font-family: "Ubuntu";
+    font-family: "Ubuntu", sans-serif;
   }
 
   .input-wrapper {
     flex: 1;
     display: flex;
     flex-direction: column;
-    font-family: "Ubuntu";
+    font-family: "Ubuntu", sans-serif;
   }
 
   .file-selection, .new-file-input {
@@ -283,30 +307,35 @@
     font-size: 0.875rem;
   }
 
-  .select-wrapper, .new-file-input input {
-    height: 38px;
+  .select-wrapper,
+  .new-file-input,
+  .input-group {
+    position: relative;
   }
 
-  .select-wrapper select, .new-file-input input {
-    width: 100%;
-    height: 100%;
+  .select-wrapper select,
+  .new-file-input input,
+  .input-group input {
+    height: 38px;
     padding: 0.5rem;
     font-size: 0.875rem;
     border: 1px solid #ccc;
     border-radius: 0.25rem;
     box-sizing: border-box;
     line-height: normal;
-    font-family: "Ubuntu";
+    font-family: "Ubuntu", sans-serif;
+    width: 100%;
+    background-color: #fff;
   }
 
   .select-wrapper select {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23333' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5' viewBox='0 0 8 8'%3E%3Cpath fill='%23333' d='M0 2l4 4 4-4z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.7em top 50%;
-    background-size: 0.65em auto;
+    background-size: 0.45em auto;
     padding-right: 1.5em;
   }
 
@@ -314,8 +343,48 @@
     display: none;
   }
 
+  input[type="date"] {
+    position: relative;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2em;
+    height: auto;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  input[type="date"]::after {
+    content: "\25BC";
+    position: absolute;
+    top: 50%;
+    right: 0.7em;
+    transform: translateY(-50%);
+    color: #333;
+    font-size: 0.7em;
+    pointer-events: none;
+  }
+
+  input:disabled,
+  select:disabled {
+    background-color: #f0f0f0;
+    cursor: not-allowed;
+  }
+
+  .select-wrapper select:focus,
+  .new-file-input input:focus,
+  .input-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+  }
+
   .entry-set {
-    font-family: "Zen Maru Gothic";
+    font-family: "Zen Maru Gothic", sans-serif;
     border: 1px solid #ccc;
     padding: 1rem;
     border-radius: 0.25rem;
@@ -351,16 +420,6 @@
     text-align: left;
   }
 
-  .input-group input {
-    font-size: 0.875rem;
-    border: 1px solid #ccc;
-    border-radius: 0.25rem;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0.5rem;
-    margin: 0;
-  }
-
   .preview-value {
     color: #007bff;
     font-size: 0.875rem;
@@ -379,7 +438,7 @@
 
   .action-button {
     padding: 0.25rem 0.5rem;
-    font-family: Ubuntu;
+    font-family: Ubuntu, sans-serif;
     font-size: 14px;
     color: white;
     border: none;
@@ -448,9 +507,6 @@
     flex: 1 1 150px;
   }
 </style>
-
-
-
 
 
 
