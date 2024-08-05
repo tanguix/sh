@@ -3,6 +3,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
+  import ExcelUpload from './units/ExcelUpload.svelte';
 
   let allowedOperations: string[] = [];
   let selectedOperations: string[] = [];
@@ -152,6 +153,12 @@
 </script>
 
 <main>
+
+  <br>
+  <ExcelUpload />
+  <br>
+  <br>
+
   <h1>Excel File Processor</h1>
   
   <div>

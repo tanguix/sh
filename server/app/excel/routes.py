@@ -12,8 +12,56 @@ excel_bp = Blueprint('excel', __name__)
 EXCEL_FOLDER = 'sheet'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+
+
+@excel_bp.route('/api/list_excel_files', methods=['GET'])
+def list_excel_files():
+    try:
+        files = [f for f in os.listdir(EXCEL_FOLDER) if f.endswith(('.xlsx', '.xls'))]
+        return jsonify(files), 200
+    except Exception as e:
+        logger.error(f"Error listing Excel files: {str(e)}")
+        return jsonify({'error': 'Failed to list Excel files'}), 500
+
+
+
+
+@excel_bp.route('/api/append_excel_files', methods=['POST'])
+def append_excel_data():
+    if 'filename' not in request.form or 'data' not in request.form or 'is_new_file' not in request.form:
+        return jsonify({'error': 'Missing filename, data, or is_new_file flag'}), 400
+
+    filename = request.form['filename']
+    data = request.form['data']
+    is_new_file = request.form['is_new_file'].lower() == 'true'
+
+    if is_new_file:
+        if not filename.endswith(('.xlsx', '.xls')):
+            filename += '.xlsx'
+        filepath = os.path.join(EXCEL_FOLDER, filename)
+        if os.path.exists(filepath):
+            return jsonify({'error': 'File already exists'}), 400
+    else:
+        filepath = os.path.join(EXCEL_FOLDER, filename)
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+
+    try:
+        ExcelProcessor.append_data(filepath, data, is_new_file)
+        return jsonify({'message': 'Data appended successfully'}), 200
+    except Exception as e:
+        logger.error(f"Error appending data to Excel file: {str(e)}")
+        return jsonify({'error': 'Failed to append data to Excel file'}), 500
+
+
+
+
 
 @excel_bp.route('/api/excel_operations', methods=['GET'])
 def get_operations():
@@ -25,6 +73,9 @@ def get_operations():
     except Exception as e:
         logger.error(f"Error fetching allowed operations: {str(e)}")
         return jsonify({'error': 'Failed to fetch allowed operations'}), 500
+
+
+
 
 @excel_bp.route('/api/upload_excel', methods=['POST'])
 def upload_excel():
@@ -45,6 +96,9 @@ def upload_excel():
             return jsonify({'error': 'Failed to save file due to system error'}), 500
     else:
         return jsonify({'error': 'File type not allowed'}), 400
+
+
+
 
 @excel_bp.route('/api/process_excel', methods=['GET'])
 def process_excel():

@@ -1,11 +1,33 @@
 
 
 import pandas as pd
+import json
 
 class ExcelProcessor:
+
     @staticmethod
     def get_allowed_operations():
         return ['basic_info', 'statistical_summary', 'full_summary']
+
+
+
+    @staticmethod
+    def append_data(filepath, data, is_new_file):
+        new_data = json.loads(data)
+        new_df = pd.DataFrame(new_data)
+
+        if is_new_file:
+            new_df.to_excel(filepath, index=False)
+        else:
+            try:
+                df = pd.read_excel(filepath)
+                updated_df = pd.concat([df, new_df], ignore_index=True)
+                updated_df.to_excel(filepath, index=False)
+            except FileNotFoundError:
+                # If the file doesn't exist, create a new one
+                new_df.to_excel(filepath, index=False)
+
+
 
     @staticmethod
     def process_excel(filepath, operations):
@@ -44,5 +66,6 @@ class ExcelProcessor:
     def _get_statistical_summary_html(df):
         summary = df.describe(include='all').to_html(classes='table')
         return f"<h3>Statistical Summary:</h3>{summary}"
+
 
 

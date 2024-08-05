@@ -200,7 +200,7 @@
 
     display: flex;
     width: calc(100% - (var(--main-padding) * 2));
-    max-width: 1800px;
+    max-width: 2000px;
     margin: 0 auto;
     padding: var(--main-padding);
     gap: var(--gap);
