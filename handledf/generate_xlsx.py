@@ -10,7 +10,7 @@ def generate_sample_excel(filename, num_rows=300):
     columns = [
         'date', 'remarks', 'detailedSubject', 'category', 'quantity',
         'specifications', 'voucherNumber', 'accountSubject', 'debitAmount',
-        'creditAmount', 'exchangeRate', 'currency', 'customer', 'paymentStatus', 'status'
+        'creditAmount', 'exchangeRate', 'price', 'unit', 'customer', 'paymentStatus', 'status'
     ]
 
     # Generate sample data for each column
@@ -26,21 +26,23 @@ def generate_sample_excel(filename, num_rows=300):
         'debitAmount': np.random.uniform(1000, 10000, num_rows).round(2),
         'creditAmount': np.random.uniform(1000, 10000, num_rows).round(2),
         'exchangeRate': np.random.uniform(1, 2, num_rows).round(4),
-        'currency': np.random.choice(['USD', 'EUR', 'CNY'], num_rows),
-        'customer': np.random.choice([f'Customer {i}' for i in range(1, 6)], num_rows),  # Only 5 customers
-        'paymentStatus': np.random.choice(['Paid', 'Pending', 'Overdue'], num_rows, p=[0.7, 0.2, 0.1]),  # Adjusted probabilities
+        'price': np.random.uniform(10, 1000, num_rows).round(2),
+        'unit': np.random.choice(['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'HKD', 'SGD'], num_rows),
+        'customer': np.random.choice([f'Customer {i}' for i in range(1, 6)], num_rows),
+        'paymentStatus': np.random.choice(['Paid', 'Pending', 'Overdue'], num_rows, p=[0.7, 0.2, 0.1]),
         'status': np.random.choice(['Active', 'Closed', 'On Hold'], num_rows)
     }
 
     # Create DataFrame
     df = pd.DataFrame(data, columns=columns)
-
+    
     # Save to Excel file
     df.to_excel(filename, index=False)
     print(f"Sample Excel file '{filename}' has been generated with {num_rows} rows.")
 
 # Generate the sample Excel file
 generate_sample_excel('sample_accounting_data.xlsx', num_rows=300)
+
 
 
 
