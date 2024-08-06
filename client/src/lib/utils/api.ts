@@ -44,8 +44,8 @@ export const API_ENDPOINTS = {
     APPEND_EXCEL: `${BASE_URL}/excel/api/append_excel_files`,
     UPLOAD_EXCEL: `${BASE_URL}/excel/api/upload_excel`,
     PROCESS_EXCEL: `${BASE_URL}/excel/api/process_excel`,
-
-    DS_OPERATION: `${BASE_URL}/excel/api/excel_operations`,
+    DS_OPERATIONS: `${BASE_URL}/excel/api/ds_operations`,
+    GET_COLUMNS: `${BASE_URL}/excel/api/get_columns`,
 
 
     EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,

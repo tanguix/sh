@@ -1,5 +1,6 @@
 
 
+
 <script lang="ts">
   import { writable } from 'svelte/store';
   import { onMount } from 'svelte';
@@ -14,12 +15,12 @@
     quantity: string;
     specifications: string;
     voucherNumber: string;
-
     accountSubject: string;
     debitAmount: string;
     creditAmount: string;
     exchangeRate: string;
-    curreny: string;
+    price: string;
+    unit: string;
     customer: string;
     paymentStatus: string;
     status: string;
@@ -35,12 +36,12 @@
     quantity: '',
     specifications: '',
     voucherNumber: '',
-
     accountSubject: '',
     debitAmount: '',
     creditAmount: '',
     exchangeRate: '',
-    curreny: '',
+    price: '',
+    unit: 'EUR',
     customer: '',
     paymentStatus: '',
     status: '',
@@ -53,11 +54,10 @@
   let selectedFile: string = '';
   let newFileName: string = '';
 
+  const currencyUnits = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'HKD', 'SGD'];
+
   function addEntrySet() {
-    entrySets.update(sets => [
-      ...sets,
-      createInitialEntrySet()
-    ]);
+    entrySets.update(sets => [...sets, createInitialEntrySet()]);
   }
 
   function removeEntrySet(id: number) {
@@ -76,7 +76,6 @@
     );
   }
 
-
   onMount(async () => {
     try {
       const response = await fetch(API_ENDPOINTS.LIST_EXCEL);
@@ -90,14 +89,39 @@
     }
   });
 
+  function checkRequiredFields(set: EntrySet): string[] {
+    const requiredFields = ['voucherNumber', 'accountSubject', 'debitAmount', 'creditAmount', 'customer'];
+    return requiredFields.filter(field => !set[field as keyof EntrySet]);
+  }
+
   async function handleSubmit() {
     if (selectedFile === 'new' && !newFileName.trim()) {
       alert('Please enter a name for the new Excel file.');
       return;
     }
 
+    let missingFields: string[] = [];
+    $entrySets.forEach((set, index) => {
+      const emptyRequiredFields = checkRequiredFields(set);
+      if (emptyRequiredFields.length > 0) {
+        missingFields.push(`Entry ${index + 1}: ${emptyRequiredFields.join(', ')}`);
+      }
+    });
+
+    if (missingFields.length > 0) {
+      alert(`Please fill in all required fields:\n${missingFields.join('\n')}`);
+      return;
+    }
+
     const formData = new FormData();
-    formData.append('filename', selectedFile === 'new' ? newFileName.trim() : selectedFile);
+    let filename = selectedFile === 'new' ? newFileName.trim() : selectedFile;
+    
+    // Ensure filename ends with .xlsx
+    if (!filename.toLowerCase().endsWith('.xlsx')) {
+      filename += '.xlsx';
+    }
+    
+    formData.append('filename', filename);
     formData.append('data', JSON.stringify($entrySets.map(({ isPreviewMode, ...rest }) => rest)));
     formData.append('is_new_file', selectedFile === 'new' ? 'true' : 'false');
 
@@ -111,7 +135,7 @@
         alert('Data appended successfully!');
 
         if (selectedFile === 'new') {
-          availableFiles = [...availableFiles, newFileName.trim()];
+          availableFiles = [...availableFiles, filename];
           newFileName = '';
         }
         
@@ -159,28 +183,22 @@
       {#if !set.isPreviewMode}
         <div class="entry-fields">
           <div class="row">
-
-
             <div class="input-group">
               <label for="date-{set.id}">日期</label>
               <input type="date" id="date-{set.id}" bind:value={set.date}>
             </div>
-
             <div class="input-group">
               <label for="remarks-{set.id}">摘要</label>
               <input type="text" id="remarks-{set.id}" bind:value={set.remarks} placeholder="摘要">
             </div>
-
             <div class="input-group">
               <label for="detailedSubject-{set.id}">明细科目</label>
               <input type="text" id="detailedSubject-{set.id}" bind:value={set.detailedSubject} placeholder="明细科目">
             </div>
-
             <div class="input-group">
               <label for="category-{set.id}">类别</label>
               <input type="text" id="category-{set.id}" bind:value={set.category} placeholder="类别">
             </div>
-
             <div class="input-group">
               <label for="quantity-{set.id}">数量</label>
               <input type="number" id="quantity-{set.id}" bind:value={set.quantity} placeholder="数量">
@@ -189,14 +207,10 @@
               <label for="specifications-{set.id}">规格</label>
               <input type="text" id="specifications-{set.id}" bind:value={set.specifications} placeholder="规格">
             </div>
-
             <div class="input-group">
               <label for="voucherNumber-{set.id}">凭证号</label>
               <input type="text" id="voucherNumber-{set.id}" bind:value={set.voucherNumber} placeholder="凭证号" required>
             </div>
-
-
-
           </div>
           <div class="row">
             <div class="input-group">
@@ -215,27 +229,29 @@
               <label for="exchangeRate-{set.id}">汇率</label>
               <input type="number" id="exchangeRate-{set.id}" bind:value={set.exchangeRate} placeholder="汇率" step="0.0001">
             </div>
-            <div class="input-group">
-              <label for="curreny-{set.id}">货币</label>
-              <input type="number" id="curreny-{set.id}" bind:value={set.curreny} placeholder="货币" step="0.01">
+            <div class="input-group price-group">
+              <label for="price-{set.id}">价格</label>
+              <div class="price-input">
+                <input type="number" id="price-{set.id}" bind:value={set.price} placeholder="价格" step="0.01">
+                <select bind:value={set.unit}>
+                  {#each currencyUnits as unit}
+                    <option value={unit}>{unit}</option>
+                  {/each}
+                </select>
+              </div>
             </div>
-
             <div class="input-group">
               <label for="customer-{set.id}">客户</label>
               <input type="text" id="customer-{set.id}" bind:value={set.customer} placeholder="客户" required>
             </div>
-
             <div class="input-group">
               <label for="paymentStatus-{set.id}">收款情况</label>
               <input type="text" id="paymentStatus-{set.id}" bind:value={set.paymentStatus} placeholder="收款情况">
             </div>
-
             <div class="input-group">
               <label for="status-{set.id}">状态</label>
               <input type="text" id="status-{set.id}" bind:value={set.status} placeholder="状态">
             </div>
-
-
           </div>
         </div>
       {:else}
@@ -274,8 +290,6 @@
     <button type="button" on:click={handleSubmit} class="action-button submit-entries">Submit Entries</button>
   </div>
 </div>
-
-
 
 <style>
   .file-selection-container .input-wrapper input {
@@ -369,6 +383,7 @@
     pointer-events: none;
   }
 
+
   input:disabled,
   select:disabled {
     background-color: #f0f0f0;
@@ -409,20 +424,15 @@
     min-width: 100px;
   }
 
-  .input-group, .preview-item {
+  .input-group {
     display: flex;
     flex-direction: column;
   }
 
-  .input-group label, .preview-label {
+  .input-group label {
     font-size: 0.75rem;
     margin-bottom: 0.25rem;
     text-align: left;
-  }
-
-  .preview-value {
-    color: #007bff;
-    font-size: 0.875rem;
   }
 
   .entry-set-actions {
@@ -497,16 +507,55 @@
   }
 
   .preview-content {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
+    align-items: start;
   }
 
   .preview-item {
+    display: flex;
+    flex-direction: column;
     min-width: 150px;
-    flex: 1 1 150px;
+  }
+
+  .preview-label {
+    font-size: 0.75rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+  }
+
+  .preview-value {
+    font-size: 0.875rem;
+    color: #007bff;
+  }
+
+  .price-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .price-input {
+    display: flex;
+    align-items: center;
+  }
+
+  .price-input input {
+    flex: 2;
+    margin-right: 5px;
+  }
+
+  .price-input select {
+    flex: 1;
+    height: 38px;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+    box-sizing: border-box;
+    line-height: normal;
+    font-family: "Ubuntu", sans-serif;
+    background-color: #fff;
   }
 </style>
-
-
 
