@@ -14,8 +14,11 @@ ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
 
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 
 @excel_bp.route('/api/append_excel_files', methods=['POST'])
 def append_excel_data():
@@ -35,7 +38,6 @@ def append_excel_data():
 
 
 
-
 @excel_bp.route('/api/upload_excel', methods=['POST'])
 def upload_excel():
     if 'file' not in request.files:
@@ -50,42 +52,36 @@ def upload_excel():
     else:
         return jsonify({'error': 'File type not allowed'}), 400
 
-
-
 @excel_bp.route('/api/list_excel_files', methods=['GET'])
 def list_excel_files():
     result, status_code = ExcelProcessor.list_excel_files()
     return jsonify(result), status_code
-
-
-
-
-
 
 @excel_bp.route('/api/ds_operations', methods=['GET'])
 def get_operations():
     operations = ExcelProcessor.get_allowed_operations()
     return jsonify({'operations': operations}), 200
 
-
-
 @excel_bp.route('/api/process_excel', methods=['GET'])
 def process_excel():
     filename = unquote(request.args.get('filepath', ''))
     operations = request.args.get('operations', '').split(',')
     selected_columns = request.args.get('columns', '').split(',') if request.args.get('columns') else None
+    group_by_column = request.args.get('groupByColumn', '')
+    group_by_values = request.args.get('groupByValues', '')
+    aggregate_column = request.args.get('aggregateColumn', '')
     
     if not filename or not operations:
         return jsonify({'error': 'Missing filename or operations'}), 400
     
     try:
-        results, status_code = ExcelProcessor.process_excel(filename, operations, selected_columns)
+        results, status_code = ExcelProcessor.process_excel(
+            filename, operations, selected_columns, group_by_column, group_by_values, aggregate_column
+        )
         return jsonify(results), status_code
     except Exception as e:
         logger.error(f"Error processing Excel file: {str(e)}")
         return jsonify({'error': 'Failed to process Excel file'}), 500
-
-
 
 @excel_bp.route('/api/get_columns', methods=['GET'])
 def get_columns():
@@ -96,5 +92,8 @@ def get_columns():
     
     result, status_code = ExcelProcessor.get_columns(filename)
     return jsonify(result), status_code
+
+
+
 
 

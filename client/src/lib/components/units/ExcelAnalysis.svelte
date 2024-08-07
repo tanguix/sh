@@ -1,5 +1,7 @@
 
 
+
+
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
@@ -7,7 +9,7 @@
 
   type PlotlyModule = typeof import('plotly.js-dist-min');
   type AnalysisResult = {
-    basic_info?: string;
+    basic_info?: { plot: string };
     column_distribution?: Array<{ name: string; plot: string }>;
     aggregation?: string;
   };
@@ -24,6 +26,9 @@
   let uploadedFile: File | null = null;
   let uploadError: string = '';
   let aggregationData: {[key: string]: {[key: string]: number}} = {};
+  let groupByColumn: string = '';
+  let groupByValues: string = '';
+  let aggregateColumn: string = '';
 
   onMount(async () => {
     if (browser) {
@@ -80,9 +85,6 @@
     }
   }
 
-
-
-
   async function handleFileSelection() {
     if (selectedFile) {
       isLoading = true;
@@ -90,9 +92,8 @@
         const response = await fetch(`${API_ENDPOINTS.GET_COLUMNS}?filepath=${encodeURIComponent(selectedFile)}`);
         if (response.ok) {
           const data = await response.json();
-          // Filter out the 'id' column
           columns = data.columns.filter(column => column.toLowerCase() !== 'id');
-          selectedColumns = []; // Deselect all columns by default
+          selectedColumns = [];
         } else {
           console.error('Failed to fetch columns');
           alert('Failed to fetch columns from the selected file.');
@@ -107,32 +108,30 @@
       columns = [];
       selectedColumns = [];
     }
-    // Clear previous results when a new file is selected
     analysisResults = {};
     aggregationData = {};
   }
 
-
-
-  function selectAllColumns() {
-    selectedColumns = [...columns];
-  }
-
-  function deselectAllColumns() {
-    selectedColumns = [];
-  }
-
   async function handleAnalysis() {
-    if (!selectedFile || selectedAnalysis.length === 0 || selectedColumns.length === 0) {
-      alert('Please select a file, at least one analysis option, and at least one column.');
+    if (!selectedFile || selectedAnalysis.length === 0) {
+      alert('Please select a file and at least one analysis option.');
+      return;
+    }
+
+    if (selectedAnalysis.includes('column_distribution') && selectedColumns.length === 0) {
+      alert('Please select at least one column for distribution analysis.');
+      return;
+    }
+
+    if (selectedAnalysis.includes('aggregation') && (!groupByColumn || !aggregateColumn)) {
+      alert('Please select both a group by column and an aggregate column for aggregation analysis.');
       return;
     }
 
     isLoading = true;
-    analysisResults = {}; // Clear previous results
-    aggregationData = {}; // Clear previous aggregation data
+    analysisResults = {};
+    aggregationData = {};
 
-    // Clear previous plots
     if (browser && Plotly) {
       document.querySelectorAll('[id^="distribution-plot-"]').forEach(el => {
         Plotly.purge(el as HTMLElement);
@@ -143,7 +142,10 @@
       const queryParams = new URLSearchParams({
         filepath: selectedFile,
         operations: selectedAnalysis.join(','),
-        columns: selectedColumns.join(',')
+        columns: selectedColumns.join(','),
+        groupByColumn: groupByColumn,
+        groupByValues: groupByValues,
+        aggregateColumn: aggregateColumn
       });
 
       const response = await fetch(`${API_ENDPOINTS.PROCESS_EXCEL}?${queryParams}`);
@@ -153,7 +155,7 @@
         if (analysisResults.aggregation) {
           aggregationData = JSON.parse(analysisResults.aggregation);
         }
-        await tick(); // Wait for the DOM to update
+        await tick();
         renderPlots();
       } else {
         const errorData = await response.json();
@@ -167,15 +169,42 @@
     }
   }
 
+
+
+
+
   async function renderPlots() {
     if (!browser || !Plotly) return;
 
-    await tick(); // Ensure DOM is updated before rendering plots
+    await tick();
 
     const plotConfig = {
       responsive: true,
-      displayModeBar: false // Hide the modebar for a cleaner look
+      displayModeBar: false
     };
+
+
+
+    const plotLayout = {
+      autosize: true,
+      margin: { l: 50, r: 50, t: 100, b: 50 }
+    };
+
+    if (analysisResults.basic_info && selectedAnalysis.includes('basic_info')) {
+      const el = document.getElementById('basic-info-plot');
+      if (el) {
+        const plotData = JSON.parse(analysisResults.basic_info.plot);
+        Plotly.newPlot(el, plotData.data, {...plotData.layout, ...plotLayout}, plotConfig);
+        
+        // Make the plot responsive
+        window.addEventListener('resize', () => {
+          Plotly.Plots.resize(el);
+        });
+      }
+    }
+
+
+
 
     if (analysisResults.column_distribution && selectedAnalysis.includes('column_distribution')) {
       analysisResults.column_distribution.forEach((plot, index) => {
@@ -187,7 +216,11 @@
     }
   }
 
-  // Reactive statement to re-render plots when analysis results change
+
+
+
+
+
   $: if (analysisResults && Object.keys(analysisResults).length > 0) {
     tick().then(() => {
       renderPlots();
@@ -217,22 +250,6 @@
   </div>
 
   {#if selectedFile}
-    <div class="column-selection">
-      <h3>Select Columns to Analyze:</h3>
-      <div class="column-selection-buttons">
-        <button on:click={selectAllColumns}>Select All</button>
-        <button on:click={deselectAllColumns}>Deselect All</button>
-      </div>
-      <div class="column-list">
-        {#each columns as column}
-          <label>
-            <input type="checkbox" bind:group={selectedColumns} value={column}>
-            {column}
-          </label>
-        {/each}
-      </div>
-    </div>
-
     <div class="analysis-options">
       <h3>Select Analysis Options:</h3>
       {#each analysisOptions as option}
@@ -243,7 +260,45 @@
       {/each}
     </div>
 
-    <button on:click={handleAnalysis} disabled={isLoading || selectedColumns.length === 0 || selectedAnalysis.length === 0}>
+    {#if selectedAnalysis.includes('column_distribution')}
+      <div class="column-selection">
+        <h3>Select Columns for Distribution Analysis:</h3>
+        <div class="column-list">
+          {#each columns as column}
+            <label class="column-checkbox">
+              <input type="checkbox" bind:group={selectedColumns} value={column}>
+              {column}
+            </label>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if selectedAnalysis.includes('aggregation')}
+      <div class="aggregation-options">
+        <h3>Aggregation Options:</h3>
+        <label for="groupByColumn">Group By Column:</label>
+        <select id="groupByColumn" bind:value={groupByColumn}>
+          <option value="">Select a column</option>
+          {#each columns as column}
+            <option value={column}>{column}</option>
+          {/each}
+        </select>
+
+        <label for="groupByValues">Group By Values (comma-separated):</label>
+        <input type="text" id="groupByValues" bind:value={groupByValues} placeholder="e.g. clothes, books">
+
+        <label for="aggregateColumn">Aggregate Column:</label>
+        <select id="aggregateColumn" bind:value={aggregateColumn}>
+          <option value="">Select a column</option>
+          {#each columns as column}
+            <option value={column}>{column}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
+
+    <button on:click={handleAnalysis} disabled={isLoading}>
       {isLoading ? 'Processing...' : 'Analyze Excel File'}
     </button>
   {/if}
@@ -253,48 +308,48 @@
   {:else if Object.keys(analysisResults).length > 0}
     <div class="analysis-results">
       <h3>Analysis Results:</h3>
-      {#if selectedAnalysis.length === 0}
-        <p>No analysis options selected. Please select at least one analysis option.</p>
-      {:else}
-        {#if analysisResults.basic_info && selectedAnalysis.includes('basic_info')}
-          <div class="result-section">
-            <h4>Basic Info:</h4>
-            {@html analysisResults.basic_info}
-          </div>
-        {/if}
-        {#if analysisResults.column_distribution && selectedAnalysis.includes('column_distribution')}
-          <div class="result-section">
-            <h4>Column Distribution:</h4>
-            {#each analysisResults.column_distribution as plot, index}
-              <div id="distribution-plot-{index}" class="plot-container"></div>
+      {#if analysisResults.basic_info && selectedAnalysis.includes('basic_info')}
+        <div class="result-section">
+          <h4>Basic Info:</h4>
+          <div id="basic-info-plot" class="plot-container"></div>
+        </div>
+      {/if}
+      {#if analysisResults.column_distribution && selectedAnalysis.includes('column_distribution')}
+        <div class="result-section">
+          <h4>Column Distribution:</h4>
+          {#each analysisResults.column_distribution as plot, index}
+            <div id="distribution-plot-{index}" class="plot-container"></div>
+          {/each}
+        </div>
+      {/if}
+      {#if Object.keys(aggregationData).length > 0 && selectedAnalysis.includes('aggregation')}
+        <div class="result-section">
+          <h4>Aggregation:</h4>
+          <p>Group By: {groupByColumn}, Aggregate: {aggregateColumn}</p>
+          <div class="aggregation-grid">
+            {#each Object.entries(aggregationData) as [group, stats]}
+              <div class="stat-box">
+                <h5>{group}</h5>
+                <table>
+                  <tr><td>Sum:</td><td>{stats.sum}</td></tr>
+                  <tr><td>Mean:</td><td>{stats.mean}</td></tr>
+                  <tr><td>Median:</td><td>{stats.median}</td></tr>
+                  <tr><td>Min:</td><td>{stats.min}</td></tr>
+                  <tr><td>Max:</td><td>{stats.max}</td></tr>
+                </table>
+              </div>
             {/each}
           </div>
-        {/if}
-        {#if Object.keys(aggregationData).length > 0 && selectedAnalysis.includes('aggregation')}
-          <div class="result-section">
-            <h4>Aggregation:</h4>
-            <div class="aggregation-grid">
-              {#each Object.entries(aggregationData) as [column, stats]}
-                <div class="stat-box">
-                  <h5>{column}</h5>
-                  <table>
-                    <tr><td>Sum:</td><td>{stats.sum}</td></tr>
-                    <tr><td>Mean:</td><td>{stats.mean}</td></tr>
-                    <tr><td>Median:</td><td>{stats.median}</td></tr>
-                    <tr><td>Min:</td><td>{stats.min}</td></tr>
-                    <tr><td>Max:</td><td>{stats.max}</td></tr>
-                  </table>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
+        </div>
       {/if}
     </div>
-  {:else if selectedFile && selectedColumns.length > 0 && selectedAnalysis.length > 0}
+  {:else if selectedFile && selectedAnalysis.length > 0}
     <p>Click "Analyze Excel File" to view results.</p>
   {/if}
 </div>
+
+
+
 
 <style>
   .excel-analysis {
@@ -357,14 +412,6 @@
     cursor: not-allowed;
   }
 
-  .column-selection-buttons {
-    margin-bottom: 10px;
-  }
-
-  .column-selection-buttons button {
-    margin-right: 10px;
-  }
-
   .column-list {
     max-height: 200px;
     overflow-y: auto;
@@ -394,6 +441,7 @@
     margin-bottom: 10px;
   }
 
+
   .plot-container {
     width: 100%;
     height: 400px;
@@ -402,7 +450,11 @@
     border-radius: 4px;
     padding: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;  /* This will prevent content from spilling out */
   }
+
+
+
 
   .aggregation-grid {
     display: flex;
@@ -485,4 +537,3 @@
     }
   }
 </style>
-

@@ -6,11 +6,13 @@ import plotly.graph_objs as go
 from plotly.utils import PlotlyJSONEncoder
 import os
 import traceback  # Add this line
+from app.logger import logger
+
+
 
 class ExcelProcessor:
 
     EXCEL_FOLDER = 'sheet'
-
 
 
     @staticmethod
@@ -58,50 +60,87 @@ class ExcelProcessor:
 
 
 
-    @staticmethod
-    def get_allowed_operations():
-        return ['basic_info', 'column_distribution', 'aggregation']
 
 
     @staticmethod
-    def process_excel(filename, operations, selected_columns=None):
+    def process_excel(filename, operations, selected_columns=None, group_by_column=None, group_by_values=None, aggregate_column=None):
         filepath = os.path.join(ExcelProcessor.EXCEL_FOLDER, filename)
         
         if not os.path.exists(filepath):
+            logger.error(f"File not found: {filepath}")
             return {'error': 'File not found'}, 404
 
         df = pd.read_excel(filepath)
         
         if df.empty:
+            logger.error("The Excel file is empty.")
             return {'error': 'The Excel file is empty.'}, 400
 
-        if selected_columns:
-            df = df[selected_columns]
+        logger.info(f"DataFrame columns: {df.columns.tolist()}")
+        logger.info(f"DataFrame dtypes: {df.dtypes}")
 
         results = {}
+
         if 'basic_info' in operations:
-            results['basic_info'] = ExcelProcessor._get_basic_info_html(df)
+            results['basic_info'] = ExcelProcessor._get_basic_info(df)
+
         if 'column_distribution' in operations:
-            results['column_distribution'] = ExcelProcessor._get_column_distribution(df)
+            if selected_columns:
+                df_selected = df[selected_columns]
+                results['column_distribution'] = ExcelProcessor._get_column_distribution(df_selected)
+            else:
+                logger.warning("No columns selected for distribution analysis.")
+
         if 'aggregation' in operations:
-            results['aggregation'] = ExcelProcessor._get_aggregation(df)
+            if group_by_column and aggregate_column:
+                if group_by_column not in df.columns:
+                    logger.error(f"Group by column '{group_by_column}' not in dataframe")
+                    results['aggregation'] = json.dumps({"error": f"Group by column '{group_by_column}' not in dataframe"})
+                elif aggregate_column not in df.columns:
+                    logger.error(f"Aggregate column '{aggregate_column}' not in dataframe")
+                    results['aggregation'] = json.dumps({"error": f"Aggregate column '{aggregate_column}' not in dataframe"})
+                else:
+                    logger.info(f"Performing grouped aggregation. Group by: {group_by_column}, Aggregate: {aggregate_column}")
+                    results['aggregation'] = ExcelProcessor._get_grouped_aggregation(df, group_by_column, group_by_values, aggregate_column)
+            else:
+                logger.warning("Missing group by column or aggregate column for aggregation analysis.")
+
+        logger.info(f"Results keys: {results.keys()}")
         return results, 200
 
+
+
+
     @staticmethod
-    def _get_basic_info_html(df):
-        info = f"""
-        <h3>Basic Summary:</h3>
-        <ul>
-            <li>Number of rows: {len(df)}</li>
-            <li>Number of columns: {len(df.columns)}</li>
-            <li>Column names: {', '.join(df.columns)}</li>
-        </ul>
-        <h4>Data types:</h4>
-        {df.dtypes.to_frame().to_html(classes='table')}
-        <h4>First few rows:</h4>
-        {df.head().to_html(classes='table')}
-        """
-        return info
+    def _get_basic_info(df):
+        if 'creditAmount' not in df.columns or 'category' not in df.columns:
+            return json.dumps({"error": "Required columns 'creditAmount' or 'category' not found in the dataframe"})
+
+        # Group by category and sum creditAmount
+        category_sums = df.groupby('category')['creditAmount'].sum().sort_values(ascending=False)
+
+        # Create a pie chart
+        fig = go.Figure(data=[go.Pie(
+            labels=category_sums.index,
+            values=category_sums.values,
+            textinfo='label+percent',
+            insidetextorientation='radial'
+        )])
+        
+        fig.update_layout(
+            title={
+                'text': 'Distribution of Credit Amount by Category',
+                'y': 0.95,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top'
+            },
+            autosize=True,
+            margin=dict(l=50, r=50, t=100, b=50)
+        )
+
+        return {"plot": json.dumps(fig, cls=PlotlyJSONEncoder)}
+
 
 
 
@@ -142,24 +181,26 @@ class ExcelProcessor:
             })
         return plots
 
-
-
     @staticmethod
-    def _get_aggregation(df):
-        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
-        if len(numeric_columns) == 0:
-            return "No numeric columns found for aggregation analysis."
-        
-        agg_data = df[numeric_columns].agg(['sum', 'mean', 'median', 'min', 'max']).T
-        
-        # Round the values to 2 decimal places
-        agg_data = agg_data.round(2)
-        
-        # Convert to dictionary for easy JSON serialization
-        agg_dict = agg_data.to_dict('index')
-        
-        return json.dumps(agg_dict)
+    def _get_grouped_aggregation(df, group_by_column, group_by_values, aggregate_column):
+        if not pd.api.types.is_numeric_dtype(df[aggregate_column]):
+            logger.error(f"Aggregate column {aggregate_column} is not numeric. dtype: {df[aggregate_column].dtype}")
+            return json.dumps({"error": f"Aggregate column '{aggregate_column}' must be numeric"})
 
+        # If group_by_values are provided, filter the dataframe
+        if group_by_values:
+            group_by_values = [value.strip() for value in group_by_values.split(',')]
+            df = df[df[group_by_column].isin(group_by_values)]
+            logger.info(f"Filtered dataframe for group_by_values: {group_by_values}")
+
+        grouped = df.groupby(group_by_column)[aggregate_column].agg(['sum', 'mean', 'median', 'min', 'max'])
+        grouped = grouped.round(2)  # Round to 2 decimal places
+
+        # Convert to dictionary for easy JSON serialization
+        grouped_dict = grouped.to_dict('index')
+
+        logger.info(f"Grouped aggregation result: {json.dumps(grouped_dict)}")
+        return json.dumps(grouped_dict)
 
     @staticmethod
     def get_columns(filename):
@@ -187,3 +228,9 @@ class ExcelProcessor:
             return {'message': 'File uploaded successfully', 'filepath': filename}, 200
         except OSError as e:
             return {'error': f'Failed to save file due to system error: {str(e)}'}, 500
+
+    @staticmethod
+    def get_allowed_operations():
+        return ['basic_info', 'column_distribution', 'aggregation']
+
+
