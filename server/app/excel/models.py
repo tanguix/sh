@@ -91,6 +91,7 @@ class ExcelProcessor:
             else:
                 logger.warning("No columns selected for distribution analysis.")
 
+
         if 'aggregation' in operations:
             if group_by_column and aggregate_column:
                 if group_by_column not in df.columns:
@@ -107,6 +108,7 @@ class ExcelProcessor:
 
         logger.info(f"Results keys: {results.keys()}")
         return results, 200
+
 
 
 
@@ -133,13 +135,21 @@ class ExcelProcessor:
                 'y': 0.95,
                 'x': 0.5,
                 'xanchor': 'center',
-                'yanchor': 'top'
+                'yanchor': 'top',
+                'font': {'size': 16}
             },
+            margin=dict(l=20, r=20, t=80, b=20),  # Increased top margin
             autosize=True,
-            margin=dict(l=50, r=50, t=100, b=50)
         )
 
-        return {"plot": json.dumps(fig, cls=PlotlyJSONEncoder)}
+        # Extend pie colors to avoid repetition
+        fig.update_layout(
+            extendpiecolors=True
+        )
+
+        fig_json = json.dumps(fig, cls=PlotlyJSONEncoder)
+        return {"plot": fig_json}
+
 
 
 

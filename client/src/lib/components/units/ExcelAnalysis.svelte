@@ -171,8 +171,6 @@
 
 
 
-
-
   async function renderPlots() {
     if (!browser || !Plotly) return;
 
@@ -180,32 +178,42 @@
 
     const plotConfig = {
       responsive: true,
-      displayModeBar: false
+      displayModeBar: true
     };
 
-
-
-    const plotLayout = {
-      autosize: true,
-      margin: { l: 50, r: 50, t: 100, b: 50 }
-    };
 
     if (analysisResults.basic_info && selectedAnalysis.includes('basic_info')) {
       const el = document.getElementById('basic-info-plot');
       if (el) {
         const plotData = JSON.parse(analysisResults.basic_info.plot);
-        Plotly.newPlot(el, plotData.data, {...plotData.layout, ...plotLayout}, plotConfig);
         
-        // Make the plot responsive
-        window.addEventListener('resize', () => {
-          Plotly.Plots.resize(el);
-        });
+        // Adjust the plot size to fit the container
+        const containerWidth = el.offsetWidth;
+        const containerHeight = el.offsetHeight;
+        
+        plotData.layout.width = containerWidth - 20; // Subtract padding
+        plotData.layout.height = containerHeight - 20; // Subtract padding
+        
+        // Ensure the title is centered and has enough space
+        plotData.layout.title.y = 0.95;
+        plotData.layout.margin.t = 60;  // Increase top margin for more space below title
+        
+        Plotly.newPlot(el, plotData.data, plotData.layout, plotConfig);
+        
+        const resizeHandler = () => {
+          const newWidth = el.offsetWidth - 20;
+          const newHeight = el.offsetHeight - 20;
+          Plotly.relayout(el, {
+            width: newWidth,
+            height: newHeight
+          });
+        };
+
+        window.addEventListener('resize', resizeHandler);
       }
     }
 
-
-
-
+    
     if (analysisResults.column_distribution && selectedAnalysis.includes('column_distribution')) {
       analysisResults.column_distribution.forEach((plot, index) => {
         const el = document.getElementById(`distribution-plot-${index}`);
@@ -217,16 +225,25 @@
   }
 
 
-
-
-
-
   $: if (analysisResults && Object.keys(analysisResults).length > 0) {
     tick().then(() => {
       renderPlots();
     });
   }
+
+
+  let allColumnsSelected = false;
+
+  function toggleAllColumns() {
+    allColumnsSelected = !allColumnsSelected;
+    selectedColumns = allColumnsSelected ? [...columns] : [];
+  }
+
+
 </script>
+
+
+
 
 <div class="excel-analysis">
   <h2>Excel File Analysis</h2>
@@ -252,71 +269,93 @@
   {#if selectedFile}
     <div class="analysis-options">
       <h3>Select Analysis Options:</h3>
-      {#each analysisOptions as option}
-        <label>
-          <input type="checkbox" bind:group={selectedAnalysis} value={option}>
-          {option.replace('_', ' ')}
-        </label>
-      {/each}
+      <div class="options-list">
+        {#each analysisOptions as option}
+          <label class="checkbox-container">
+            <input type="checkbox" bind:group={selectedAnalysis} value={option}>
+            <span class="checkmark"></span>
+            <span class="option-text">{option.replace('_', ' ')}</span>
+          </label>
+        {/each}
+      </div>
     </div>
 
     {#if selectedAnalysis.includes('column_distribution')}
       <div class="column-selection">
         <h3>Select Columns for Distribution Analysis:</h3>
+
         <div class="column-list">
           {#each columns as column}
-            <label class="column-checkbox">
+            <label class="checkbox-container">
               <input type="checkbox" bind:group={selectedColumns} value={column}>
-              {column}
+              <span class="checkmark"></span>
+              <span class="option-text">{column}</span>
             </label>
           {/each}
         </div>
+        <button on:click={toggleAllColumns} class="toggle-all-btn">
+          {allColumnsSelected ? 'Deselect All' : 'Select All'}
+        </button>
+
       </div>
     {/if}
 
     {#if selectedAnalysis.includes('aggregation')}
       <div class="aggregation-options">
         <h3>Aggregation Options:</h3>
-        <label for="groupByColumn">Group By Column:</label>
-        <select id="groupByColumn" bind:value={groupByColumn}>
-          <option value="">Select a column</option>
-          {#each columns as column}
-            <option value={column}>{column}</option>
-          {/each}
-        </select>
-
-        <label for="groupByValues">Group By Values (comma-separated):</label>
-        <input type="text" id="groupByValues" bind:value={groupByValues} placeholder="e.g. clothes, books">
-
-        <label for="aggregateColumn">Aggregate Column:</label>
-        <select id="aggregateColumn" bind:value={aggregateColumn}>
-          <option value="">Select a column</option>
-          {#each columns as column}
-            <option value={column}>{column}</option>
-          {/each}
-        </select>
+        <div class="aggregation-grid">
+          <div class="aggregation-item">
+            <label for="groupByColumn">Group By Column:</label>
+            <select id="groupByColumn" bind:value={groupByColumn}>
+              <option value="">Select a column</option>
+              {#each columns as column}
+                <option value={column}>{column}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="aggregation-item">
+            <label for="groupByValues">Values (comma-separated):</label>
+            <input type="text" id="groupByValues" bind:value={groupByValues} placeholder="e.g. clothes, books">
+          </div>
+          <div class="aggregation-item">
+            <label for="aggregateColumn">Aggregate Column:</label>
+            <select id="aggregateColumn" bind:value={aggregateColumn}>
+              <option value="">Select a column</option>
+              {#each columns as column}
+                <option value={column}>{column}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
       </div>
     {/if}
 
-    <button on:click={handleAnalysis} disabled={isLoading}>
+    <button on:click={handleAnalysis} disabled={isLoading} class="analyze-btn">
       {isLoading ? 'Processing...' : 'Analyze Excel File'}
     </button>
   {/if}
 
   {#if isLoading}
-    <p>Loading analysis results...</p>
+    <p class="loading-message">Loading analysis results...</p>
   {:else if Object.keys(analysisResults).length > 0}
     <div class="analysis-results">
       <h3>Analysis Results:</h3>
+
+
       {#if analysisResults.basic_info && selectedAnalysis.includes('basic_info')}
         <div class="result-section">
-          <h4>Basic Info:</h4>
-          <div id="basic-info-plot" class="plot-container"></div>
+          <h4>[ Basic Info ]</h4>
+          <div class="plot-container">
+            <div id="basic-info-plot" class="plot-inner"></div>
+          </div>
         </div>
       {/if}
+
+
+
       {#if analysisResults.column_distribution && selectedAnalysis.includes('column_distribution')}
         <div class="result-section">
-          <h4>Column Distribution:</h4>
+          <h4>[ Column Distribution ]</h4>
           {#each analysisResults.column_distribution as plot, index}
             <div id="distribution-plot-{index}" class="plot-container"></div>
           {/each}
@@ -324,9 +363,9 @@
       {/if}
       {#if Object.keys(aggregationData).length > 0 && selectedAnalysis.includes('aggregation')}
         <div class="result-section">
-          <h4>Aggregation:</h4>
+          <h4>[ Aggregation ]</h4>
           <p>Group By: {groupByColumn}, Aggregate: {aggregateColumn}</p>
-          <div class="aggregation-grid">
+          <div class="aggregation-results-grid">
             {#each Object.entries(aggregationData) as [group, stats]}
               <div class="stat-box">
                 <h5>{group}</h5>
@@ -344,14 +383,18 @@
       {/if}
     </div>
   {:else if selectedFile && selectedAnalysis.length > 0}
-    <p>Click "Analyze Excel File" to view results.</p>
+    <p class="info-message">Click "Analyze Excel File" to view results.</p>
   {/if}
 </div>
 
-
-
-
 <style>
+
+  input {
+    margin: 0;
+    padding: 0;
+  }
+
+
   .excel-analysis {
     font-family: Arial, sans-serif;
     max-width: 800px;
@@ -359,138 +402,145 @@
     padding: 20px;
   }
 
-  .file-selection, .column-selection, .analysis-options {
+
+  h2 {
+    font-size: 24px;
     margin-bottom: 20px;
   }
 
-  .file-selection select {
-    width: 300px;
-    padding: 8px 12px;
-    font-size: 16px;
+  h3 {
+    font-size: 20px;
+    margin-top: 20px;
+    margin-bottom: 10px;
+  }
+
+  h4 {
+    font-size: 18px;
+    margin-top: 15px;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  .file-selection, .file-upload, .analysis-options, .column-selection, .aggregation-options {
+    margin-bottom: 20px;
+  }
+
+  label {
+    font-family: Ubuntu;
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+
+  select, input[type="text"], input[type="file"] {
+    font-family: Ubuntu;
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    background-color: #f8f8f8;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23333' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: calc(100% - 12px) center;
+    box-sizing: border-box;
   }
 
-  .file-selection select:hover {
-    border-color: #888;
+  .options-list, .column-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
   }
 
-  .file-selection select:focus {
-    outline: none;
-    border-color: #4CAF50;
-    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+
+
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    user-select: none;
   }
 
-  .file-upload {
-    margin-top: 20px;
-    margin-bottom: 20px;
+  .checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
   }
 
-  button {
+  .checkmark {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    height: 18px;
+    width: 18px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+  }
+
+  .checkbox-container:hover input ~ .checkmark {
+    background-color: #e0e0e0;
+  }
+
+  .checkbox-container input:checked ~ .checkmark {
+    background-color: #2196F3;
+    border-color: #2196F3;
+  }
+
+  .checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+  }
+
+  .checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+  }
+
+  .checkbox-container .checkmark:after {
+    left: 6px;
+    top: 2px;
+    width: 3px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .option-text {
+    margin-left: 8px;
+    line-height: 18px;
+  }
+
+
+
+
+
+  .toggle-all-btn, .analyze-btn {
     background-color: #4CAF50;
     color: white;
     border: none;
     padding: 10px 15px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
     font-size: 16px;
+    margin: 4px 2px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    border-radius: 4px;
   }
 
-  button:hover {
-    background-color: #45a049;
+  .toggle-all-btn {
+    background-color: #008CBA;
   }
 
-  button:disabled {
+  .analyze-btn:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
-  }
-
-  .column-list {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-    padding: 10px;
-  }
-
-  .column-list label {
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  .analysis-options label {
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  .analysis-results {
-    margin-top: 20px;
-  }
-
-  .result-section {
-    margin-bottom: 20px;
-  }
-
-  .result-section h4 {
-    margin-bottom: 10px;
-  }
-
-
-  .plot-container {
-    width: 100%;
-    height: 400px;
-    margin-bottom: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    padding: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    overflow: hidden;  /* This will prevent content from spilling out */
-  }
-
-
-
-
-  .aggregation-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    justify-content: flex-start;
-  }
-
-  .stat-box {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 15px;
-    width: calc(25% - 15px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    background-color: #f9f9f9;
-  }
-
-  .stat-box h5 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1em;
-    text-align: center;
-  }
-
-  .stat-box table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .stat-box td {
-    padding: 3px 0;
-  }
-
-  .stat-box td:first-child {
-    font-weight: bold;
-    padding-right: 10px;
   }
 
   .error {
@@ -498,42 +548,120 @@
     margin-top: 5px;
   }
 
+  .loading-message {
+    color: #008CBA;
+    font-weight: bold;
+  }
 
-  :global(.table) {
-    border-collapse: collapse;
+  .info-message {
+    color: #555;
+    font-style: italic;
+  }
+
+
+
+  .plot-container {
     width: 100%;
-    margin-bottom: 1em;
+    max-width: 600px;
+    height: 450px;  /* Increased height to accommodate title */
+    margin: 0 auto 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
-  :global(.table th, .table td) {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
+
+  .plot-inner {
+    width: 100%;
+    height: 100%;
   }
 
-  :global(.table th) {
-    background-color: #f2f2f2;
+
+  .aggregation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+  }
+
+  .aggregation-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+
+
+  .aggregation-results-grid {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .stat-box {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    min-width: 0; /* Allows the box to shrink below its content size */
+  }
+
+  .stat-box h5 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  .stat-box table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .stat-box td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stat-box td:first-child {
+    font-weight: bold;
+    padding-right: 10px;
+    width: 40%;
+    text-align: left; /* Keep labels left-aligned */
+  }
+
+  .stat-box td:last-child {
+    text-align: center; /* Center-align only the value cells */
   }
 
   @media (max-width: 1200px) {
-    .stat-box {
-      width: calc(33.33% - 13.33px); /* 3 boxes per row */
+    .aggregation-results-grid {
+      grid-template-columns: repeat(3, 1fr);
     }
   }
 
   @media (max-width: 900px) {
-    .stat-box {
-      width: calc(50% - 10px); /* 2 boxes per row */
+    .aggregation-results-grid {
+      grid-template-columns: repeat(2, 1fr);
     }
   }
 
   @media (max-width: 600px) {
-    .stat-box {
-      width: 100%; /* 1 box per row */
-    }
-
-    .file-selection select {
-      width: 100%;
+    .aggregation-results-grid {
+      grid-template-columns: 1fr;
     }
   }
+
+
+
 </style>
+
+
+
+

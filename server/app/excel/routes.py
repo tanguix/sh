@@ -52,15 +52,18 @@ def upload_excel():
     else:
         return jsonify({'error': 'File type not allowed'}), 400
 
+
 @excel_bp.route('/api/list_excel_files', methods=['GET'])
 def list_excel_files():
     result, status_code = ExcelProcessor.list_excel_files()
     return jsonify(result), status_code
 
+
 @excel_bp.route('/api/ds_operations', methods=['GET'])
 def get_operations():
     operations = ExcelProcessor.get_allowed_operations()
     return jsonify({'operations': operations}), 200
+
 
 @excel_bp.route('/api/process_excel', methods=['GET'])
 def process_excel():
@@ -82,6 +85,7 @@ def process_excel():
     except Exception as e:
         logger.error(f"Error processing Excel file: {str(e)}")
         return jsonify({'error': 'Failed to process Excel file'}), 500
+
 
 @excel_bp.route('/api/get_columns', methods=['GET'])
 def get_columns():

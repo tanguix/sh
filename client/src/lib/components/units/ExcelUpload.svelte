@@ -161,7 +161,7 @@
         <div class="select-wrapper">
           <select id="excel-file-select" bind:value={selectedFile}>
             <option value="">Select a file</option>
-            <option value="new">Create New Sheet</option>
+            <option value="new">[ Create New Sheet ]</option>
             {#each availableFiles as file}
               <option value={file}>{file}</option>
             {/each}
