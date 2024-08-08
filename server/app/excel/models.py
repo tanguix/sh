@@ -191,6 +191,8 @@ class ExcelProcessor:
             })
         return plots
 
+
+
     @staticmethod
     def _get_grouped_aggregation(df, group_by_column, group_by_values, aggregate_column):
         if not pd.api.types.is_numeric_dtype(df[aggregate_column]):
@@ -212,6 +214,7 @@ class ExcelProcessor:
         logger.info(f"Grouped aggregation result: {json.dumps(grouped_dict)}")
         return json.dumps(grouped_dict)
 
+
     @staticmethod
     def get_columns(filename):
         filepath = os.path.join(ExcelProcessor.EXCEL_FOLDER, filename)
@@ -219,6 +222,7 @@ class ExcelProcessor:
             return {'error': 'File not found'}, 404
         df = pd.read_excel(filepath)
         return {'columns': df.columns.tolist()}, 200
+
 
     @staticmethod
     def list_excel_files():
@@ -228,6 +232,7 @@ class ExcelProcessor:
         except Exception as e:
             return {'error': f'Failed to list Excel files: {str(e)}'}, 500
 
+    
     @staticmethod
     def save_uploaded_file(file):
         filename = file.filename
@@ -238,6 +243,7 @@ class ExcelProcessor:
             return {'message': 'File uploaded successfully', 'filepath': filename}, 200
         except OSError as e:
             return {'error': f'Failed to save file due to system error: {str(e)}'}, 500
+
 
     @staticmethod
     def get_allowed_operations():

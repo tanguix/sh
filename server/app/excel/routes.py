@@ -19,7 +19,6 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-
 @excel_bp.route('/api/append_excel_files', methods=['POST'])
 def append_excel_data():
     if 'filename' not in request.form or 'data' not in request.form or 'is_new_file' not in request.form:
