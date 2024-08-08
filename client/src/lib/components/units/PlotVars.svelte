@@ -2,92 +2,135 @@
 
 
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
   import { browser } from '$app/environment';
 
-  type PlotlyModule = typeof import('plotly.js-dist-min');
-  
-  let Plotly: PlotlyModule;
   let plotDiv: HTMLElement;
-  let identifier = 'SAM_animal_47e47476'; // You can make this dynamic if needed
+  let identifier = 'SAM_human_4a606530';
   let isLoading = false;
   let error = '';
+  let plotData: any = null;
+  let viewMode: 'normalized' | 'separate' = 'normalized';
+  let Plotly: any;
+  let shouldCreatePlot = false;
 
   onMount(async () => {
     if (browser) {
-      Plotly = await import('plotly.js-dist-min');
+      try {
+        await loadPlotly();
+        await fetchData();
+      } catch (err) {
+        error = `Error in onMount: ${err.message}`;
+        console.error('Error in onMount:', err);
+      }
     }
-    await fetchDataAndPlot();
   });
 
-  async function fetchDataAndPlot() {
+  afterUpdate(() => {
+    if (shouldCreatePlot && plotDiv && plotData) {
+      createPlot();
+      shouldCreatePlot = false;
+    }
+  });
+
+  async function loadPlotly() {
+    return new Promise<void>((resolve, reject) => {
+      if ((window as any).Plotly) {
+        Plotly = (window as any).Plotly;
+        resolve();
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.plot.ly/plotly-2.20.0.min.js';
+        script.onload = () => {
+          Plotly = (window as any).Plotly;
+          resolve();
+        };
+        script.onerror = (e) => {
+          console.error('Error loading Plotly from CDN:', e);
+          reject(new Error('Failed to load Plotly'));
+        };
+        document.head.appendChild(script);
+      }
+    });
+  }
+
+  async function fetchData() {
     isLoading = true;
     error = '';
     try {
-      const response = await fetch(`${API_ENDPOINTS.GET_PRICE_WEIGHT}?identifier=${identifier}`);
+      const response = await fetch(`${API_ENDPOINTS.GET_PRICE_WEIGHT}?identifier=${identifier}&view_mode=${viewMode}`);
       if (response.ok) {
-        const data = await response.json();
-        createPlot(data);
+        plotData = await response.json();
+        if (plotData && plotData.x && plotData.traces && plotData.layout) {
+          shouldCreatePlot = true;
+        } else {
+          error = 'Invalid data format received from the server';
+          console.error('Invalid plotData format:', plotData);
+        }
       } else {
-        error = 'Failed to fetch price and weight data';
-        console.error(error);
+        error = `Server responded with status: ${response.status}`;
+        console.error('Error response from server:', error);
       }
     } catch (err) {
-      error = 'Error fetching price and weight data';
-      console.error(error, err);
+      error = `Error fetching price and weight data: ${err.message}`;
+      console.error('Error in fetchData:', err);
     } finally {
       isLoading = false;
     }
   }
 
-  function createPlot(data: { timestamps: number[], unit_prices: number[], unit_weights: number[] }) {
-    if (!Plotly || !plotDiv) return;
+  function createPlot() {
+    if (!Plotly || !plotDiv || !plotData) {
+      console.error('Unable to create plot. Missing:', {
+        Plotly: !Plotly,
+        plotDiv: !plotDiv,
+        plotData: !plotData
+      });
+      error = 'Missing required data for plot creation';
+      return;
+    }
 
-    const trace1 = {
-      x: data.timestamps,
-      y: data.unit_prices,
+    const traces = plotData.traces.map(trace => ({
+      x: plotData.x,
+      y: trace.y,
       mode: 'lines+markers',
-      name: 'Unit Price',
-      line: {color: '#1f77b4'},
-      marker: {size: 8}
-    };
+      name: trace.name,
+      line: { color: trace.color },
+      marker: { size: 6 },
+      xaxis: trace.xaxis,
+      yaxis: trace.yaxis
+    }));
 
-    const trace2 = {
-      x: data.timestamps,
-      y: data.unit_weights,
-      mode: 'lines+markers',
-      name: 'Unit Weight',
-      line: {color: '#ff7f0e'},
-      marker: {size: 8},
-      yaxis: 'y2'
-    };
+    try {
+      Plotly.newPlot(plotDiv, traces, plotData.layout);
+    } catch (err) {
+      console.error('Error creating plot:', err);
+      error = `Error creating plot: ${err.message}`;
+    }
+  }
 
-    const layout = {
-      title: 'Unit Price and Weight Over Time',
-      xaxis: {title: 'Timestamp'},
-      yaxis: {title: 'Unit Price', side: 'left'},
-      yaxis2: {
-        title: 'Unit Weight',
-        overlaying: 'y',
-        side: 'right'
-      },
-      legend: {x: 0, y: 1.2},
-      margin: {t: 60, b: 100, l: 60, r: 60},
-      height: 500,
-      width: 800
-    };
-
-    Plotly.newPlot(plotDiv, [trace1, trace2], layout);
+  async function toggleView() {
+    console.log(`Toggling view from ${viewMode} to ${viewMode === 'normalized' ? 'separate' : 'normalized'}`);
+    viewMode = viewMode === 'normalized' ? 'separate' : 'normalized';
+    await fetchData();
   }
 </script>
+
+<div>
+  <button on:click={toggleView}>
+    Switch to {viewMode === 'normalized' ? 'Separate' : 'Normalized'} View
+  </button>
+</div>
 
 {#if isLoading}
   <p>Loading...</p>
 {:else if error}
   <p>Error: {error}</p>
-{:else}
+{:else if plotData}
   <div bind:this={plotDiv}></div>
+{:else}
+  <p>No data available to plot.</p>
 {/if}
 
 

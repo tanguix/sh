@@ -15,43 +15,49 @@ export const SECURE_HOST = 'https://';
 // Specific API endpoints
 export const API_ENDPOINTS = {
 
-    REGISTER: `${BASE_URL}/auth/api/register`,
-    MATCH: `${BASE_URL}/auth/api/match`,
+  // auth route
+  REGISTER: `${BASE_URL}/auth/api/register`,
+  MATCH: `${BASE_URL}/auth/api/match`,
 
 
-    UPLOAD_REFERENCE: `${BASE_URL}/upload/api/upload_reference`,
-    FETCH_REF_KEYS: `${BASE_URL}/upload/api/fetch_reference_keys`,
-    UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
-    FETCH_IDENTIFIERS: `${BASE_URL}/upload/api/fetch_identifiers`,
-    CREATE_IDENTIFIER: `${BASE_URL}/upload/api/create_identifier`,
-    UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
-    WORKFLOW_COMMIT: `${BASE_URL}/upload/api/workflow_commit`,
-    FETCH_LOCKED_WORKFLOW: `${BASE_URL}/upload/api/fetch_locked_workflow`,
-    FETCH_ALL_WORKFLOW: `${BASE_URL}/upload/api/fetch_all_workflow`,
-    UPLOAD_FILE: `${BASE_URL}/upload/api/upload_file`,
-    DOWNLOAD_FILE: `${BASE_URL}/upload/api/download_file`,
+  // upload route
+  UPLOAD_REFERENCE: `${BASE_URL}/upload/api/upload_reference`,
+  FETCH_REF_KEYS: `${BASE_URL}/upload/api/fetch_reference_keys`,
+  UPLOAD_DATA: `${BASE_URL}/upload/api/upload_data`,
+  FETCH_IDENTIFIERS: `${BASE_URL}/upload/api/fetch_identifiers`,
+  CREATE_IDENTIFIER: `${BASE_URL}/upload/api/create_identifier`,
+  UPLOAD_SAMPLE: `${BASE_URL}/upload/api/upload_sample`,
+  WORKFLOW_COMMIT: `${BASE_URL}/upload/api/workflow_commit`,
+  FETCH_LOCKED_WORKFLOW: `${BASE_URL}/upload/api/fetch_locked_workflow`,
+  FETCH_ALL_WORKFLOW: `${BASE_URL}/upload/api/fetch_all_workflow`,
+  UPLOAD_FILE: `${BASE_URL}/upload/api/upload_file`,
+  DOWNLOAD_FILE: `${BASE_URL}/upload/api/download_file`,
 
 
-    FETCH_COLLECTIONS: `${BASE_URL}/search/api/collections`,
-    FETCH_KEYS: `${BASE_URL}/search/api/keys`,
-    FETCH_UNIQUE_IDENTIFIERS: `${BASE_URL}/search/api/get_unique_identifiers`,
-    FETCH_WORKFLOW_TOKEN: `${BASE_URL}/search/api/get_workflow_tokens`,
-    SEARCH_RESULTS: `${BASE_URL}/search/api/searched_result`,
-    FETCH_CATEGORIES_AND_TAGS: `${BASE_URL}/search/api/categories_and_tags`,
+  // search route
+  FETCH_COLLECTIONS: `${BASE_URL}/search/api/collections`,
+  FETCH_KEYS: `${BASE_URL}/search/api/keys`,
+  FETCH_UNIQUE_IDENTIFIERS: `${BASE_URL}/search/api/get_unique_identifiers`,
+  FETCH_WORKFLOW_TOKEN: `${BASE_URL}/search/api/get_workflow_tokens`,
+  SEARCH_RESULTS: `${BASE_URL}/search/api/searched_result`,
+  FETCH_CATEGORIES_AND_TAGS: `${BASE_URL}/search/api/categories_and_tags`,
 
 
-    LIST_EXCEL: `${BASE_URL}/excel/api/list_excel_files`,
-    APPEND_EXCEL: `${BASE_URL}/excel/api/append_excel_files`,
-    UPLOAD_EXCEL: `${BASE_URL}/excel/api/upload_excel`,
-    PROCESS_EXCEL: `${BASE_URL}/excel/api/process_excel`,
-    DS_OPERATIONS: `${BASE_URL}/excel/api/ds_operations`,
-    GET_COLUMNS: `${BASE_URL}/excel/api/get_columns`,
+  // excel route
+  LIST_EXCEL: `${BASE_URL}/excel/api/list_excel_files`,
+  APPEND_EXCEL: `${BASE_URL}/excel/api/append_excel_files`,
+  UPLOAD_EXCEL: `${BASE_URL}/excel/api/upload_excel`,
+  PROCESS_EXCEL: `${BASE_URL}/excel/api/process_excel`,
+  DS_OPERATIONS: `${BASE_URL}/excel/api/ds_operations`,
+  GET_COLUMNS: `${BASE_URL}/excel/api/get_columns`,
 
 
-    GET_PRICE_WEIGHT: `${BASE_URL}/price/api/get_price_weight`,
+  // price route
+  GET_PRICE_WEIGHT: `${BASE_URL}/price/api/get_price_weight`,
 
 
-    EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,
+  // extra route
+  EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,
 
 };
 

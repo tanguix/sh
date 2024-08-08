@@ -11,7 +11,7 @@
 
 <main>
 
-  <h2>COOL</h2>
+  <h2>Price Graph</h2>
   <PlotVars />
 
 </main>
