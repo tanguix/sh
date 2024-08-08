@@ -48,6 +48,9 @@ export const API_ENDPOINTS = {
     GET_COLUMNS: `${BASE_URL}/excel/api/get_columns`,
 
 
+    GET_PRICE_WEIGHT: `${BASE_URL}/price/api/get_price_weight`,
+
+
     EXCHANGE_RATE: `${BASE_URL}/extra/api/exchange_rate`,
 
 };

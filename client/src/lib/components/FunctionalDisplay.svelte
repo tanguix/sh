@@ -4,448 +4,362 @@
 
 
 <script lang="ts">
-  import { onMount, beforeUpdate } from 'svelte';
-  import { API_ENDPOINTS } from '$lib/utils/api';
-  import { page } from '$app/stores';
-  import { get } from 'svelte/store';
-  import { writable } from 'svelte/store';
-  import { unsavedChanges } from '$lib/utils/vars';
-  import { generatePDF } from '$lib/utils/pdf';
-  import Modal from '$lib/components/units/Modal.svelte';
 
-  import InventoryUpdate from '$lib/components/units/InventoryUpdate.svelte';  // Add this line
+import { onMount, beforeUpdate } from 'svelte';
+import { API_ENDPOINTS } from '$lib/utils/api';
+import { page } from '$app/stores';
+import { get } from 'svelte/store';
+import { writable } from 'svelte/store';
+import { unsavedChanges } from '$lib/utils/vars';
+import { generatePDF } from '$lib/utils/pdf';
+import Modal from '$lib/components/units/Modal.svelte';
+import InventoryUpdate from '$lib/components/units/InventoryUpdate.svelte';
 
+interface InventoryItem {
+  putIn: number;
+  takeOut: number;
+  by: string;
+  timestamp: number;
+}
 
+interface UnitData {
+  num: number;
+  unit: string;
+  timestamp: number;
+  upload: string;
+}
 
-  interface InventoryItem {
-    putIn: number;
-    takeOut: number;
-    by: string;
-    timestamp: number;
+interface Sample {
+  reference_no: string;
+  tags: string[];
+  date: string;
+  image_url: string;
+  modifiedBy: string[];
+  total_inventory: number;
+  inventory: InventoryItem[];
+  identifier?: string;
+  newPutIn?: number;
+  newTakeOut?: number;
+  unit_price?: UnitData | UnitData[];
+  unit_weight?: UnitData | UnitData[];
+  [key: string]: any;
+}
+
+export let results: Sample[] = [];
+export let deepCopiedResults: Sample[] = [];
+export let searchOption: string = '';
+export let resultCount: number = 0;
+
+let expandedItems = new Set<number>();
+let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
+let content: string = `
+    Marks & Order Nos.(标志及订单号码)\n
+    Description & Specifications (描述及规格)\n
+    Unit Price (单价)\n
+    Total Price (总值)\n
+    H.S.CODE (商品编码)\n
+    From 由\n
+    To 至
+`;
+
+const displayedForms = writable({});
+let removeClickCounts = writable({});
+let selectedForRemoval = writable({});
+let unsavedChangesByIndex = writable({});
+let formActionClicked = writable({});
+let dropSampleClicked = writable<{[key: number]: boolean}>({});
+let pendingRemoval = writable<{[key: number]: boolean}>({});
+
+const errorMessage = writable('');
+const isLoading = writable(false);
+
+$: isEditingEnabled = searchOption === 'sampling' || searchOption === 'inventory';
+$: isInventoryMode = searchOption === 'inventory';
+$: isSamplingMode = searchOption === 'sampling';
+$: resultsLengthChanged = results.length !== deepCopiedResults.length;
+
+let isGridView = true;
+let expandedItemIndex: number | null = null;
+let isModalOpen = false;
+let currentInventory: InventoryItem[] = [];
+
+let availableIdentifiers: string[] = [];
+let selectedIdentifier: string = '';
+let newIdentifierName: string = '';
+let isCreatingNewIdentifier: boolean = false;
+
+let mounted = false;
+
+onMount(() => {
+  if (searchOption === 'sampling' || searchOption === 'inventory') {
+    fetchAvailableIdentifiers();
   }
+  mounted = true;
+});
 
-  interface Sample {
-    reference_no: string;
-    tags: string[];
-    date: string;
-    image_url: string;
-    modifiedBy: string[];
-    total_inventory: number;
-    inventory: InventoryItem[];
-    identifier?: string;
-    newPutIn?: number;
-    newTakeOut?: number;
+$: if (mounted) {
+  if (searchOption === 'sampling' || searchOption === 'inventory') {
+    fetchAvailableIdentifiers();
+  } else {
+    availableIdentifiers = [];
   }
+}
 
-  export let results: Sample[] = [];
-  export let deepCopiedResults: Sample[] = [];
-  export let searchOption: string = '';
-  export let resultCount: number = 0;
-
-  let expandedItems = new Set<number>();
-  let keysToExclude: string[] = ['image_url', 'file', 'inventory', 'sample_token'];
-  let content: string = `
-      Marks & Order Nos.(标志及订单号码)\n
-      Description & Specifications (描述及规格)\n
-      Unit Price (单价)\n
-      Total Price (总值)\n
-      H.S.CODE (商品编码)\n
-      From 由\n
-      To 至
-  `;
-
-  const displayedForms = writable({});
-  let removeClickCounts = writable({});
-  let selectedForRemoval = writable({});
-  let unsavedChangesByIndex = writable({});
-  let formActionClicked = writable({});
-  let dropSampleClicked = writable<{[key: number]: boolean}>({});
-  let pendingRemoval = writable<{[key: number]: boolean}>({});
-
-  const errorMessage = writable('');
-  const isLoading = writable(false);
-
-  $: isEditingEnabled = searchOption === 'sampling' || searchOption === 'inventory';
-  $: isInventoryMode = searchOption === 'inventory';
-  $: isSamplingMode = searchOption === 'sampling';
-  $: resultsLengthChanged = results.length !== deepCopiedResults.length;
-
-  let isGridView = true;
-  let expandedItemIndex: number | null = null;
-  let isModalOpen = false;
-  let currentInventory: InventoryItem[] = [];
-
-  let availableIdentifiers: string[] = [];
-  let selectedIdentifier: string = '';
-  let newIdentifierName: string = '';
-  let isCreatingNewIdentifier: boolean = false;
-
-  let mounted = false;
-
-  onMount(() => {
-    if (searchOption === 'sampling' || searchOption === 'inventory') {
-      fetchAvailableIdentifiers();
-    }
-    mounted = true;
-  });
-
-  $: if (mounted) {
-    if (searchOption === 'sampling' || searchOption === 'inventory') {
-      fetchAvailableIdentifiers();
+async function fetchAvailableIdentifiers() {
+  try {
+    const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
+    if (response.ok) {
+      const data = await response.json();
+      availableIdentifiers = data.identifiers;
     } else {
-      availableIdentifiers = [];
+      throw new Error('Failed to fetch identifiers');
     }
+  } catch (error) {
+    console.error('Error fetching identifiers:', error);
+    errorMessage.set('Failed to fetch identifiers. Please try again.');
+    availableIdentifiers = [];
+  }
+}
+
+function toggleNewIdentifierCreation() {
+  isCreatingNewIdentifier = !isCreatingNewIdentifier;
+  if (!isCreatingNewIdentifier) {
+    newIdentifierName = '';
+  }
+}
+
+async function createNewIdentifier() {
+  if (!newIdentifierName.trim()) {
+    errorMessage.set('Please enter a name for the new identifier');
+    return;
   }
 
-  async function fetchAvailableIdentifiers() {
-    try {
-      const response = await fetch(`${API_ENDPOINTS.FETCH_IDENTIFIERS}?mode=${searchOption}`);
-      if (response.ok) {
-        const data = await response.json();
-        availableIdentifiers = data.identifiers;
-      } else {
-        throw new Error('Failed to fetch identifiers');
-      }
-    } catch (error) {
-      console.error('Error fetching identifiers:', error);
-      errorMessage.set('Failed to fetch identifiers. Please try again.');
-      availableIdentifiers = [];
-    }
-  }
+  try {
+    const response = await fetch(`${API_ENDPOINTS.CREATE_IDENTIFIER}?mode=${searchOption}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newIdentifierName })
+    });
 
-  function toggleNewIdentifierCreation() {
-    isCreatingNewIdentifier = !isCreatingNewIdentifier;
-    if (!isCreatingNewIdentifier) {
+    if (response.ok) {
+      const data = await response.json();
+      availableIdentifiers = [...availableIdentifiers, data.identifier];
+      selectedIdentifier = data.identifier;
+      isCreatingNewIdentifier = false;
       newIdentifierName = '';
+    } else {
+      throw new Error('Failed to create new identifier');
     }
+  } catch (error) {
+    console.error('Error creating new identifier:', error);
+    errorMessage.set(error.message);
   }
+}
 
-  async function createNewIdentifier() {
-    if (!newIdentifierName.trim()) {
-      errorMessage.set('Please enter a name for the new identifier');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_ENDPOINTS.CREATE_IDENTIFIER}?mode=${searchOption}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newIdentifierName })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        availableIdentifiers = [...availableIdentifiers, data.identifier];
-        selectedIdentifier = data.identifier;
-        isCreatingNewIdentifier = false;
-        newIdentifierName = '';
-      } else {
-        throw new Error('Failed to create new identifier');
+function toggleExpandItem(index: number) {
+  if (isGridView) {
+    if (expandedItems.has(index)) {
+      expandedItems.delete(index);
+    } else {
+      if (expandedItems.size >= 2) {
+        expandedItems.delete(expandedItems.values().next().value);
       }
-    } catch (error) {
-      console.error('Error creating new identifier:', error);
-      errorMessage.set(error.message);
+      expandedItems.add(index);
     }
+    expandedItems = expandedItems; // Trigger reactivity
   }
+}
 
-  function toggleExpandItem(index: number) {
-    if (isGridView) {
-      if (expandedItems.has(index)) {
-        expandedItems.delete(index);
-      } else {
-        if (expandedItems.size >= 2) {
-          expandedItems.delete(expandedItems.values().next().value);
-        }
-        expandedItems.add(index);
-      }
-      expandedItems = expandedItems; // Trigger reactivity
-    }
-  }
+function filterDisplayedKeys(result: any) {
+  return Object.fromEntries(
+    Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
+  );
+}
 
-  function filterDisplayedKeys(result: any) {
-    return Object.fromEntries(
-      Object.entries(result).filter(([key]) => !keysToExclude.includes(key))
-    );
-  }
-
-  function formatPropertyValue(key: string, value: any) {
-    if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
-      const lastModifier = value[value.length - 1];
-      return `${lastModifier.name} (${lastModifier.role})`;
-    } else if (key === 'additional_image_path' && Array.isArray(value)) {
-      return value;
-    } else if (key === 'unit_price' || key === 'unit_weight') {
-      return `${value.num} ${value.unit}`;
-    } else if (key === 'total_inventory') {
-      return value.toString();
-    } else if (Array.isArray(value)) {
-      return value.join(', ');
+function formatPropertyValue(key: string, value: any) {
+  if (key === 'modifiedBy' && Array.isArray(value) && value.length > 0) {
+    const lastModifier = value[value.length - 1];
+    return `${lastModifier.name} (${lastModifier.role})`;
+  } else if (key === 'additional_image_path' && Array.isArray(value)) {
+    return value;
+  } else if (key === 'unit_price' || key === 'unit_weight') {
+    if (Array.isArray(value)) {
+      return value.map(item => `${item.num} ${item.unit}`).join(', ');
     } else if (typeof value === 'object' && value !== null) {
-      return JSON.stringify(value);
+      return `${value.num} ${value.unit}`;
     }
     return value;
+  } else if (key === 'total_inventory') {
+    return value.toString();
+  } else if (Array.isArray(value)) {
+    return value.join(', ');
+  } else if (typeof value === 'object' && value !== null) {
+    return JSON.stringify(value);
   }
+  return value;
+}
 
-  async function generatePDFWrapper() {
-    await generatePDF(results, content);
-  }
+async function generatePDFWrapper() {
+  await generatePDF(results, content);
+}
 
-  function addForm(index: number) {
-    displayedForms.update(forms => {
-      if (!forms[index]) {
-        forms[index] = [];
-      }
-      forms[index].push({ key: '', value: '', isRemove: false, rawValue: '' });
-      return forms;
-    });
-    setUnsavedChanges(index, true);
-    formActionClicked.update(clicked => {
-      clicked[index] = true;
-      return clicked;
-    });
-    dropSampleClicked.update(clicked => {
-      clicked[index] = false;
-      return clicked;
-    });
-  }
-
-  function removeKey(index: number) {
-    displayedForms.update(forms => {
-      if (!forms[index]) {
-        forms[index] = [];
-      }
-      forms[index].push({ key: '', isRemove: true });
-      return forms;
-    });
-
-    removeClickCounts.update(counts => {
-      counts[index] = (counts[index] || 0) + 1;
-      return counts;
-    });
-    setUnsavedChanges(index, true);
-    formActionClicked.update(clicked => {
-      clicked[index] = true;
-      return clicked;
-    });
-    dropSampleClicked.update(clicked => {
-      clicked[index] = false;
-      return clicked;
-    });
-  }
-
-  function confirmDropSample(index: number) {
-    const result = results[index];
-    const canDrop = result.reference_no && result.identifier && (isSamplingMode || isInventoryMode);
-    
-    if (canDrop) {
-      pendingRemoval.update(pending => {
-        pending[index] = true;
-        return pending;
-      });
-    } else {
-      errorMessage.set("Cannot drop sample: Missing reference number or identifier");
+function addForm(index: number) {
+  displayedForms.update(forms => {
+    if (!forms[index]) {
+      forms[index] = [];
     }
-  }
+    forms[index].push({ key: '', value: '', isRemove: false, rawValue: '' });
+    return forms;
+  });
+  setUnsavedChanges(index, true);
+  formActionClicked.update(clicked => {
+    clicked[index] = true;
+    return clicked;
+  });
+  dropSampleClicked.update(clicked => {
+    clicked[index] = false;
+    return clicked;
+  });
+}
 
-  async function dropSample(index: number) {
-    const sampleToDelete = results[index];
-    const referenceNo = sampleToDelete.reference_no;
-    const identifier = sampleToDelete.identifier;
-
-    if (!referenceNo || !identifier) {
-      console.error("Reference number or identifier is missing");
-      errorMessage.set("Unable to drop sample: Missing reference number or identifier");
-      return;
+function removeKey(index: number) {
+  displayedForms.update(forms => {
+    if (!forms[index]) {
+      forms[index] = [];
     }
+    forms[index].push({ key: '', isRemove: true });
+    return forms;
+  });
 
-    isLoading.set(true);
-    errorMessage.set('');
+  removeClickCounts.update(counts => {
+    counts[index] = (counts[index] || 0) + 1;
+    return counts;
+  });
+  setUnsavedChanges(index, true);
+  formActionClicked.update(clicked => {
+    clicked[index] = true;
+    return clicked;
+  });
+  dropSampleClicked.update(clicked => {
+    clicked[index] = false;
+    return clicked;
+  });
+}
 
-    try {
-      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(identifier)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ 
-          _remove: true, 
-          reference_no: referenceNo,
-          identifier: identifier,
-          ...sampleToDelete
-        }]),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to drop sample');
-      }
-
-      const result = await response.json();
-      console.log("Sample dropped:", result);
-
-      results = results.filter((_, i) => i !== index);
-
-      displayedForms.update(forms => {
-        delete forms[index];
-        return forms;
-      });
-      unsavedChangesByIndex.update(changes => {
-        delete changes[index];
-        return changes;
-      });
-      formActionClicked.update(clicked => {
-        delete clicked[index];
-        return clicked;
-      });
-      dropSampleClicked.update(clicked => {
-        delete clicked[index];
-        return clicked;
-      });
-      pendingRemoval.update(pending => {
-        delete pending[index];
-        return pending;
-      });
-
-      console.log(`Sample with reference number ${referenceNo} and identifier ${identifier} dropped successfully`);
-
-    } catch (error) {
-      console.error("Error dropping sample:", error.message);
-      errorMessage.set(error.message);
-    } finally {
-      isLoading.set(false);
-    }
-  }
-
-  function cancelDropSample(index: number) {
+function confirmDropSample(index: number) {
+  const result = results[index];
+  const canDrop = result.reference_no && result.identifier && (isSamplingMode || isInventoryMode);
+  
+  if (canDrop) {
     pendingRemoval.update(pending => {
-      delete pending[index];
+      pending[index] = true;
       return pending;
     });
+  } else {
+    errorMessage.set("Cannot drop sample: Missing reference number or identifier");
+  }
+}
+
+async function dropSample(index: number) {
+  const sampleToDelete = results[index];
+  const referenceNo = sampleToDelete.reference_no;
+  const identifier = sampleToDelete.identifier;
+
+  if (!referenceNo || !identifier) {
+    console.error("Reference number or identifier is missing");
+    errorMessage.set("Unable to drop sample: Missing reference number or identifier");
+    return;
   }
 
-  function lessForm(index: number) {
-    displayedForms.update(forms => {
-      if (!forms || !forms[index] || forms[index].length === 0) {
-        return forms;
-      }
-      forms[index].pop();
-      if (forms[index].length === 0) {
-        delete forms[index];
-      }
-      return forms;
+  isLoading.set(true);
+  errorMessage.set('');
+
+  try {
+    const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(identifier)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ 
+        _remove: true, 
+        reference_no: referenceNo,
+        identifier: identifier,
+        ...sampleToDelete
+      }]),
     });
 
-    removeClickCounts.update(counts => {
-      if (counts[index] > 0) {
-        counts[index]--;
-      }
-      return counts;
-    });
-
-    selectedForRemoval.update(selections => {
-      delete selections[index];
-      return selections;
-    });
-
-    if (!hasDisplayedForms(index)) {
-      results[index] = { ...deepCopiedResults[index] };
-      setUnsavedChanges(index, false);
-      formActionClicked.update(clicked => {
-        clicked[index] = false;
-        return clicked;
-      });
-      dropSampleClicked.update(clicked => {
-        delete clicked[index];
-        return clicked;
-      });
-    }
-  }
-
-  function hasDisplayedForms(index: number): boolean {
-    return $displayedForms[index] && $displayedForms[index].length > 0;
-  }
-
-  function updateForm(index: number, entryIndex: number, field: string, value: string) {
-    displayedForms.update(forms => {
-      if (forms[index] && forms[index][entryIndex]) {
-        if (field === 'key') {
-          forms[index][entryIndex][field] = value;
-          forms[index][entryIndex].value = '';
-          forms[index][entryIndex].rawValue = '';
-        } else if (field === 'value') {
-          forms[index][entryIndex].rawValue = value;
-          if (forms[index][entryIndex].isDate) {
-            forms[index][entryIndex].value = new Date(value).toISOString().split('T')[0];
-          } else if (forms[index][entryIndex].key === 'tags' || forms[index][entryIndex].key === 'categories') {
-            forms[index][entryIndex].value = value.split(',').map(item => item.trim()).filter(item => item !== '');
-          } else {
-            forms[index][entryIndex].value = value;
-          }
-        }
-      }
-      return forms;
-    });
-    setUnsavedChanges(index, true);
-  }
-
-  function toggleDateInput(index: number, entryIndex: number) {
-    displayedForms.update(forms => {
-      if (forms[index] && forms[index][entryIndex]) {
-        forms[index][entryIndex].isDate = !forms[index][entryIndex].isDate;
-        if (forms[index][entryIndex].isDate) {
-          forms[index][entryIndex].key = 'delivery_date';
-          forms[index][entryIndex].value = '';
-          forms[index][entryIndex].rawValue = '';
-        } else {
-          forms[index][entryIndex].key = '';
-          forms[index][entryIndex].value = '';
-          forms[index][entryIndex].rawValue = '';
-        }
-      }
-      return forms;
-    });
-    setUnsavedChanges(index, true);
-  }
-
-  function updateResults(index: number) {
-    const user = get(page).data.user;
-    if (!user) {
-      console.error("User is undefined");
-      return;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to drop sample');
     }
 
-    const formData = $displayedForms[index] || [];
-    const updates = formData.reduce((acc, curr) => {
-      if (curr.key && !curr.isRemove) {
-        if (curr.key === 'tags' || curr.key === 'categories') {
-          acc[curr.key] = curr.value;
-        } else {
-          acc[curr.key] = curr.value;
-        }
-      } else if (curr.key && curr.isRemove) {
-        acc[curr.key] = null;
-      }
-      return acc;
-    }, {});
+    const result = await response.json();
+    console.log("Sample dropped:", result);
 
-    results[index] = { ...results[index], ...updates };
-    
-    Object.keys(results[index]).forEach(key => {
-      if (results[index][key] === null) {
-        delete results[index][key];
-      }
-    });
-
-    if (results[index].modifiedBy) {
-      results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
-        ? [...results[index].modifiedBy, user]
-        : [results[index].modifiedBy, user];
-    } else {
-      results[index].modifiedBy = [user];
-    }
+    results = results.filter((_, i) => i !== index);
 
     displayedForms.update(forms => {
       delete forms[index];
       return forms;
     });
+    unsavedChangesByIndex.update(changes => {
+      delete changes[index];
+      return changes;
+    });
+    formActionClicked.update(clicked => {
+      delete clicked[index];
+      return clicked;
+    });
+    dropSampleClicked.update(clicked => {
+      delete clicked[index];
+      return clicked;
+    });
+    pendingRemoval.update(pending => {
+      delete pending[index];
+      return pending;
+    });
+
+    console.log(`Sample with reference number ${referenceNo} and identifier ${identifier} dropped successfully`);
+
+  } catch (error) {
+    console.error("Error dropping sample:", error.message);
+    errorMessage.set(error.message);
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+function cancelDropSample(index: number) {
+  pendingRemoval.update(pending => {
+    delete pending[index];
+    return pending;
+  });
+}
+
+function lessForm(index: number) {
+  displayedForms.update(forms => {
+    if (!forms || !forms[index] || forms[index].length === 0) {
+      return forms;
+    }
+    forms[index].pop();
+    if (forms[index].length === 0) {
+      delete forms[index];
+    }
+    return forms;
+  });
+
+  removeClickCounts.update(counts => {
+    if (counts[index] > 0) {
+      counts[index]--;
+    }
+    return counts;
+  });
+
+  selectedForRemoval.update(selections => {
+    delete selections[index];
+    return selections;
+  });
+
+  if (!hasDisplayedForms(index)) {
+    results[index] = { ...deepCopiedResults[index] };
     setUnsavedChanges(index, false);
     formActionClicked.update(clicked => {
       clicked[index] = false;
@@ -455,153 +369,271 @@
       delete clicked[index];
       return clicked;
     });
-
-    console.log(`Updated result at index ${index}:`, results[index]);
   }
+}
 
-  async function pushChangesToBackend() {
-    isLoading.set(true);
-    errorMessage.set('');
+function hasDisplayedForms(index: number): boolean {
+  return $displayedForms[index] && $displayedForms[index].length > 0;
+}
 
-    try {
-
-      const user = get(page).data.user;
-      if (!user) throw new Error("User is undefined");
-
-      if (!selectedIdentifier) {
-        throw new Error("Please select an identifier or create a new one before pushing changes.");
+function updateForm(index: number, entryIndex: number, field: string, value: string) {
+  displayedForms.update(forms => {
+    if (forms[index] && forms[index][entryIndex]) {
+      if (field === 'key') {
+        forms[index][entryIndex][field] = value;
+        forms[index][entryIndex].value = '';
+        forms[index][entryIndex].rawValue = '';
+      } else if (field === 'value') {
+        forms[index][entryIndex].rawValue = value;
+        if (forms[index][entryIndex].isDate) {
+          forms[index][entryIndex].value = new Date(value).toISOString().split('T')[0];
+        } else if (forms[index][entryIndex].key === 'tags' || forms[index][entryIndex].key === 'categories') {
+          forms[index][entryIndex].value = value.split(',').map(item => item.trim()).filter(item => item !== '');
+        } else {
+          forms[index][entryIndex].value = value;
+        }
       }
+    }
+    return forms;
+  });
+  setUnsavedChanges(index, true);
+}
 
-      let updatedResults = results.map(result => ({
-        ...result,
-        timestamp: Date.now(),
-        modifiedBy: Array.isArray(result.modifiedBy) 
-          ? [...result.modifiedBy, user]
-          : result.modifiedBy 
-            ? [result.modifiedBy, user]
-            : [user],
-        identifier: selectedIdentifier
-      }));
-
-      const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedResults),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload sample data');
+function toggleDateInput(index: number, entryIndex: number) {
+  displayedForms.update(forms => {
+    if (forms[index] && forms[index][entryIndex]) {
+      forms[index][entryIndex].isDate = !forms[index][entryIndex].isDate;
+      if (forms[index][entryIndex].isDate) {
+        forms[index][entryIndex].key = 'delivery_date';
+        forms[index][entryIndex].value = '';
+        forms[index][entryIndex].rawValue = '';
+      } else {
+        forms[index][entryIndex].key = '';
+        forms[index][entryIndex].value = '';
+        forms[index][entryIndex].rawValue = '';
       }
-
-      const backend_response = await response.json();
-      console.log("Backend response:", backend_response);
-
-      results = updatedResults;
-      deepCopiedResults = JSON.parse(JSON.stringify(results));
-      unsavedChanges.set(false);
-      unsavedChangesByIndex.set({});
-
-    } catch (error) {
-      console.error("Error pushing changes to backend:", error.message);
-      errorMessage.set(error.message);
-    } finally {
-      isLoading.set(false);
     }
+    return forms;
+  });
+  setUnsavedChanges(index, true);
+}
+
+function prepareItemForSubmission(item: Sample): Sample {
+  const preparedItem = { ...item };
+
+  // Ensure unit_price is an array
+  if (preparedItem.unit_price && !Array.isArray(preparedItem.unit_price)) {
+    preparedItem.unit_price = [{
+      num: parseFloat(preparedItem.unit_price.num.toString()),
+      unit: preparedItem.unit_price.unit,
+      timestamp: preparedItem.unit_price.timestamp || Date.now(),
+      upload: preparedItem.unit_price.upload || get(page).data.user.name
+    }];
   }
 
-  function setUnsavedChanges(index: number, value: boolean) {
-    unsavedChangesByIndex.update(changes => {
-      changes[index] = value;
-      return changes;
-    });
-    unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
+  // Ensure unit_weight is an array
+  if (preparedItem.unit_weight && !Array.isArray(preparedItem.unit_weight)) {
+    preparedItem.unit_weight = [{
+      num: parseFloat(preparedItem.unit_weight.num.toString()),
+      unit: preparedItem.unit_weight.unit,
+      timestamp: preparedItem.unit_weight.timestamp || Date.now(),
+      upload: preparedItem.unit_weight.upload || get(page).data.user.name
+    }];
   }
 
-  function handleImageError(e: Event) {
-    const target = e.target as HTMLImageElement;
-    console.error(`Error loading image: ${target.src}`);
-    target.src = '/path/to/fallback-image.jpg';
-    target.alt = 'Image not available';
+  return preparedItem;
+}
+
+
+  function updateResults(index: number) {
+    const user = get(page).data.user;
+    if (!user) {
+      console.error("User is undefined");
+      return;
   }
 
-  function displayInventoryDetails(inventory: InventoryItem[]) {
-    currentInventory = inventory;
-    isModalOpen = true;
-  }
-
-  function closeModal(event?: MouseEvent | KeyboardEvent) {
-    if (!event || event.type === 'click' || (event as KeyboardEvent).key === 'Escape') {
-      isModalOpen = false;
+  const formData = $displayedForms[index] || [];
+  const updates = formData.reduce((acc, curr) => {
+    if (curr.key && !curr.isRemove) {
+      if (curr.key === 'tags' || curr.key === 'categories') {
+        acc[curr.key] = curr.value;
+      } else {
+        acc[curr.key] = curr.value;
+      }
+    } else if (curr.key && curr.isRemove) {
+      acc[curr.key] = null;
     }
-  }
+    return acc;
+  }, {});
 
-
-  function handleInventoryUpdate(event: CustomEvent<{referenceNo: string, newEntry: InventoryItem}>) {
-    const { referenceNo, newEntry } = event.detail;
-    const index = results.findIndex(item => item.reference_no === referenceNo);
-    if (index !== -1) {
-      results[index].inventory = [...results[index].inventory, newEntry];
-      results[index].total_inventory = calculateTotalInventory(results[index].inventory);
-      results = [...results]; // trigger update
-      setUnsavedChanges(index, true);
-    }
-  }
-
-
-
-
-  function calculateTotalInventory(inventory: InventoryItem[]): number {
-    return inventory.reduce((total, item) => total + item.putIn - item.takeOut, 0);
-  }
-
-  $: canRemove = results.map((result, index) =>
-    Object.keys(filterDisplayedKeys(result)).length >
-    ($removeClickCounts[index] || 0)
-  );
-
-
-
-  let noChanged = true;
-  let showModal = false;
-  $: {
-    noChanged = JSON.stringify(deepCopiedResults) === JSON.stringify(results);
-  }
-
-
-  import { goto } from '$app/navigation';
-  import { beforeNavigate } from '$app/navigation';
-
-
-  let pendingNavigation = null;
-  let modalMessage = "You have unsaved changes. Are you sure you want to leave?";
-
-
-  beforeNavigate(({ to, cancel }) => {
-    if (!noChanged) {
-      cancel();
-      pendingNavigation = to ? to.url.toString() : null;
-      showModal = true;
+  const updatedItem = { ...results[index], ...updates };
+  results[index] = prepareItemForSubmission(updatedItem);
+  
+  Object.keys(results[index]).forEach(key => {
+    if (results[index][key] === null) {
+      delete results[index][key];
     }
   });
 
-  function handleConfirm() {
-    showModal = false;
-    if (pendingNavigation) {
-      noChanged = true; // Reset the change status
-      window.location.href = pendingNavigation; // Use window.location for navigation
+  if (results[index].modifiedBy) {
+    results[index].modifiedBy = Array.isArray(results[index].modifiedBy)
+      ? [...results[index].modifiedBy, user]
+      : [results[index].modifiedBy, user];
+  } else {
+    results[index].modifiedBy = [user];
+  }
+
+  displayedForms.update(forms => {
+    delete forms[index];
+    return forms;
+  });
+  setUnsavedChanges(index, false);
+  formActionClicked.update(clicked => {
+    clicked[index] = false;
+    return clicked;
+  });
+  dropSampleClicked.update(clicked => {
+    delete clicked[index];
+    return clicked;
+  });
+
+  console.log(`Updated result at index ${index}:`, results[index]);
+}
+
+async function pushChangesToBackend() {
+  isLoading.set(true);
+  errorMessage.set('');
+
+  try {
+    const user = get(page).data.user;
+    if (!user) throw new Error("User is undefined");
+
+    if (!selectedIdentifier) {
+      throw new Error("Please select an identifier or create a new one before pushing changes.");
     }
-    pendingNavigation = null;
+
+    let updatedResults = results.map(result => {
+      const preparedResult = prepareItemForSubmission(result);
+      return {
+        ...preparedResult,
+        timestamp: Date.now(),
+        modifiedBy: Array.isArray(preparedResult.modifiedBy) 
+          ? [...preparedResult.modifiedBy, user]
+          : preparedResult.modifiedBy 
+            ? [preparedResult.modifiedBy, user]
+            : [user],
+        identifier: selectedIdentifier
+      };
+    });
+
+    const response = await fetch(`${API_ENDPOINTS.UPLOAD_SAMPLE}?mode=${searchOption}&identifier=${encodeURIComponent(selectedIdentifier)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedResults),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload sample data');
+    }
+
+    const backend_response = await response.json();
+    console.log("Backend response:", backend_response);
+
+    results = updatedResults;
+    deepCopiedResults = JSON.parse(JSON.stringify(results));
+    unsavedChanges.set(false);
+    unsavedChangesByIndex.set({});
+
+  } catch (error) {
+    console.error("Error pushing changes to backend:", error.message);
+    errorMessage.set(error.message);
+  } finally {
+    isLoading.set(false);
   }
+}
 
-  function handleCancel() {
-    showModal = false;
-    pendingNavigation = null;
+function setUnsavedChanges(index: number, value: boolean) {
+  unsavedChangesByIndex.update(changes => {
+    changes[index] = value;
+    return changes;
+  });
+  unsavedChanges.set(Object.values($unsavedChangesByIndex).some(Boolean));
+}
+
+function handleImageError(e: Event) {
+  const target = e.target as HTMLImageElement;
+  console.error(`Error loading image: ${target.src}`);
+  target.src = '/path/to/fallback-image.jpg';
+  target.alt = 'Image not available';
+}
+
+function displayInventoryDetails(inventory: InventoryItem[]) {
+  currentInventory = inventory;
+  isModalOpen = true;
+}
+
+function closeModal(event?: MouseEvent | KeyboardEvent) {
+  if (!event || event.type === 'click' || (event as KeyboardEvent).key === 'Escape') {
+    isModalOpen = false;
   }
+}
 
+function handleInventoryUpdate(event: CustomEvent<{referenceNo: string, newEntry: InventoryItem}>) {
+  const { referenceNo, newEntry } = event.detail;
+  const index = results.findIndex(item => item.reference_no === referenceNo);
+  if (index !== -1) {
+    results[index].inventory = [...results[index].inventory, newEntry];
+    results[index].total_inventory = calculateTotalInventory(results[index].inventory);
+    results = [...results]; // trigger update
+    setUnsavedChanges(index, true);
+  }
+}
 
-  $: user = $page.data.user;
+function calculateTotalInventory(inventory: InventoryItem[]): number {
+  return inventory.reduce((total, item) => total + item.putIn - item.takeOut, 0);
+}
 
+$: canRemove = results.map((result, index) =>
+  Object.keys(filterDisplayedKeys(result)).length >
+  ($removeClickCounts[index] || 0)
+);
+
+let noChanged = true;
+let showModal = false;
+$: {
+  noChanged = JSON.stringify(deepCopiedResults) === JSON.stringify(results);
+}
+
+import { goto } from '$app/navigation';
+import { beforeNavigate } from '$app/navigation';
+
+let pendingNavigation: string | null = null;
+let modalMessage = "You have unsaved changes. Are you sure you want to leave?";
+
+beforeNavigate(({ to, cancel }) => {
+  if (!noChanged) {
+    cancel();
+    pendingNavigation = to ? to.url.toString() : null;
+    showModal = true;
+  }
+});
+
+function handleConfirm() {
+  showModal = false;
+  if (pendingNavigation) {
+    noChanged = true; // Reset the change status
+    window.location.href = pendingNavigation; // Use window.location for navigation
+  }
+  pendingNavigation = null;
+}
+
+function handleCancel() {
+  showModal = false;
+  pendingNavigation = null;
+}
+
+$: user = $page.data.user;
 
 
 </script>

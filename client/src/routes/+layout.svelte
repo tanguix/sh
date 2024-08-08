@@ -16,6 +16,7 @@
   import UserWindow from '$lib/components/UserWindow.svelte';
   import DataUpload from '../lib/components/DataUpload.svelte';
   import SearchByValue from '../lib/components/SearchByValue.svelte';
+  import EstPrice from "$lib/components/EstPrice.svelte";
   import '../app.css';
 
 
@@ -147,6 +148,10 @@
               <hr>
               <br>
 
+              <EstPrice />
+
+              <hr>
+              <br>
 
               <button on:click={toggleWorkflow}>
                 {showWorkflow ? 'Hide Workflow' : 'Show Workflow'}

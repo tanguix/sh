@@ -342,7 +342,7 @@ class ItemBatch:
 
 
 
-    def _process_item(self, item):
+    def _process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         processed_item = {
             "timestamp": self.timestamp,
             "identifier": self.identifier
@@ -356,9 +356,21 @@ class ItemBatch:
                     # Convert full URL to relative path
                     relative_path = self._get_relative_path(value)
                     processed_item['image_path'] = f"images/{relative_path}"
+                elif key in ['unit_price', 'unit_weight']:
+                    processed_item[key] = self._ensure_array(value)
                 else:
                     processed_item[key] = value
         return processed_item
+
+
+    def _ensure_array(self, value):
+        if isinstance(value, list):
+            return value
+        elif isinstance(value, dict):
+            return [value]
+        else:
+            return []
+
 
 
 
