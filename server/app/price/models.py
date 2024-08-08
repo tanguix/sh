@@ -80,6 +80,9 @@ class Price:
             return [1.0 for _ in data]
         return [(val - min_val) / (max_val - min_val) for val in data]
 
+
+
+
     @staticmethod
     def get_layout_config(view_mode, title, price_unit=None, weight_unit=None):
         base_layout = {
@@ -90,35 +93,30 @@ class Price:
                 "xanchor": "center",
                 "yanchor": "top"
             },
-            "height": 450,
-            "width": 900,
+            "autosize": True,  # Make the plot responsive
             "margin": {"t": 80, "b": 50, "l": 50, "r": 50},
             "legend": {
-                "x": 0.5,
-                "y": 1.05,
-                "xanchor": "center",
-                "yanchor": "bottom",
                 "orientation": "h",
-                "bgcolor": "rgba(255, 255, 255, 0.8)",
-                "bordercolor": "rgba(0, 0, 0, 0.1)",
-                "borderwidth": 1
+                "yanchor": "bottom",
+                "y": 1.02,
+                "xanchor": "right",
+                "x": 1
             },
-            "xaxis": {"title": "Reference Number"},
-            "yaxis": {"title": "Normalized Value" if view_mode == "normalized" else f"Unit Price ({price_unit})"}
+            "xaxis": {"title": "Reference Number", "automargin": True},
+            "yaxis": {"title": "Normalized Value" if view_mode == "normalized" else f"Unit Price ({price_unit})", "automargin": True}
         }
 
         if view_mode == "separate":
             base_layout.update({
                 "grid": {"rows": 1, "columns": 2, "pattern": "independent"},
-                "height": 450,
-                "width": 900,
-                "xaxis": {"title": "Reference Number", "domain": [0, 0.45]},
-                "yaxis": {"title": f"Unit Price ({price_unit})"},
-                "xaxis2": {"title": "Reference Number", "domain": [0.55, 1]},
-                "yaxis2": {"title": f"Unit Weight ({weight_unit})"}
+                "xaxis": {"title": "Reference Number", "domain": [0, 0.48], "automargin": True},
+                "yaxis": {"title": f"Unit Price ({price_unit})", "automargin": True},
+                "xaxis2": {"title": "Reference Number", "domain": [0.52, 1], "automargin": True},
+                "yaxis2": {"title": f"Unit Weight ({weight_unit})", "automargin": True}
             })
 
         return base_layout
+
 
 
 

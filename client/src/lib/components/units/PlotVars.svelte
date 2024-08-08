@@ -1,28 +1,27 @@
 
 
-
 <script lang="ts">
   import { onMount, afterUpdate } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
   import { browser } from '$app/environment';
 
   let plotDiv: HTMLElement;
-  let identifier = 'SAM_human_4a606530';
+  let identifier = '';
   let isLoading = false;
   let error = '';
   let plotData: any = null;
   let viewMode: 'normalized' | 'separate' = 'normalized';
   let Plotly: any;
   let shouldCreatePlot = false;
+  let showPlot = false;
 
   onMount(async () => {
     if (browser) {
       try {
         await loadPlotly();
-        await fetchData();
       } catch (err) {
-        error = `Error in onMount: ${err.message}`;
-        console.error('Error in onMount:', err);
+        error = `Error loading Plotly: ${err.message}`;
+        console.error('Error loading Plotly:', err);
       }
     }
   });
@@ -65,12 +64,10 @@
         if (plotData && plotData.x && plotData.traces && plotData.layout) {
           shouldCreatePlot = true;
         } else {
-          error = 'Invalid data format received from the server';
-          console.error('Invalid plotData format:', plotData);
+          throw new Error('Invalid data format received from the server');
         }
       } else {
-        error = `Server responded with status: ${response.status}`;
-        console.error('Error response from server:', error);
+        throw new Error(`Server responded with status: ${response.status}`);
       }
     } catch (err) {
       error = `Error fetching price and weight data: ${err.message}`;
@@ -79,6 +76,9 @@
       isLoading = false;
     }
   }
+
+
+
 
   function createPlot() {
     if (!Plotly || !plotDiv || !plotData) {
@@ -90,7 +90,6 @@
       error = 'Missing required data for plot creation';
       return;
     }
-
     const traces = plotData.traces.map(trace => ({
       x: plotData.x,
       y: trace.y,
@@ -101,37 +100,173 @@
       xaxis: trace.xaxis,
       yaxis: trace.yaxis
     }));
-
     try {
-      Plotly.newPlot(plotDiv, traces, plotData.layout);
+      Plotly.newPlot(plotDiv, traces, plotData.layout, {responsive: true});
     } catch (err) {
       console.error('Error creating plot:', err);
       error = `Error creating plot: ${err.message}`;
     }
   }
 
+
+
+
   async function toggleView() {
-    console.log(`Toggling view from ${viewMode} to ${viewMode === 'normalized' ? 'separate' : 'normalized'}`);
     viewMode = viewMode === 'normalized' ? 'separate' : 'normalized';
     await fetchData();
   }
+
+  async function togglePlot() {
+    if (!showPlot) {
+      await fetchData();
+    }
+    showPlot = !showPlot;
+  }
+
+  function handleIdentifierChange() {
+    if (showPlot) {
+      fetchData();
+    }
+  }
+
+
 </script>
 
-<div>
-  <button on:click={toggleView}>
-    Switch to {viewMode === 'normalized' ? 'Separate' : 'Normalized'} View
-  </button>
+
+
+
+
+<div class="outer-container">
+  <div class="input-group">
+    <label for="identifier">Identifier:</label>
+    <div class="input-button-wrapper">
+      <input
+        id="identifier"
+        type="text"
+        bind:value={identifier}
+        on:change={handleIdentifierChange}
+        placeholder="Enter identifier"
+      />
+      <button on:click={togglePlot} class="btn">
+        {showPlot ? 'Hide' : 'Show'} Plot
+      </button>
+    </div>
+  </div>
+
+  {#if showPlot}
+    <div class="plot-controls">
+      <button on:click={toggleView} class="btn btn-small">
+        Switch to {viewMode === 'normalized' ? 'Separate' : 'Normalized'} View
+      </button>
+    </div>
+
+    <div class="plot-wrapper">
+      {#if isLoading}
+        <p class="loading">Loading...</p>
+      {:else if error}
+        <div class="error">{error}</div>
+      {:else if plotData}
+        <div bind:this={plotDiv} class="plot-container"></div>
+      {:else}
+        <p class="loading">No data available to plot.</p>
+      {/if}
+    </div>
+  {/if}
 </div>
 
-{#if isLoading}
-  <p>Loading...</p>
-{:else if error}
-  <p>Error: {error}</p>
-{:else if plotData}
-  <div bind:this={plotDiv}></div>
-{:else}
-  <p>No data available to plot.</p>
-{/if}
+<style>
+
+  label {
+    font-family: Ubuntu;
+  }
+
+  .outer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    margin-bottom: 1rem;
+    align-items: center;
+    justify-content: center
+  }
+  .input-group label {
+    font-weight: bold;
+  }
+  .input-button-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    width: 40%;
+    align-items: center;
+    justify-content: center;
+  }
+  .input-group input {
+    flex-grow: 1;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    font-size: 1rem;
+  }
+  .btn {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    font-weight: bold;
+    color: white;
+    background-color: #3b82f6;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background-color: #2563eb;
+  }
+  .btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+  }
+  .plot-controls {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 1rem;
+  }
+  .plot-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .plot-container {
+    width: 100%;
+    min-width: 600px;
+    height: 100%;
+    min-height: 400px;
+  }
+  @media (max-width: 600px) {
+    .plot-container {
+      min-width: 100%;
+    }
+  }
+</style>
+
+
+
 
 
 

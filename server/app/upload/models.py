@@ -70,12 +70,32 @@ class Item:
             "upload": username
         }]
 
+
     def save_item(self):
         if not self.validate_references():
             raise ValueError("Reference validation failed")
         data = self.__dict__
         result = db.samples.insert_one(data)
         return result
+
+
+
+    @staticmethod
+    def are_side_references_unique(side_refs):
+        if len(side_refs) != len(set(side_refs)):
+            return False
+        for ref in side_refs:
+            if db.samples.find_one({"side_reference_nos": ref}):
+                return False
+        return True
+
+    @staticmethod
+    def is_reference_no_unique(ref_no):
+        return db.samples.find_one({"reference_no": ref_no}) is None
+
+
+
+
 
     def validate_references(self):
         if not self.reference_no:
@@ -84,10 +104,19 @@ class Item:
         if not self.are_side_references_unique(self.side_reference_nos):
             raise ValueError("Side reference numbers are not unique")
         
-        self.reference_no = f"{self.reference_no}{self.timestamp}x"
+        # Extract the last 6 digits of the timestamp
+        short_timestamp = str(self.timestamp)[-6:]
+        
+        # Generate the new reference number
+        self.reference_no = f"{self.reference_no}{short_timestamp}x"
+        
         if not self.is_reference_no_unique(self.reference_no):
             raise ValueError("Generated reference number is not unique")
+        
         return True
+
+
+
 
     @classmethod
     def from_form_data(cls, form_data, files):
@@ -164,19 +193,6 @@ class Item:
                 for ref in result['reference_number_table']
             ]
         return []
-
-    @staticmethod
-    def are_side_references_unique(side_refs):
-        if len(side_refs) != len(set(side_refs)):
-            return False
-        for ref in side_refs:
-            if db.samples.find_one({"side_reference_nos": ref}):
-                return False
-        return True
-
-    @staticmethod
-    def is_reference_no_unique(ref_no):
-        return db.samples.find_one({"reference_no": ref_no}) is None
 
 
 
