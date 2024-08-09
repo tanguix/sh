@@ -14,10 +14,11 @@ class ExcelProcessor:
 
     EXCEL_FOLDER = 'sheet'
 
+    # ------------------------------------------------------ excel upload part ------------------------------------------------------
+
 
     @staticmethod
     def append_data(filename, data, is_new_file):
-        # Ensure filename has .xlsx extension
         if not filename.lower().endswith('.xlsx'):
             filename += '.xlsx'
         
@@ -25,14 +26,12 @@ class ExcelProcessor:
         try:
             new_data = json.loads(data)
             
-            # Convert the list of dictionaries to a DataFrame
             new_df = pd.DataFrame(new_data)
             
-            # Ensure 'price' and 'unit' columns exist
             if 'price' not in new_df.columns:
                 new_df['price'] = ''
             if 'unit' not in new_df.columns:
-                new_df['unit'] = 'USD'  # Default to USD if not provided
+                new_df['unit'] = 'USD'
 
             if is_new_file:
                 if os.path.exists(filepath):
@@ -43,7 +42,6 @@ class ExcelProcessor:
                     return {'error': 'File not found'}, 404
                 df = pd.read_excel(filepath, engine='openpyxl')
                 
-                # Ensure existing DataFrame has 'price' and 'unit' columns
                 if 'price' not in df.columns:
                     df['price'] = ''
                 if 'unit' not in df.columns:
@@ -51,14 +49,50 @@ class ExcelProcessor:
                 
                 updated_df = pd.concat([df, new_df], ignore_index=True)
                 updated_df.to_excel(filepath, index=False, engine='openpyxl')
-            return {'message': 'Data appended successfully'}, 200
+
+            # Calculate imbalanced vouchers
+            imbalanced_vouchers = ExcelProcessor._calculate_imbalanced_vouchers(updated_df if 'updated_df' in locals() else new_df)
+
+            print("Imbalanced vouchers being sent:", imbalanced_vouchers)
+            return {'message': 'Data appended successfully', 'imbalancedVouchers': imbalanced_vouchers}, 200
         except Exception as e:
             error_traceback = traceback.format_exc()
             error_message = f"Failed to append data: {str(e)}\n\nTraceback:\n{error_traceback}"
-            print(error_message)  # This will print to your console/logs
+            print(error_message)
             return {'error': error_message}, 500
 
 
+
+    @staticmethod
+    def _calculate_imbalanced_vouchers(df):
+        df['debitAmount'] = pd.to_numeric(df['debitAmount'], errors='coerce').fillna(0)
+        df['creditAmount'] = pd.to_numeric(df['creditAmount'], errors='coerce').fillna(0)
+        
+        voucher_balance = df.groupby('voucherNumber').agg({
+            'debitAmount': 'sum',
+            'creditAmount': 'sum'
+        })
+        
+        voucher_balance['balance'] = voucher_balance['debitAmount'] - voucher_balance['creditAmount']
+        imbalanced_vouchers = voucher_balance[voucher_balance['balance'] != 0]
+        
+        imbalanced_vouchers_list = [
+            {
+                'voucherNumber': voucher,
+                'debitAmount': float(row['debitAmount']),
+                'creditAmount': float(row['creditAmount']),
+                'imbalanceAmount': abs(float(row['balance'])),
+                'imbalanceType': 'Excess Debit' if row['balance'] > 0 else 'Excess Credit'
+            }
+            for voucher, row in imbalanced_vouchers.iterrows()
+        ]
+        
+        return imbalanced_vouchers_list
+
+
+    
+
+    # ------------------------------------------------------ excel analysis part ------------------------------------------------------
 
 
 
