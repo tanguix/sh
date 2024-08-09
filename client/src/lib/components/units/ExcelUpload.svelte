@@ -6,6 +6,7 @@
   import { onMount } from 'svelte';
   import { API_ENDPOINTS } from '$lib/utils/api';
 
+
   type EntrySet = {
     id: number;
     date: string;
@@ -27,6 +28,7 @@
     isPreviewMode: boolean;
     entryType: 'debit' | 'credit';
   };
+
 
   type ImbalancedVoucher = {
     voucherNumber: string;
@@ -95,6 +97,7 @@
     );
   }
 
+
   function setEntryType(id: number, type: 'debit' | 'credit') {
     entrySets.update(sets =>
       sets.map(set =>
@@ -110,6 +113,7 @@
     );
   }
 
+
   function handleAmountChange(id: number, field: 'debitAmount' | 'creditAmount', value: string) {
     const numericValue = parseFloat(value);
     const validValue = isNaN(numericValue) ? '0' : numericValue.toString();
@@ -122,6 +126,7 @@
       )
     );
   }
+
 
   onMount(async () => {
     try {
@@ -202,10 +207,10 @@
           resetForm();
         }, 100);
 
-        // Set a timer to clear imbalanced vouchers after 30 seconds
+        // Set a timer to clear imbalanced vouchers after 20 seconds
         setTimeout(() => {
           clearImbalancedVouchers();
-        }, 10000);
+        }, 20000);
       } else {
         const errorData = await response.json();
         alert(`Failed to append data: ${errorData.error}`);
@@ -226,7 +231,7 @@
 </script>
 
 <div class="excel-upload-entries">
-  <h2>Accounting</h2>
+  <h2>Accounting (Temporarily Abort!)</h2>
 
   <div class="file-selection-container">
     <div class="input-wrapper">
