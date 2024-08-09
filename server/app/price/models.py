@@ -2,7 +2,9 @@
 
 
 from app.database import db
+from flask import current_app
 import numpy as np
+
 
 class Price:
     @staticmethod
@@ -117,6 +119,25 @@ class Price:
 
         return base_layout
 
+
+
+
+    @staticmethod
+    def get_document_by_reference_no(reference_no):
+        document = db.samples.find_one({"reference_no": reference_no})
+        
+        if not document:
+            return None
+        
+        image_base_url = current_app.config['IMAGE_BASE_URL']
+        image_path = document.get('image_path', '')
+        image_url = f"{image_base_url}/{image_path.lstrip('/')}" if image_path else None
+
+        return {
+            "unit_price": document.get('unit_price', [])[-1] if document.get('unit_price') else None,
+            "unit_weight": document.get('unit_weight', [])[-1] if document.get('unit_weight') else None,
+            "image_url": image_url
+        }
 
 
 

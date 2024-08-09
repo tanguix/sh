@@ -27,4 +27,21 @@ def get_price_weight():
         return jsonify({"error": str(e)}), 500
 
 
-
+@price_bp.route('/api/search_document', methods=['GET'])
+def search_document():
+    try:
+        reference_no = request.args.get('reference_no')
+        
+        if not reference_no:
+            return jsonify({"error": "Reference number is required"}), 400
+        
+        document_data = Price.get_document_by_reference_no(reference_no)
+        
+        if not document_data:
+            return jsonify({"error": "Document not found"}), 404
+        
+        return jsonify(document_data), 200
+    except Exception as e:
+        print(f"Error in search_document: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500

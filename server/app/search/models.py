@@ -146,6 +146,7 @@ class Collection:
             logger.error(f"Error executing query: {str(e)}")
             return None, 0
 
+
     @staticmethod
     def process_results(results):
         processed_results = []

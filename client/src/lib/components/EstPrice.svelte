@@ -4,6 +4,7 @@
 <script lang="ts">
   import PlotVars from "./units/PlotVars.svelte";
   import { writable } from 'svelte/store';
+  import { API_ENDPOINTS } from "$lib/utils/api";
   
   // Input values
   let productionCost = writable('');
@@ -17,15 +18,43 @@
   let localVAT = writable('');
   let weight = writable('');
 
-  // Search functionality
+
+
+  // Updated search functionality
   let referenceNo = writable('');
-  let searchResult = writable({ unitPrice: null, unitWeight: null });
+  let searchResult = writable({ 
+    unitPrice: null, 
+    unitWeight: null, 
+    imageUrl: null 
+  });
+
+
 
   async function searchDocument() {
-    // TODO: Implement actual database search
-    // For now, we'll just set dummy values
-    searchResult.set({ unitPrice: 10.5, unitWeight: 0.5 });
+    try {
+      const response = await fetch(`${API_ENDPOINTS.SEARCH_DOCUMENT}?reference_no=${$referenceNo}`);
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      const data = await response.json();
+      
+      if (data && Object.keys(data).length > 0) {
+        searchResult.set({ 
+          unitPrice: data.unit_price ? data.unit_price.num : null,
+          unitWeight: data.unit_weight ? data.unit_weight.num : null,
+          imageUrl: data.image_url || null
+        });
+      } else {
+        searchResult.set({ unitPrice: null, unitWeight: null, imageUrl: null });
+      }
+    } catch (error) {
+      console.error('Error searching document:', error);
+      searchResult.set({ unitPrice: null, unitWeight: null, imageUrl: null });
+    }
   }
+
+
+
 
   // Transportation entries
   type TransportEntry = {
@@ -177,12 +206,19 @@
         </div>
 
         <div class="right-column">
+
+
           <div class="calculator-box image-search-combined">
-            <div class="image-placeholder">
-              <p>Image will be displayed here</p>
+            <div class="image-container">
+              {#if $searchResult.imageUrl}
+                <img src={$searchResult.imageUrl} alt="product_image" />
+              {:else}
+                <div class="image-placeholder">
+                  <p>No image available</p>
+                </div>
+              {/if}
             </div>
             <div class="search-result">
-              <h4>Search Result</h4>
               {#if $searchResult.unitPrice !== null && $searchResult.unitWeight !== null}
                 <p>Unit Price: ${$searchResult.unitPrice.toFixed(2)}</p>
                 <p>Unit Weight: {$searchResult.unitWeight.toFixed(2)} kg</p>
@@ -191,6 +227,8 @@
               {/if}
             </div>
           </div>
+
+
 
           <div class="calculator-box">
             <h4>DAP Price: {dapPrice.toFixed(2)}</h4>
@@ -233,7 +271,7 @@
 
 <style>
   input {
-    margin: 0;
+    margin: 4px 0 0 0;
     padding: 0;
     font-size: 13px;
   }

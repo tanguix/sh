@@ -54,6 +54,7 @@ export const API_ENDPOINTS = {
 
   // price route
   GET_PRICE_WEIGHT: `${BASE_URL}/price/api/get_price_weight`,
+  SEARCH_DOCUMENT: `${BASE_URL}/price/api/search_document`,
 
 
   // extra route
