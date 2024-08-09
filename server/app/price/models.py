@@ -134,6 +134,7 @@ class Price:
         image_url = f"{image_base_url}/{image_path.lstrip('/')}" if image_path else None
 
         return {
+            "reference_no": reference_no,
             "unit_price": document.get('unit_price', [])[-1] if document.get('unit_price') else None,
             "unit_weight": document.get('unit_weight', [])[-1] if document.get('unit_weight') else None,
             "image_url": image_url
